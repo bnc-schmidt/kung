@@ -109,7 +109,7 @@ public final class KungReleaseNotesTest {
         assertTrue(KungReleaseNotes.parse("{\"tag_name\":\"v0.3.2\",\"draft\":true,\"body\":\"Draft\"}", "0.3.2").isEmpty());
         var result = KungReleaseNotes.parse(json("v0.3.2", "# Fixes\\n- Mimic ESP"), "0.3.2").orElseThrow();
         assertEquals("# Fixes\n- Mimic ESP", result.body());
-        assertEquals("https://github.com/Beng420/kung/releases/tag/v0.3.2", result.page().toString());
+        assertEquals("https://github.com/bnc-schmidt/kung/releases/tag/v0.3.2", result.page().toString());
         assertTrue(KungReleaseNotes.parse(json("0.3.2", "Notes"), "v0.3.2").isPresent());
     }
 
@@ -230,7 +230,7 @@ public final class KungReleaseNotesTest {
         return new KungReleaseNotes(version, () -> file, worker, fetcher);
     }
     private static KungReleaseNotes.Notes release(String version) {
-        return new KungReleaseNotes.Notes(version, "# Fixes\n- Updated", URI.create("https://github.com/Beng420/kung/releases/tag/v" + version));
+        return new KungReleaseNotes.Notes(version, "# Fixes\n- Updated", URI.create("https://github.com/bnc-schmidt/kung/releases/tag/v" + version));
     }
     private static String json(String version, String body) {
         return "{\"tag_name\":\"" + version + "\",\"body\":\"" + body + "\",\"html_url\":\"https://example.com/untrusted\"}";

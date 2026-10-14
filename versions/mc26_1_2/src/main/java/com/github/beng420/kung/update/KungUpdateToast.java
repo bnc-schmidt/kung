@@ -22,7 +22,7 @@ import net.minecraft.resources.Identifier;
 /** One transient update card; it never opens a screen or grabs the mouse by itself. */
 final class KungUpdateToast {
     private static final UiTheme THEME = UiTheme.settings();
-    private static final URI RELEASE_PAGE = URI.create("https://github.com/Beng420/kung/releases/latest");
+    private static final URI RELEASE_PAGE = URI.create("https://github.com/bnc-schmidt/kung/releases/latest");
     private final KungUpdateToastState state = new KungUpdateToastState();
     private String title = "";
     private String currentVersion = "";

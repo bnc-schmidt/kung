@@ -4,7 +4,7 @@ A client-side Fabric mod with passive helpers for Hypixel SkyBlock: dungeon and 
 maps, run splits and statistics, slayer and garden helpers, hitboxes, HUD overlays and
 quality-of-life chat tools.
 
-Owner: [Beng420](https://github.com/Beng420)  
+Owner: [bnc-schmidt](https://github.com/bnc-schmidt)  
 Official Discord Server: [KUNG](https://discord.com/invite/EDD4ujq3NM)
 
 ## Requirements

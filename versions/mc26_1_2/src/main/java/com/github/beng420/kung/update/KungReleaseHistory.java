@@ -14,8 +14,8 @@ import java.util.concurrent.Executor;
 
 /** On-demand history has no installed-version receipt and never selects a release for the popup. */
 public final class KungReleaseHistory {
-    public static final URI RELEASES_PAGE = URI.create("https://github.com/Beng420/kung/releases");
-    private static final URI API = URI.create("https://api.github.com/repos/Beng420/kung/releases");
+    public static final URI RELEASES_PAGE = URI.create("https://github.com/bnc-schmidt/kung/releases");
+    private static final URI API = URI.create("https://api.github.com/repos/bnc-schmidt/kung/releases");
     private static final int PAGE_SIZE = 10;
     private static final KungReleaseNotes.Snapshot IDLE = new KungReleaseNotes.Snapshot(KungReleaseNotes.Status.IDLE, null);
     private static final KungReleaseNotes.Snapshot LOADING = new KungReleaseNotes.Snapshot(KungReleaseNotes.Status.LOADING, null);

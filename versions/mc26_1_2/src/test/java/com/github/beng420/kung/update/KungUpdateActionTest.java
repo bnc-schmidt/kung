@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import org.junit.Test;
 
 public final class KungUpdateActionTest {
-    private static final String DOWNLOAD = "https://github.com/Beng420/kung/releases/download/v0.3.5/kung-26.1.2-0.3.5.jar";
+    private static final String DOWNLOAD = "https://github.com/bnc-schmidt/kung/releases/download/v0.3.5/kung-26.1.2-0.3.5.jar";
 
     @Test public void modrinthUsesTheSameAutomaticInstallationActionAsOtherLaunchers() throws Exception {
         // The GitHub updater's menu; the Modrinth jar shows the Modrinth App instead (ModrinthFlavorTest).

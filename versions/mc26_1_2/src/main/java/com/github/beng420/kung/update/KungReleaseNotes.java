@@ -23,8 +23,8 @@ import java.util.function.Supplier;
 
 /** Installed-version display/dismissal receipts; GitHub/network work uses the updater worker. */
 public final class KungReleaseNotes {
-    private static final String API = "https://api.github.com/repos/Beng420/kung/releases/tags/";
-    private static final String RELEASE_PAGE = "https://github.com/Beng420/kung/releases/tag/";
+    private static final String API = "https://api.github.com/repos/bnc-schmidt/kung/releases/tags/";
+    private static final String RELEASE_PAGE = "https://github.com/bnc-schmidt/kung/releases/tag/";
     private static final int MAX_RESPONSE_BYTES = 1_048_576;
     private final String version;
     private final Supplier<Path> receipt;

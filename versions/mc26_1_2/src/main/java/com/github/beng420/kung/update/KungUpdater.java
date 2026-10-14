@@ -41,7 +41,7 @@ import net.minecraft.client.Minecraft;
 public enum KungUpdater {
     INSTANCE;
 
-    private static final String RELEASE_API = "https://api.github.com/repos/Beng420/kung/releases/latest";
+    private static final String RELEASE_API = "https://api.github.com/repos/bnc-schmidt/kung/releases/latest";
     private static final Pattern VERSION_PATTERN = Pattern.compile("^v?(\\d+(?:\\.\\d+){0,3}).*$", Pattern.CASE_INSENSITIVE);
     private static final List<String> SKIPPED_ASSET_PARTS = List.of("-sources", "-javadoc", "-dev", "-all");
 
@@ -425,7 +425,7 @@ public enum KungUpdater {
         }
         URI uri = URI.create(downloadUrl);
         if (!"https".equalsIgnoreCase(uri.getScheme()) || !"github.com".equalsIgnoreCase(uri.getHost())
-            || !uri.getPath().startsWith("/Beng420/kung/releases/download/") || uri.getUserInfo() != null) {
+            || !uri.getPath().startsWith("/bnc-schmidt/kung/releases/download/") || uri.getUserInfo() != null) {
             return Optional.empty();
         }
         long size = object.has("size") ? object.get("size").getAsLong() : 0;

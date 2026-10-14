@@ -141,7 +141,7 @@ public final class KungReleaseHistoryTest {
         assertEquals(2, page.releases().size());
         assertTrue(page.hasNext());
         assertEquals("2026-09-12", page.releases().getFirst().date());
-        assertEquals("https://github.com/Beng420/kung/releases/tag/v0.3.1", page.releases().getFirst().page().toString());
+        assertEquals("https://github.com/bnc-schmidt/kung/releases/tag/v0.3.1", page.releases().getFirst().page().toString());
         assertEquals("0.3.0-beta", page.releases().getLast().version());
         assertEquals("", page.releases().getLast().date());
     }

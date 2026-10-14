@@ -9,8 +9,8 @@
     "${mod_author}"
   ],
   "contact": {
-    "homepage": "https://github.com/Beng420",
-    "sources": "https://github.com/Beng420/kung"
+    "homepage": "https://github.com/bnc-schmidt",
+    "sources": "https://github.com/bnc-schmidt/kung"
   },
   "license": "${mod_license}",
   "environment": "client",
