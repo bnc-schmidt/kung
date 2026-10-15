@@ -93,146 +93,6 @@ public final class DungeonKnownRoomCatalog {
         "Withermancer",
         "Withermancers"
     );
-    private static final Set<String> LEGACY_NON_PRINCE_ROOM_NAMES = canonicalNameSet(
-        "Admin",
-        "Altar",
-        "Andesite",
-        "Arches",
-        "Archway",
-        "Arrow Trap",
-        "Atlas",
-        "Balcony",
-        "Banners",
-        "Basement",
-        "Beams",
-        "Big Red Flag",
-        "Black Flag",
-        "Blaze",
-        "Blood",
-        "Blue Skulls",
-        "Boulder",
-        "Bridges",
-        "Buttons",
-        "Cage",
-        "Cages",
-        "Carpets",
-        "Cathedral",
-        "Catwalk",
-        "Cell",
-        "Chains",
-        "Chambers",
-        "Cobble Wall Pillar",
-        "Corridor",
-        "Creeper Beams",
-        "Criss Cross",
-        "Crypt",
-        "Crypts",
-        "Deathmite",
-        "Diagonal",
-        "Dino Site",
-        "Dip",
-        "Dome",
-        "Double Diamond",
-        "Dragon Skull",
-        "Draw Bridge",
-        "Drop",
-        "Dueces",
-        "Duncan",
-        "End",
-        "Entrance",
-        "Fairy",
-        "Flags",
-        "Gold",
-        "Golden Oasis",
-        "Grand Library",
-        "Granite",
-        "Grass Ruin",
-        "Gravel",
-        "Hall",
-        "Hallway",
-        "Hanging Vines",
-        "Ice Fill",
-        "Ice Path",
-        "Jumping Skulls",
-        "King Midas",
-        "Knight",
-        "Lava Pit",
-        "Lava Ravine",
-        "Layers",
-        "Leaves",
-        "Locked Away",
-        "Logs",
-        "Long Hall",
-        "Lots Of Floors",
-        "Mage",
-        "Market",
-        "Melon",
-        "Mines",
-        "Mini Rail Track",
-        "Miniboss",
-        "Mirror",
-        "Mossy",
-        "Multicolored",
-        "Mural",
-        "Museum",
-        "Mushroom",
-        "New Trap",
-        "Old Trap",
-        "Overgrown",
-        "Overgrown Chains",
-        "Painting",
-        "Pedestal",
-        "Perch",
-        "Pillars",
-        "Pipes",
-        "Pirate",
-        "Pit",
-        "Pressure Plates",
-        "Prison Cell",
-        "Purple Flags",
-        "Quad Lava",
-        "Quartz Knight",
-        "Quiz",
-        "Raccoon",
-        "Rails",
-        "Red Blue",
-        "Red-Blue",
-        "Red Green",
-        "Redstone Crypt",
-        "Redstone Key",
-        "Redstone Warrior",
-        "Ritual",
-        "Sand Dragon",
-        "Sarcophagus",
-        "Scaffolding",
-        "Shadow Assassin",
-        "Silvers Sword",
-        "Slabs",
-        "Slime",
-        "Sloth",
-        "Small Stairs",
-        "Small Waterfall",
-        "Spider",
-        "Spikes",
-        "Staircase",
-        "Stairs",
-        "Steps",
-        "Stone Window",
-        "Teleport Maze",
-        "Temple",
-        "Three Weirdos",
-        "Tic Tac Toe",
-        "Tombstone",
-        "Tomioka",
-        "Trinity",
-        "Vinny 8 Ball",
-        "Water",
-        "Water Board",
-        "Waterfall",
-        "Well",
-        "Wizard",
-        "Zodd"
-    );
 
     private static TemplateCache cachedTemplateCache;
     private static long revision;
@@ -2038,7 +1898,7 @@ public final class DungeonKnownRoomCatalog {
 
     private static boolean legacyHasPrince(String name) {
         String key = canonicalNameKey(name);
-        return LEGACY_PRINCE_ROOM_NAMES.contains(key) && !LEGACY_NON_PRINCE_ROOM_NAMES.contains(key);
+        return LEGACY_PRINCE_ROOM_NAMES.contains(key);
     }
 
     private static Set<String> canonicalNameSet(String... names) {
@@ -2842,8 +2702,28 @@ public final class DungeonKnownRoomCatalog {
             return false;
         }
 
-        public boolean hasAdjacentComponents(int firstRoomGridX, int firstRoomGridZ, int secondRoomGridX, int secondRoomGridZ) {
-            return contains(firstRoomGridX, firstRoomGridZ) && contains(secondRoomGridX, secondRoomGridZ);
+        public RoomBounds bounds() {
+            int minX = Integer.MAX_VALUE;
+            int maxX = Integer.MIN_VALUE;
+            int minZ = Integer.MAX_VALUE;
+            int maxZ = Integer.MIN_VALUE;
+            for (MatchedComponent component : components) {
+                minX = Math.min(minX, component.roomGridX());
+                maxX = Math.max(maxX, component.roomGridX());
+                minZ = Math.min(minZ, component.roomGridZ());
+                maxZ = Math.max(maxZ, component.roomGridZ());
+            }
+            return new RoomBounds(minX, maxX, minZ, maxZ);
+        }
+    }
+
+    public record RoomBounds(int minX, int maxX, int minZ, int maxZ) {
+        int spanX() {
+            return maxX - minX + 1;
+        }
+
+        int spanZ() {
+            return maxZ - minZ + 1;
         }
     }
 

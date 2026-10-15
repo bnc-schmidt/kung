@@ -8,7 +8,6 @@ import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.Locale;
-import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.Screen;
@@ -16,7 +15,6 @@ import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.network.chat.Component;
 
 public final class ScreenTracker {
-    private static OpenScreen currentScreen;
     private static String lastScreenKey = "";
 
     private ScreenTracker() {
@@ -26,34 +24,14 @@ public final class ScreenTracker {
         ClientTickEvents.END_CLIENT_TICK.register(ScreenTracker::tick);
     }
 
-    public static OpenScreen currentScreen() {
-        return currentScreen;
-    }
-
-    public static boolean hasContainerOpen() {
-        return currentScreen != null && currentScreen.container();
-    }
-
-    public static boolean isContainerOpen(String title) {
-        return isContainerOpen(openTitle -> openTitle.equalsIgnoreCase(title));
-    }
-
-    public static boolean isContainerOpen(Predicate<String> titlePredicate) {
-        return currentScreen != null
-            && currentScreen.container()
-            && titlePredicate.test(currentScreen.title());
-    }
-
     private static void tick(Minecraft client) {
         NpcDialogueTrace.screen(McCompat.screen(client));
         OpenScreen nextScreen = openScreen(McCompat.screen(client));
         String nextKey = nextScreen == null ? "" : nextScreen.key();
         if (nextKey.equals(lastScreenKey)) {
-            currentScreen = nextScreen;
             return;
         }
 
-        currentScreen = nextScreen;
         lastScreenKey = nextKey;
         LoadoutsAutoCloseFeature.observeScreenChange(McCompat.screen(client));
         KungDebugRecorder.event("screen", nextScreen == null

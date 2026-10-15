@@ -4,6 +4,11 @@ import static org.junit.Assert.*;
 
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.category.DungeonConfig;
+import com.mojang.authlib.exceptions.AuthenticationException;
+import com.mojang.authlib.exceptions.AuthenticationUnavailableException;
+import com.mojang.authlib.exceptions.InsufficientPrivilegesException;
+import com.mojang.authlib.exceptions.InvalidCredentialsException;
+import com.mojang.authlib.exceptions.UserBannedException;
 import com.sun.net.httpserver.HttpServer;
 import java.net.InetSocketAddress;
 import java.net.http.HttpRequest;
@@ -100,6 +105,32 @@ public final class KungServerSessionTest {
             KungConfig.get().dungeon = previous;
             server.stop(0);
         }
+    }
+
+    @Test public void mojangJoinFailuresKeepTheirCauseInTheMessage() {
+        assertEquals("Mojang is unreachable",
+            KungServerSession.signInFailure(new AuthenticationUnavailableException("Status: 503")));
+        assertEquals("Invalid session: restart the game and the launcher",
+            KungServerSession.signInFailure(new InvalidCredentialsException("Invalid session")));
+        assertEquals("Can't confirm your Mojang session (Status: 429): restart the game and the launcher",
+            KungServerSession.signInFailure(new AuthenticationException("Status: 429")));
+        assertEquals("Can't confirm your Mojang session (Insufficient privileges): restart the game and the launcher",
+            KungServerSession.signInFailure(new InsufficientPrivilegesException("Insufficient privileges")));
+        assertEquals("a messageless exception falls back to its class name",
+            "Can't confirm your Mojang session (UserBannedException): restart the game and the launcher",
+            KungServerSession.signInFailure(new UserBannedException()));
+    }
+
+    @Test public void onlyUnusableMojangSessionsAskForARestart() {
+        assertTrue(KungServerSession.needsRestart(
+            "Sign-in failed: " + KungServerSession.signInFailure(new InvalidCredentialsException("Invalid session"))));
+        assertTrue(KungServerSession.needsRestart(
+            "Sign-in failed: " + KungServerSession.signInFailure(new AuthenticationException("Status: 429"))));
+        assertFalse(KungServerSession.needsRestart(
+            "Sign-in failed: " + KungServerSession.signInFailure(new AuthenticationUnavailableException("Status: 503"))));
+        assertFalse(KungServerSession.needsRestart("Sign-in failed: too many attempts, try again later"));
+        assertFalse(KungServerSession.needsRestart(KungServerSession.NOT_ALLOWED));
+        assertFalse(KungServerSession.needsRestart(null));
     }
 
     /** The fake server numbers its challenges by request count, so each one is unique. */

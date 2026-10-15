@@ -22,6 +22,7 @@ import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.level.saveddata.maps.MapDecoration;
 import net.minecraft.world.level.saveddata.maps.MapDecorationTypes;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
@@ -38,9 +39,12 @@ public final class DungeonStateTracker {
     private static final int DEBUG_DOOR_SIZE = 6;
     private static final int DEBUG_CELL_GAP = 1;
     private static final int PLAYER_IDENTITY_MATCH_DISTANCE = 12;
+    private static final int MAX_BABY_ZOMBIE_DEATHS = 8;
     private final DungeonRoomRepository roomRepository;
     private final DungeonScanRecorder scanRecorder = new DungeonScanRecorder();
     private final DungeonRunStats runStats = new DungeonRunStats();
+    /** The latest baby-zombie deaths: a Mimic can die between two Mimic ESP scans, so the ESP matches these to its chests. */
+    private final List<BabyZombieDeath> babyZombieDeaths = new ArrayList<>();
     /**
      * Hypixel's score report arrives in the same moment the run ends; printing the splits right
      * away landed them between its header and the rest. Hold them until the report is through.
@@ -58,14 +62,12 @@ public final class DungeonStateTracker {
     private boolean inDungeonArea;
     private boolean mapVisibleArea;
     private long dungeonTick;
-    private long lastDungeonAreaSeenTick;
     private long cachedRenderPlanRevision = Long.MIN_VALUE;
     private long cachedRenderPlanCatalogRevision = Long.MIN_VALUE;
     private DungeonLiveMapWriter.MatchRenderPlan cachedRenderPlan;
     private long lastStatsObserveTick = Long.MIN_VALUE;
     private long lastClearStateObserveTick = Long.MIN_VALUE;
     private long lastLiveRoomSyncTick = Long.MIN_VALUE;
-    private long lastObservedClearStateRevision = Long.MIN_VALUE;
     private long pendingRunSummaryTick = Long.MIN_VALUE;
     private long pendingRunStartSignalTick = Long.MIN_VALUE;
     private long lastRunStartSignalTick = Long.MIN_VALUE;
@@ -98,10 +100,6 @@ public final class DungeonStateTracker {
         this.roomRepository = java.util.Objects.requireNonNull(roomRepository, "roomRepository");
     }
 
-    public DungeonRoomRepository roomRepository() {
-        return roomRepository;
-    }
-
     boolean canScanDungeon() {
         return scanReady;
     }
@@ -116,11 +114,6 @@ public final class DungeonStateTracker {
 
     public boolean isRecording() {
         return scanRecorder.isRecording();
-    }
-
-    boolean doorTitlePending() {
-        if (KungBuild.MODRINTH) return false;
-        return BloodRushHelperFeature.INSTANCE.doorTitlePending(dungeonTick);
     }
 
     boolean shouldFastScanDoors() {
@@ -138,10 +131,6 @@ public final class DungeonStateTracker {
 
     public long dungeonTick() {
         return dungeonTick;
-    }
-
-    public boolean wasInDungeonAreaRecently(long ignoredNowMillis) {
-        return inDungeonArea || dungeonTick - lastDungeonAreaSeenTick <= 400L;
     }
 
     public DungeonRunStats runStats() {
@@ -268,16 +257,14 @@ public final class DungeonStateTracker {
         }
         lines.add("MapDecorations count=" + decorationCount);
         for (MapDecoration decoration : map.getDecorations()) {
-            String name = decoration.name()
-                .map(component -> component.getString().replaceAll("\u00a7.", "").trim())
-                .orElse("");
+            String name = DungeonMapCheckmarkReader.decorationName(decoration);
             DungeonMapCheckmarkReader.MapPixel pixel = DungeonMapCheckmarkReader.mapPixelForDecoration(decoration);
             DungeonMapCheckmarkReader.MapPixel overlayPixel =
                 DungeonMapCheckmarkReader.overlayPixelForDecoration(decoration, client, scanRecorder.mapSnapshot(), 19, 6, 1);
             DungeonMapCheckmarkReader.MapRoom room =
                 DungeonMapCheckmarkReader.roomFromDecoration(decoration, client, scanRecorder.mapSnapshot());
             boolean strictParty = isStrictPartyMapDecoration(client, decoration, name);
-            lines.add("type=" + decorationTypeLabel(decoration)
+            lines.add("type=" + DungeonMapCheckmarkReader.decorationTypeName(decoration)
                 + " name=" + (name.isEmpty() ? "<empty>" : name)
                 + " raw=" + decoration.x() + "," + decoration.y()
                 + " pixel=" + pixel.x() + "," + pixel.z()
@@ -404,7 +391,7 @@ public final class DungeonStateTracker {
                 + " secrets=" + stats.secretsFound()
                 + " rooms=" + stats.soloRoomsCleared() + "-" + stats.roomsCleared()
                 + " lastSeenTick=" + stats.lastSeenTick()
-                + " loaded=" + (loadedPlayer(client, stats.uuid()) != null));
+                + " loaded=" + (DungeonScanUtils.playerByUuid(client, stats.uuid()) != null));
         }
         for (Map.Entry<UUID, DungeonPlayerStats> entry : runStats.players().entrySet()) {
             DungeonPlayerStats stats = entry.getValue();
@@ -459,7 +446,7 @@ public final class DungeonStateTracker {
         int drawableCount = 0;
         Set<UUID> resolvedPlayerUuids = new HashSet<>();
         for (MapDecoration decoration : map.getDecorations()) {
-            String name = decorationName(decoration);
+            String name = DungeonMapCheckmarkReader.decorationName(decoration);
             boolean selfDecoration = isSelfDecoration(client, decoration, name);
 
             DungeonMapCheckmarkReader.MapPixel mapPixel = DungeonMapCheckmarkReader.mapPixelForDecoration(decoration);
@@ -487,8 +474,8 @@ public final class DungeonStateTracker {
             }
             DungeonMapCheckmarkReader.MapRoom room =
                 DungeonMapCheckmarkReader.roomFromDecoration(decoration, client, snapshot);
-            AbstractClientPlayer loaded = loadedPlayer(client, resolvedUuid);
-            boolean playerDecoration = isPlayerMapDecoration(decoration);
+            AbstractClientPlayer loaded = DungeonScanUtils.playerByUuid(client, resolvedUuid);
+            boolean playerDecoration = DungeonMapCheckmarkReader.isPlayerDecoration(decoration);
             boolean drawable = playerDecoration && (anchoredOverlay != null || rawOverlay != null || loaded != null);
             if (drawable) {
                 drawableCount++;
@@ -497,7 +484,7 @@ public final class DungeonStateTracker {
                 }
             }
 
-            appendLine(debug, "decoration[" + decorationIndex++ + "] type=" + decorationTypeLabel(decoration)
+            appendLine(debug, "decoration[" + decorationIndex++ + "] type=" + DungeonMapCheckmarkReader.decorationTypeName(decoration)
                 + " playerDecoration=" + playerDecoration
                 + " name=" + (name.isEmpty() ? "<empty>" : name)
                 + " self=" + selfDecoration
@@ -537,7 +524,7 @@ public final class DungeonStateTracker {
     }
 
     private boolean isStrictPartyMapDecoration(Minecraft client, MapDecoration decoration, String name) {
-        if (!isPlayerMapDecoration(decoration)) {
+        if (!DungeonMapCheckmarkReader.isPlayerDecoration(decoration)) {
             return false;
         }
         if (name.isEmpty()) {
@@ -545,14 +532,6 @@ public final class DungeonStateTracker {
         }
         return !name.isEmpty()
             && (name.equalsIgnoreCase(client.player.getName().getString()) || runStats.isKnownDungeonPlayer(name));
-    }
-
-    private static boolean isPlayerMapDecoration(MapDecoration decoration) {
-        return decoration.type().equals(MapDecorationTypes.PLAYER)
-            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)
-            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)
-            || decoration.type().equals(MapDecorationTypes.BLUE_MARKER)
-            || decoration.type().equals(MapDecorationTypes.FRAME);
     }
 
     private UUID resolveDecorationUuid(
@@ -630,13 +609,6 @@ public final class DungeonStateTracker {
                 && name.equalsIgnoreCase(client.player.getName().getString()));
     }
 
-    private static AbstractClientPlayer loadedPlayer(Minecraft client, UUID uuid) {
-        if (client.level == null || uuid == null) {
-            return null;
-        }
-        return client.level.getPlayerByUUID(uuid) instanceof AbstractClientPlayer player ? player : null;
-    }
-
     private String classText(UUID uuid) {
         DungeonPlayerStats stats = uuid == null ? null : runStats.playerStats(uuid);
         return stats == null ? "UNKNOWN(no-stats)" : stats.dungeonClass().name();
@@ -686,12 +658,6 @@ public final class DungeonStateTracker {
         return pixel;
     }
 
-    private static String decorationName(MapDecoration decoration) {
-        return decoration.name()
-            .map(component -> component.getString().replaceAll("\u00a7.", "").trim())
-            .orElse("");
-    }
-
     private static String gridKeysText(Set<DungeonMapSnapshot.GridKey> keys) {
         List<String> parts = new ArrayList<>();
         for (DungeonMapSnapshot.GridKey key : keys) {
@@ -717,25 +683,6 @@ public final class DungeonStateTracker {
         builder.append(line).append('\n');
     }
 
-    private static String decorationTypeLabel(MapDecoration decoration) {
-        if (decoration.type().equals(MapDecorationTypes.PLAYER)) {
-            return "PLAYER";
-        }
-        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)) {
-            return "PLAYER_OFF_MAP";
-        }
-        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)) {
-            return "PLAYER_OFF_LIMITS";
-        }
-        if (decoration.type().equals(MapDecorationTypes.BLUE_MARKER)) {
-            return "BLUE_MARKER";
-        }
-        if (decoration.type().equals(MapDecorationTypes.FRAME)) {
-            return "FRAME";
-        }
-        return String.valueOf(decoration.type());
-    }
-
     public void initializeClient() {
         new DungeonEventRouter(this).register();
         scanRecorder.initializeClient(this);
@@ -749,7 +696,18 @@ public final class DungeonStateTracker {
             KungDebugRecorder.event("necron-end", "death split=" + splitTracker.currentSplitName() + " " + entity.getType()
                 + " name=\"" + entity.getName().getString() + "\" position=" + entity.position());
         }
+        if (!KungBuild.MODRINTH && entity instanceof Zombie zombie && zombie.isBaby()) {
+            if (babyZombieDeaths.size() >= MAX_BABY_ZOMBIE_DEATHS) babyZombieDeaths.removeFirst();
+            babyZombieDeaths.add(new BabyZombieDeath(entity.blockPosition(), dungeonTick));
+        }
         runStats.observeEntityDeath(Minecraft.getInstance(), entity);
+    }
+
+    List<BabyZombieDeath> babyZombieDeaths() {
+        return babyZombieDeaths;
+    }
+
+    record BabyZombieDeath(BlockPos pos, long tick) {
     }
 
     void observeSkyblockerBonus(DungeonBonusContribution bonus) {
@@ -877,17 +835,9 @@ public final class DungeonStateTracker {
         );
     }
 
-    public LearnRoomResult learnCurrentRoom(Minecraft client, String name, RoomType roomType, int secrets) {
-        return learnCurrentRoom(client, name, roomType, secrets, 0);
-    }
-
     public LearnRoomResult learnCurrentRoom(Minecraft client, String name, RoomType roomType, int secrets, int crypts) {
         CurrentRoomCore currentRoomCore = currentRoomCore(client);
         return learnRoomCore(currentRoomCore, name, roomType, secrets, crypts);
-    }
-
-    public LearnRoomResult learnCurrentKnownRoom(Minecraft client, DungeonKnownRoomCatalog.KnownRoomInfo info) {
-        return learnCurrentRoom(client, info.name(), info.type(), info.secrets(), info.crypts());
     }
 
     public LearnRoomResult learnCurrentMultiRoom(Minecraft client, String name, RoomType roomType, int secrets, int crypts) {
@@ -947,16 +897,6 @@ public final class DungeonStateTracker {
             crypts,
             roomComponents.size()
         );
-    }
-
-    public LearnRoomResult learnRoomAt(
-        Minecraft client,
-        BlockPos targetPosition,
-        String name,
-        RoomType roomType,
-        int secrets
-    ) {
-        return learnRoomAt(client, targetPosition, name, roomType, secrets, 0);
     }
 
     public LearnRoomResult learnRoomAt(
@@ -1229,7 +1169,7 @@ public final class DungeonStateTracker {
             return LearnRoomResult.failed("Stand in a Catacombs room to update its Prince setting.");
         }
         DungeonScanUtils.GridPosition roomGrid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        DungeonKnownRoomCatalog.MatchedRoom match = matchedRoomAt(roomGrid.gridX(), roomGrid.gridZ());
+        DungeonKnownRoomCatalog.MatchedRoom match = renderPlan().matchContaining(roomGrid.gridX(), roomGrid.gridZ());
         if (match == null) {
             return LearnRoomResult.failed("The current room has not been uniquely identified yet.");
         }
@@ -1253,7 +1193,7 @@ public final class DungeonStateTracker {
         }
 
         DungeonScanUtils.GridPosition roomGrid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        DungeonKnownRoomCatalog.MatchedRoom match = matchedRoomAt(roomGrid.gridX(), roomGrid.gridZ());
+        DungeonKnownRoomCatalog.MatchedRoom match = renderPlan().matchContaining(roomGrid.gridX(), roomGrid.gridZ());
         if (match == null) {
             return LearnRoomResult.failed("The current room has not been uniquely identified yet.");
         }
@@ -1292,7 +1232,7 @@ public final class DungeonStateTracker {
             ? null
             : roomRepository.knownCoreHint(currentRoomCore.stableCoreHash());
         DungeonKnownRoomCatalog.MatchedRoom match =
-            matchedRoomAt(currentRoomCore.roomGridX(), currentRoomCore.roomGridZ());
+            renderPlan().matchContaining(currentRoomCore.roomGridX(), currentRoomCore.roomGridZ());
         DungeonMapSnapshot.ObservedPoint initialPoint =
             scanRecorder.mapSnapshot().initialRoomPointAt(currentRoomCore.roomGridX(), currentRoomCore.roomGridZ());
 
@@ -1530,15 +1470,6 @@ public final class DungeonStateTracker {
         json.append('"');
     }
 
-    private DungeonKnownRoomCatalog.MatchedRoom matchedRoomAt(int roomGridX, int roomGridZ) {
-        for (DungeonKnownRoomCatalog.MatchedRoom match : renderPlan().matches()) {
-            if (match.contains(roomGridX, roomGridZ)) {
-                return match;
-            }
-        }
-        return null;
-    }
-
     private static String formatInitialPoint(DungeonMapSnapshot.ObservedPoint initialPoint) {
         if (initialPoint == null || initialPoint.point().kind() != DungeonScanPointKind.ROOM) {
             return "none";
@@ -1651,9 +1582,6 @@ public final class DungeonStateTracker {
         boolean insideDungeonGrid = isInsideDungeonGrid(client);
         if (instanceEntrance == null && dungeonInstanceActive && insideDungeonGrid) {
             instanceEntrance = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        }
-        if (mapVisibleArea) {
-            lastDungeonAreaSeenTick = dungeonTick;
         }
 
         DungeonWorkload workload = DungeonWorkload.current();
@@ -1986,8 +1914,8 @@ public final class DungeonStateTracker {
         lastStatsObserveTick = Long.MIN_VALUE;
         lastClearStateObserveTick = Long.MIN_VALUE;
         lastLiveRoomSyncTick = Long.MIN_VALUE;
-        lastObservedClearStateRevision = Long.MIN_VALUE;
         runStats.reset();
+        babyZombieDeaths.clear();
         runStats.startRun(dungeonTick);
         splitTracker.reset();
         configureDungeonFloor();
@@ -2031,7 +1959,6 @@ public final class DungeonStateTracker {
         lastStatsObserveTick = Long.MIN_VALUE;
         lastClearStateObserveTick = Long.MIN_VALUE;
         lastLiveRoomSyncTick = Long.MIN_VALUE;
-        lastObservedClearStateRevision = Long.MIN_VALUE;
         pendingRunSummaryTick = Long.MIN_VALUE;
         pendingRunStartSignalTick = Long.MIN_VALUE;
         runSummarySent = false;
@@ -2081,6 +2008,7 @@ public final class DungeonStateTracker {
         inDungeonArea = false;
         mapVisibleArea = false;
         runStats.reset();
+        babyZombieDeaths.clear();
         dungeonInstanceActive = false;
         pendingRunSummaryTick = Long.MIN_VALUE;
         runSummarySent = false;
@@ -2097,7 +2025,6 @@ public final class DungeonStateTracker {
         loggedMapDiscoveryLines.clear();
         lastStatsObserveTick = Long.MIN_VALUE;
         lastClearStateObserveTick = Long.MIN_VALUE;
-        lastObservedClearStateRevision = Long.MIN_VALUE;
         scanReady = false;
     }
 
@@ -2294,9 +2221,7 @@ public final class DungeonStateTracker {
         }
 
         DungeonMapCheckmarkReader.observe(client, scanRecorder.mapSnapshot());
-        long revision = scanRecorder.mapSnapshot().revision();
         runStats.observeClearStates(client, renderPlan());
-        lastObservedClearStateRevision = revision;
         lastClearStateObserveTick = dungeonTick;
     }
 

@@ -141,6 +141,39 @@ final class DungeonMapCheckmarkReader {
         return decorationPixel(decoration);
     }
 
+    static boolean isPlayerDecoration(MapDecoration decoration) {
+        return decoration.type().equals(MapDecorationTypes.PLAYER)
+            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)
+            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)
+            || decoration.type().equals(MapDecorationTypes.BLUE_MARKER)
+            || decoration.type().equals(MapDecorationTypes.FRAME);
+    }
+
+    static String decorationName(MapDecoration decoration) {
+        return decoration.name()
+            .map(component -> component.getString().replaceAll("§.", "").trim())
+            .orElse("");
+    }
+
+    static String decorationTypeName(MapDecoration decoration) {
+        if (decoration.type().equals(MapDecorationTypes.PLAYER)) {
+            return "PLAYER";
+        }
+        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)) {
+            return "PLAYER_OFF_MAP";
+        }
+        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)) {
+            return "PLAYER_OFF_LIMITS";
+        }
+        if (decoration.type().equals(MapDecorationTypes.BLUE_MARKER)) {
+            return "BLUE_MARKER";
+        }
+        if (decoration.type().equals(MapDecorationTypes.FRAME)) {
+            return "FRAME";
+        }
+        return String.valueOf(decoration.type());
+    }
+
     static MapPixel overlayPixelForDecoration(
         MapDecoration decoration,
         Minecraft client,

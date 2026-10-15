@@ -25,14 +25,6 @@ public final class CatacombsAverageCalculator {
         360_559_640L, 453_559_640L, 569_809_640L
     };
 
-    public CompletableFuture<Result> calculateAsync(String username) {
-        return calculateAsync(username, Goal.CLASS_AVERAGE_50);
-    }
-
-    public CompletableFuture<Result> calculateAsync(String username, Goal goal) {
-        return calculateAsync(username, goal, true);
-    }
-
     /**
      * Your own XP comes from the loader, merged with or answered from your saved data either way.
      * {@code useLastRunXp} additionally swaps the preset class XP per run for your last run's; chat replies
@@ -355,6 +347,10 @@ public final class CatacombsAverageCalculator {
         }
         if (KungServerSession.NOT_ALLOWED.equals(error)) {
             return "not allowed on the Kung server; set your own Hypixel API key";
+        }
+        if (KungServerSession.needsRestart(error)) {
+            // The asker can't fix it and the exception text isn't theirs to read: just say whose session it is.
+            return "Kung sign-in failed (Mojang session invalid, the Kung user has to restart the game)";
         }
         String lower = error == null ? "" : error.toLowerCase(Locale.ROOT);
         if (lower.contains("http 403")) {

@@ -100,6 +100,14 @@ public final class DungeonLifecycleTest {
     @Test public void differentServerStartsNewSessionEvenWithoutAWorldPacket() {
         HypixelInstanceState state = new HypixelInstanceState();
         state.observe(location("The Catacombs (F7)"), "mini1a");
+        // The tracker holds a different id for SERVER_CHANGE_CONFIRM_TICKS before observing it.
+        assertTrue(state.holdServerChange("mini2bc"));
+        List<String> sidebar = List.of("09/10/26 mini2bc");
+        for (int tick = 1; tick < HypixelInstanceState.SERVER_CHANGE_CONFIRM_TICKS; tick++) {
+            assertEquals("", state.confirmedServerChange(sidebar));
+            assertTrue(state.catacombs());
+        }
+        assertEquals("mini2bc", state.confirmedServerChange(sidebar));
         state.observe(HypixelLocation.UNKNOWN, "mini2bc");
         assertFalse(state.catacombs());
         assertEquals(1, state.epoch());

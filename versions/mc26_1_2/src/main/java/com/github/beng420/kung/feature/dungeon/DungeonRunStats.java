@@ -22,6 +22,7 @@ import java.text.NumberFormat;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
+import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
@@ -31,6 +32,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
@@ -290,7 +292,7 @@ public final class DungeonRunStats {
             if (uuid.equals(client.player.getUUID())) {
                 continue;
             }
-            AbstractClientPlayer player = playerByUuid(client, uuid);
+            AbstractClientPlayer player = DungeonScanUtils.playerByUuid(client, uuid);
             if (player != null) {
                 observePlayer(client, player, nowTick);
             }
@@ -303,10 +305,6 @@ public final class DungeonRunStats {
 
     public int secretsFound() {
         return secretsFound;
-    }
-
-    public boolean hasServerSecretsFound() {
-        return serverSecretsFoundObserved;
     }
 
     public int secretsAvailable() {
@@ -976,7 +974,7 @@ public final class DungeonRunStats {
 
     public void observeMessage(Minecraft client, String rawMessage, long nowTick, DungeonDeathTracker.MessageSource source) {
         if (rawMessage == null || rawMessage.isBlank() || sendingRunSummary) return;
-        String message = DungeonSecretCounts.clean(rawMessage);
+        String message = DungeonLifecycleSignals.clean(rawMessage);
         if (isGeneratedRunSummaryLine(message) || source == DungeonDeathTracker.MessageSource.ACTIONBAR) return;
         // Bonus assists may be social messages, but personal counters never come from quoted chat.
         observeScoreKillMessage(client, message);
@@ -1008,7 +1006,8 @@ public final class DungeonRunStats {
                 + " armor=" + java.util.Arrays.stream(EquipmentSlot.values())
                     .filter(slot -> slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR)
                     .filter(slot -> !zombie.getItemBySlot(slot).isEmpty())
-                    .map(Enum::name).toList());
+                    .map(slot -> slot.name() + ":" + BuiltInRegistries.ITEM.getKey(zombie.getItemBySlot(slot).getItem()))
+                    .toList());
         }
         if (mimic) {
             var damage = ((Zombie) entity).getLastDamageSource();
@@ -1049,7 +1048,9 @@ public final class DungeonRunStats {
     }
 
     private void observeScoreboard(Minecraft client) {
-        List<String> lines = DungeonSidebarReader.lines(client);
+        List<String> lines = client == null || client.level == null
+            ? List.of()
+            : HypixelInstanceTracker.INSTANCE.sidebarLines();
         for (String line : lines) {
             observeScoreboardLine(client, line);
         }
@@ -1057,7 +1058,7 @@ public final class DungeonRunStats {
     }
 
     void observeScoreboardLine(Minecraft client, String raw) {
-        String line = DungeonSecretCounts.clean(raw);
+        String line = DungeonLifecycleSignals.clean(raw);
         if (line.isBlank()) return;
         observeStatLine(client, line);
         int totalDeaths = DungeonDeathTracker.teamTotal(line);
@@ -1117,12 +1118,8 @@ public final class DungeonRunStats {
         return players;
     }
 
-    private UUID observeTabLine(String line) {
-        return observeTabLine(null, line, null);
-    }
-
     UUID observeTabLine(Minecraft client, String line, UUID uuid) {
-        line = DungeonSecretCounts.clean(line);
+        line = DungeonLifecycleSignals.clean(line);
         int partySecrets = DungeonSecretCounts.partyFound(line);
         if (partySecrets >= 0) {
             observeSecretsTotal(client, partySecrets);
@@ -1233,7 +1230,7 @@ public final class DungeonRunStats {
     }
 
     void observeStatLine(Minecraft client, String raw) {
-        String line = DungeonSecretCounts.clean(raw);
+        String line = DungeonLifecycleSignals.clean(raw);
         observeFloorMetadata(line);
         observeServerScoreLine(line);
         var fraction = DungeonSecretCounts.party(line);
@@ -1359,14 +1356,7 @@ public final class DungeonRunStats {
             return null;
         }
 
-        for (DungeonKnownRoomCatalog.MatchedRoom match : renderPlan.matches()) {
-            for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
-                if (component.roomGridX() == room.roomGridX() && component.roomGridZ() == room.roomGridZ()) {
-                    return match;
-                }
-            }
-        }
-        return null;
+        return renderPlan.matchContaining(room.roomGridX(), room.roomGridZ());
     }
 
     private static RoomKey currentPlayerRoom(Minecraft client) {
@@ -1774,17 +1764,9 @@ public final class DungeonRunStats {
     }
 
     private static String roomKeyFor(DungeonKnownRoomCatalog.MatchedRoom match) {
-        int minX = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
-            minX = Math.min(minX, component.roomGridX());
-            maxX = Math.max(maxX, component.roomGridX());
-            minZ = Math.min(minZ, component.roomGridZ());
-            maxZ = Math.max(maxZ, component.roomGridZ());
-        }
-        return "match:" + minX + "," + minZ + ":" + maxX + "," + maxZ + ":" + match.components().size();
+        DungeonKnownRoomCatalog.RoomBounds bounds = match.bounds();
+        return "match:" + bounds.minX() + "," + bounds.minZ() + ":" + bounds.maxX() + "," + bounds.maxZ()
+            + ":" + match.components().size();
     }
 
     private DungeonPlayerStats playerStats(UUID uuid, String fallbackName) {
@@ -1823,13 +1805,6 @@ public final class DungeonRunStats {
             || lowerName.equals("trinity");
     }
 
-    private AbstractClientPlayer playerByUuid(Minecraft client, UUID uuid) {
-        if (client.level == null || uuid == null) {
-            return null;
-        }
-        return client.level.getPlayerByUUID(uuid) instanceof AbstractClientPlayer player ? player : null;
-    }
-
     private void updateEstimatedScore() {
         estimatedScore = estimatedScore(null, bestSecretsAvailable(0));
     }
@@ -1840,10 +1815,6 @@ public final class DungeonRunStats {
             + speedScore()
             + bonusScore()
             + paulScoreBonus();
-    }
-
-    private int skillScore() {
-        return skillScore(null);
     }
 
     private int skillScore(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -1857,10 +1828,6 @@ public final class DungeonRunStats {
 
     private int deathPenalty() {
         return DungeonScoreCalculator.deathPenalty(deaths);
-    }
-
-    private int exploreScore() {
-        return exploreScore(null, bestSecretsAvailable(0));
     }
 
     private int exploreScore(DungeonLiveMapWriter.MatchRenderPlan renderPlan, int estimatedSecretsAvailable) {
@@ -1879,10 +1846,6 @@ public final class DungeonRunStats {
         }
         return clearedPercent >= 0.0
             ? Math.clamp((int) Math.floor(maxScore * clearedPercent / 100.0), 0, (int) maxScore) : 0;
-    }
-
-    private int secretScore() {
-        return secretScore(bestSecretsAvailable(0));
     }
 
     private int secretScore(int estimatedSecretsAvailable) {
@@ -2113,7 +2076,7 @@ public final class DungeonRunStats {
         return DungeonScoreCalculator.speedGraceSeconds(floor, masterMode);
     }
 
-    private boolean hasMimic() {
+    boolean hasMimic() {
         return floor == 6 || floor == 7;
     }
 

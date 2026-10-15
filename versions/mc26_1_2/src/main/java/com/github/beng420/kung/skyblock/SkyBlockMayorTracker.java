@@ -3,7 +3,6 @@ package com.github.beng420.kung.skyblock;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.util.KungDebugRecorder;
-import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -13,7 +12,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Locale;
-import java.util.Map;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 
@@ -135,9 +133,7 @@ public final class SkyBlockMayorTracker {
         String parsedMayorName = stringMember(mayor, "name");
         JsonObject minister = objectMember(mayor, "minister");
         String parsedMinisterName = stringMember(minister, "name");
-        boolean active = isPaul(parsedMayorName)
-            || isPaul(parsedMinisterName)
-            || hasPaulScorePerk(mayor);
+        boolean active = parsePaulScoreActive(mayor);
         MayorXpBoost xpBoost = mayorXpBoost(parsedMayorName, parsedMinisterName);
         feastStatus = parseFeastStatus(mayor, System.currentTimeMillis());
 
@@ -204,38 +200,19 @@ public final class SkyBlockMayorTracker {
         return "Grand Feast".equals(HypixelLocation.clean(stringMember(perk, "name")));
     }
 
-    private static boolean hasPaulScorePerk(JsonElement element) {
-        if (element == null || element.isJsonNull()) {
-            return false;
-        }
-        if (element.isJsonObject()) {
-            JsonObject object = element.getAsJsonObject();
-            for (Map.Entry<String, JsonElement> entry : object.entrySet()) {
-                String key = entry.getKey().toLowerCase(Locale.ROOT);
-                JsonElement value = entry.getValue();
-                if ((key.equals("name") || key.equals("description")) && value.isJsonPrimitive()) {
-                    String text = value.getAsString().toLowerCase(Locale.ROOT);
-                    if (text.equals("ezpz")
-                        || (text.contains("10") && text.contains("bonus") && text.contains("score"))
-                        || (text.contains("dungeon") && text.contains("score"))) {
-                        return true;
-                    }
-                }
-                if (hasPaulScorePerk(value)) {
-                    return true;
-                }
-            }
-            return false;
-        }
-        if (element.isJsonArray()) {
-            JsonArray array = element.getAsJsonArray();
-            for (JsonElement item : array) {
-                if (hasPaulScorePerk(item)) {
-                    return true;
-                }
+    static boolean parsePaulScoreActive(JsonObject mayor) {
+        // The +10 score is the elected EZPZ perk, not the name Paul or his candidate perks.
+        JsonElement perks = mayor == null ? null : mayor.get("perks");
+        if (perks != null && perks.isJsonArray()) {
+            for (JsonElement perk : perks.getAsJsonArray()) {
+                if (perk.isJsonObject() && isEzpzPerk(perk.getAsJsonObject())) return true;
             }
         }
-        return false;
+        return isEzpzPerk(objectMember(objectMember(mayor, "minister"), "perk"));
+    }
+
+    private static boolean isEzpzPerk(JsonObject perk) {
+        return "EZPZ".equalsIgnoreCase(HypixelLocation.clean(stringMember(perk, "name")));
     }
 
     private static JsonObject objectMember(JsonObject object, String name) {
@@ -260,10 +237,6 @@ public final class SkyBlockMayorTracker {
         }
         JsonElement value = object.get(name);
         return value != null && value.isJsonPrimitive() && value.getAsBoolean();
-    }
-
-    private static boolean isPaul(String name) {
-        return "paul".equals(name.trim().toLowerCase(Locale.ROOT));
     }
 
     private static boolean isDerpy(String name) {

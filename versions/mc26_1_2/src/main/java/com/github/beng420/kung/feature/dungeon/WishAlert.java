@@ -72,7 +72,7 @@ public final class WishAlert {
         boolean ready = canWish(config, selfClass, client.player.experienceLevel,
             com.github.beng420.kung.runtime.KungDeveloperAccess.allowed());
         for (String line : lines) {
-            String name = lowHealth.observe(DungeonSecretCounts.clean(line), config.wishAlertLowHealthPercent(), ready);
+            String name = lowHealth.observe(DungeonLifecycleSignals.clean(line), config.wishAlertLowHealthPercent(), ready);
             if (name != null) alert(client, name + " is below " + config.wishAlertLowHealthPercent() + "% HP");
         }
     }

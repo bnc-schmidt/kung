@@ -1,6 +1,7 @@
 package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.feature.dungeon.DungeonServerTickEvents;
+import com.github.beng420.kung.feature.misc.FrozenBlazeCapture;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
 import com.github.beng420.kung.util.ServerTickSequence;
@@ -34,5 +35,6 @@ public abstract class ClientCommonPacketListenerMixin {
     private void kung$traceSent(Packet<?> packet, CallbackInfo callbackInfo) {
         NpcDialogueTrace.sent(packet);
         FrozenBlazeHudFeature.INSTANCE.observeSent(packet);
+        FrozenBlazeCapture.sent(packet);
     }
 }

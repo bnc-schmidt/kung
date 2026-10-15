@@ -20,7 +20,7 @@ final class ChatEmoteSettings implements Supplier<List<SettingEntry>> {
         entries = List.copyOf(config.customChatEmotes());
         var next = new ArrayList<SettingEntry>();
         next.add(SettingEntry.toggle("Replace In Text", config::chatEmotesReplaceWords,
-            () -> config.setChatEmotesReplaceWords(!config.chatEmotesReplaceWords()))
+            config::setChatEmotesReplaceWords)
             .withTooltip("Also replaces the word without its colons: \"but i am on an iman account\"",
                 "is sent as \"but i am on an ♲ account\". Whole words only, any capitalization.",
                 "Command names and a /msg recipient stay as typed."));

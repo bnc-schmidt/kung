@@ -101,8 +101,6 @@ public final class SplitsConfig extends ConfigCategory {
         save();
     }
 
-    public void cyclePredictionMode() { setPredictionMode(predictionMode().next()); }
-
     public PredictionSource predictionSource() {
         return predictionSource == null ? PredictionSource.PB : predictionSource;
     }
@@ -236,7 +234,6 @@ public final class SplitsConfig extends ConfigCategory {
 
         PredictionMode(String label) { this.label = label; }
         public String label() { return label; }
-        public PredictionMode next() { return this == PHASE_END ? LIVE : PHASE_END; }
     }
 
     public enum TimeFormat {

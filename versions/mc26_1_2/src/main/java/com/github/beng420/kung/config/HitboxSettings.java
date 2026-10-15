@@ -34,10 +34,10 @@ final class HitboxSettings implements Supplier<List<SettingEntry>> {
             String expand = "Expand for line thickness and box size.";
             if (id.equals("minecraft:ender_dragon")) {
                 children.add(SettingEntry.toggle("Overall Box", config::dragonOverallBox,
-                        () -> config.setDragonOverallBox(!config.dragonOverallBox()))
+                        config::setDragonOverallBox)
                     .withTooltip("Show the dragon's large overall bounding box."));
                 children.add(SettingEntry.toggle("Body Part Boxes", config::dragonPartBoxes,
-                        () -> config.setDragonPartBoxes(!config.dragonPartBoxes()))
+                        config::setDragonPartBoxes)
                     .withTooltip("Show the smaller boxes for the head, body, wings and tail."));
                 expand = "Expand for independent overall and body-part boxes, line thickness and box size.";
             }

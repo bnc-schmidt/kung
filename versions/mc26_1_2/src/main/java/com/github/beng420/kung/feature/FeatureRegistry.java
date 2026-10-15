@@ -27,7 +27,6 @@ import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
 import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
 import com.github.beng420.kung.runtime.AppServices;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 
 public final class FeatureRegistry {
@@ -69,14 +68,6 @@ public final class FeatureRegistry {
 
         bootstrapped = true;
         FEATURES.forEach(feature -> feature.initialize(services));
-    }
-
-    public static List<Feature> features() {
-        return Collections.unmodifiableList(FEATURES);
-    }
-
-    public static void reset() {
-        FEATURES.forEach(Feature::reset);
     }
 
     public static void shutdown() {

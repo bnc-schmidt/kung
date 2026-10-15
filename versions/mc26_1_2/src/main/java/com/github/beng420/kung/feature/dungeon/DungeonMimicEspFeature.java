@@ -6,12 +6,15 @@ import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
@@ -36,13 +39,18 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     private static final int WAYPOINT_FILL = 0xAAFF3030;
     private static final int WAYPOINT_OUTLINE = 0xFFFFF15A;
     private static final double MIMIC_ENTITY_SEARCH_RANGE = 16.0;
+    // The Mimic moves a little before it dies.
+    private static final double MIMIC_DEATH_RANGE = 4.0;
+    // Longer than SCAN_INTERVAL_TICKS, so a death is judged by at least one scan.
+    private static final long MIMIC_DEATH_WINDOW_TICKS = 40L;
     private static final Set<String> KNOWN_STATIC_TRAPPED_CHEST_ROOMS = Set.of(
         "buttons",
         "slime",
         "slimemaze"
     );
-    private static final Pattern COMBAT_XP_PATTERN =
-        Pattern.compile("^\\+\\d+(?:\\.\\d+)?\\s+Combat\\b.*", Pattern.CASE_INSENSITIVE);
+    // Hypixel's actionbar writes thousands separators: "+1,251.9 Combat (722,792,684/0) 0/3 Secrets".
+    static final Pattern COMBAT_XP_PATTERN =
+        Pattern.compile("^\\+[\\d,]+(?:\\.\\d+)?\\s+Combat\\b.*", Pattern.CASE_INSENSITIVE);
     private static final Pattern MIMIC_KILL_PATTERN =
         Pattern.compile(".*(?:Mimic dead!?|Mimic Killed!|\\$SKYTILS-DUNGEON-SCORE-MIMIC\\$).*", Pattern.CASE_INSENSITIVE);
 
@@ -66,6 +74,9 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     private String lastCandidateLogState = "";
     private DungeonMapSnapshot.GridKey observedMimicMapRoom;
     private String mimicMapReason = "no-candidates";
+    // Trace dedupe, cleared with the rest of the per-run state in clear().
+    private final Set<String> rejectedLogged = new HashSet<>();
+    private final Set<Long> anomalyLogged = new HashSet<>();
 
     public DungeonMimicEspFeature(DungeonStateTracker tracker) {
         super(config -> config.dungeon);
@@ -143,16 +154,21 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         try {
             DungeonLiveMapWriter.MatchRenderPlan renderPlan = tracker.renderPlan();
             Set<String> drawnRooms = new HashSet<>();
+            List<Marker> drawn = new ArrayList<>();
             for (BlockPos pos : mimicChestPositions) {
-                if (playerInSameRoom(client, renderPlan, pos)) {
+                String match = sameRoomReason(client, renderPlan, pos);
+                if (match != null) {
                     String roomKey = roomKey(renderPlan, pos);
                     if (roomKey != null && !drawnRooms.add(roomKey)) {
                         continue;
                     }
-                    drawScreenWaypoint(client, graphics, pos);
+                    Marker marker = drawScreenWaypoint(client, graphics, pos, match);
+                    if (marker != null) drawn.add(marker);
                 }
             }
-            logRenderState(McCompat.camera(client).position(), sameRoomMimicChestCount(client));
+            Vec3 camera = McCompat.camera(client).position();
+            logAnomaly(client, renderPlan, camera, drawn);
+            logRenderState(camera, sameRoomMimicChestCount(client), renderPlan, drawn);
         } catch (RuntimeException | LinkageError exception) {
             tracker.reportRunError(client, "Mimic ESP waypoint", exception);
             KungMod.LOGGER.warn("Failed to render dungeon mimic waypoint.", exception);
@@ -200,12 +216,22 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
 
     private boolean isAllowedMimicPosition(Minecraft client, DungeonLiveMapWriter.MatchRenderPlan renderPlan, BlockPos pos) {
         DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(pos);
-        if (!isInsideDungeonGrid(grid) || renderPlan.roomTypeAt(grid.gridX(), grid.gridZ()) == RoomType.TRAP) return false;
+        if (!isInsideDungeonGrid(grid)) return reject(pos, "outside-grid");
+        if (renderPlan.roomTypeAt(grid.gridX(), grid.gridZ()) == RoomType.TRAP) return reject(pos, "trap-room");
         var decision = staticChests.check(tracker, client.level, pos, tracker.dungeonTick());
+        if (decision.fixed()) return reject(pos, "fixed-static");
         // Existing room-wide exclusions remain only for variants without confirmed positions.
         // Once a variant has a template, an additional chest in Buttons/Slime is a candidate too.
-        return !decision.fixed() && (decision.hasPattern()
-            || !isKnownStaticTrappedChestRoom(renderPlan, grid.gridX(), grid.gridZ()));
+        if (!decision.hasPattern() && isKnownStaticTrappedChestRoom(renderPlan, grid.gridX(), grid.gridZ())) {
+            return reject(pos, "static-room:" + canonicalRoomName(roomName(renderPlan, grid.gridX(), grid.gridZ())));
+        }
+        return true;
+    }
+
+    private boolean reject(BlockPos pos, String reason) {
+        String line = "pos=" + xyz(pos) + " reason=" + reason;
+        if (rejectedLogged.add(line)) KungDebugRecorder.event("mimic-rejected", line);
+        return false;
     }
 
     private static boolean isInsideDungeonGrid(DungeonScanUtils.GridPosition grid) {
@@ -314,6 +340,18 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             }
         }
 
+        long nowTick = tracker.dungeonTick();
+        // Same test as observeOpenedMimicChest: a loaded chunk whose chest block is no longer trapped.
+        var death = mimicDeathAtChest(tracker.runStats(), lastKnownMimicChestPositions, tracker.babyZombieDeaths(), nowTick,
+            chest -> client.level.hasChunk(chest.getX() >> 4, chest.getZ() >> 4)
+                && !client.level.getBlockState(chest).is(Blocks.TRAPPED_CHEST));
+        if (death != null) {
+            KungDebugRecorder.event("mimic-esp", "mimic death at chest pos=" + xyz(death.pos())
+                + " age=" + (nowTick - death.tick()) + " opened=true");
+            completeMimic(client, "mimic-death-at-chest");
+            return;
+        }
+
         Set<Integer> currentIds = new LinkedHashSet<>();
         for (Entity entity : client.level.entitiesForRendering()) {
             if (isMimicSpawnCandidate(entity)) {
@@ -324,6 +362,35 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         // Entities also disappear when leaving their tracking range. That is not a kill.
         if (!currentIds.isEmpty()) mimicEncounterActive = true;
         observedMimicEntityIds = currentIds;
+    }
+
+    /**
+     * A baby zombie that recently died within {@link #MIMIC_DEATH_RANGE} of an opened Mimic chest.
+     * The Mimic can die within one scan of spawning and wears armor, which fails the entity test in
+     * {@code DungeonRunStats}; position and time stand in for it. Only an opened chest counts, as in
+     * {@link #isMimicSpawnCandidate}: a baby zombie dying next to a closed trapped chest is no Mimic.
+     */
+    static DungeonStateTracker.BabyZombieDeath mimicDeathAtChest(
+        DungeonRunStats stats,
+        List<BlockPos> chests,
+        List<DungeonStateTracker.BabyZombieDeath> deaths,
+        long nowTick,
+        Predicate<BlockPos> opened
+    ) {
+        if (!stats.hasMimic() || stats.mimicKilled()) {
+            return null;
+        }
+        for (DungeonStateTracker.BabyZombieDeath death : deaths) {
+            if (nowTick - death.tick() > MIMIC_DEATH_WINDOW_TICKS) {
+                continue;
+            }
+            for (BlockPos chest : chests) {
+                if (chest.distSqr(death.pos()) <= MIMIC_DEATH_RANGE * MIMIC_DEATH_RANGE && opened.test(chest)) {
+                    return death;
+                }
+            }
+        }
+        return null;
     }
 
     private boolean isMimicSpawnCandidate(Entity entity) {
@@ -410,19 +477,28 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         DungeonLiveMapWriter.MatchRenderPlan renderPlan,
         BlockPos mimicPos
     ) {
+        return sameRoomReason(client, renderPlan, mimicPos) != null;
+    }
+
+    /** Which test put the chest in the player's room: "cell", "owner" or "cells"; null when it is not. */
+    private static String sameRoomReason(
+        Minecraft client,
+        DungeonLiveMapWriter.MatchRenderPlan renderPlan,
+        BlockPos mimicPos
+    ) {
         if (client.player == null) {
-            return false;
+            return null;
         }
         DungeonScanUtils.GridPosition playerGrid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
         DungeonScanUtils.GridPosition mimicGrid = DungeonScanUtils.getRoomGridPosition(mimicPos);
         if (!isInsideDungeonGrid(playerGrid) || !isInsideDungeonGrid(mimicGrid)) {
-            return false;
+            return null;
         }
         DungeonLiveMapWriter.CellKey playerCell = new DungeonLiveMapWriter.CellKey(playerGrid.gridX(), playerGrid.gridZ());
         DungeonLiveMapWriter.CellKey mimicCell = new DungeonLiveMapWriter.CellKey(mimicGrid.gridX(), mimicGrid.gridZ());
-        return playerCell.equals(mimicCell)
-            || renderPlan.sameRoomOwner(playerCell, mimicCell)
-            || sameRoomCells(renderPlan, mimicCell).contains(playerCell);
+        if (playerCell.equals(mimicCell)) return "cell";
+        if (renderPlan.sameRoomOwner(playerCell, mimicCell)) return "owner";
+        return sameRoomCells(renderPlan, mimicCell).contains(playerCell) ? "cells" : null;
     }
 
     private static Set<DungeonLiveMapWriter.CellKey> sameRoomCells(
@@ -503,10 +579,11 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
     }
 
-    private static void drawScreenWaypoint(
+    private static Marker drawScreenWaypoint(
         Minecraft client,
         GuiGraphicsExtractor graphics,
-        BlockPos pos
+        BlockPos pos,
+        String match
     ) {
         String label = "MIMIC";
         Vec3 screen = client.gameRenderer.projectPointToScreen(new Vec3(
@@ -519,7 +596,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             || !Double.isFinite(screen.z)
             || screen.z < -1.0
             || screen.z > 1.0) {
-            return;
+            return null;
         }
 
         int screenX = (int) Math.round((screen.x + 1.0) * 0.5 * graphics.guiWidth());
@@ -536,6 +613,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         graphics.fill(markerX + 4, markerY + 4, markerX + markerSize - 4, markerY + markerSize - 4, WAYPOINT_FILL);
         graphics.outline(markerX, markerY, markerSize, markerSize, WAYPOINT_OUTLINE);
         graphics.text(client.font, label, labelX, labelY, TEXT_RED, true);
+        return new Marker(pos, match, screenX, screenY, markerX != screenX - half || markerY != screenY - half);
     }
 
     private void clear() {
@@ -566,28 +644,63 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         lastLoggedState = "";
         lastCandidateLogState = "";
         observedMimicMapRoom = null;
+        rejectedLogged.clear();
+        anomalyLogged.clear();
     }
 
-    private void logRenderState(Vec3 camera, int sameRoomMarkers) {
+    private void logRenderState(
+        Vec3 camera,
+        int sameRoomMarkers,
+        DungeonLiveMapWriter.MatchRenderPlan renderPlan,
+        List<Marker> drawn
+    ) {
         long nowTick = tracker.dungeonTick();
         if (lastRenderLogTick != Long.MIN_VALUE && nowTick - lastRenderLogTick < 20L) {
             return;
         }
         lastRenderLogTick = nowTick;
         BlockPos first = mimicChestPositions.getFirst();
-        double dx = first.getX() + 0.5 - camera.x;
-        double dy = first.getY() + 0.5 - camera.y;
-        double dz = first.getZ() + 0.5 - camera.z;
-        int distance = (int) Math.round(Math.sqrt(dx * dx + dy * dy + dz * dz));
         String state = "waypoint chests=" + mimicChestPositions.size()
             + " sameRoom=" + sameRoomMarkers
-            + " pos=" + first.getX() + "," + first.getY() + "," + first.getZ()
-            + " distance=" + distance;
+            + " pos=" + xyz(first)
+            + " distance=" + distance(first, camera)
+            + drawnText(renderPlan, camera, drawn);
         if (state.equals(lastRenderLogState)) {
             return;
         }
         lastRenderLogState = state;
         KungDebugRecorder.event("mimic-esp", state);
+    }
+
+    /** Every frame: a second marker, or one matched by owner/cells instead of the player's own cell, is logged once per chest. */
+    private void logAnomaly(
+        Minecraft client,
+        DungeonLiveMapWriter.MatchRenderPlan renderPlan,
+        Vec3 camera,
+        List<Marker> drawn
+    ) {
+        boolean multiple = drawn.size() > 1;
+        boolean fresh = false;
+        for (Marker marker : drawn) {
+            if ((multiple || !"cell".equals(marker.match())) && anomalyLogged.add(marker.pos().asLong())) fresh = true;
+        }
+        if (!fresh) return;
+        DungeonLiveMapWriter.CellKey playerCell = currentPlayerRoom(client);
+        KungDebugRecorder.event("mimic-esp", "anomaly why=" + (multiple ? "multiple-markers" : "other-room-cell")
+            + " player=" + (playerCell == null ? "none" : playerCell.x() + "," + playerCell.z())
+            + drawnText(renderPlan, camera, drawn));
+    }
+
+    private static String drawnText(DungeonLiveMapWriter.MatchRenderPlan renderPlan, Vec3 camera, List<Marker> drawn) {
+        String list = drawn.stream().limit(4).map(marker -> {
+            var grid = DungeonScanUtils.getRoomGridPosition(marker.pos());
+            return xyz(marker.pos()) + " room=" + roomName(renderPlan, grid.gridX(), grid.gridZ())
+                + " cell=" + grid.gridX() + "," + grid.gridZ() + " match=" + marker.match()
+                + " dist=" + distance(marker.pos(), camera) + " screen=" + marker.x() + "," + marker.y()
+                + " clamped=" + marker.clamped();
+        }).collect(Collectors.joining("; "));
+        return " markers=" + drawn.size() + " drawn=[" + list
+            + (drawn.size() > 4 ? "; +" + (drawn.size() - 4) + " more" : "") + "]";
     }
 
     private void logCandidateState(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -638,6 +751,24 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
 
     private static int clampInt(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    private static String xyz(BlockPos pos) {
+        return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+    }
+
+    private static int distance(BlockPos pos, Vec3 camera) {
+        return (int) Math.round(Vec3.atCenterOf(pos).distanceTo(camera));
+    }
+
+    private static String roomName(DungeonLiveMapWriter.MatchRenderPlan renderPlan, int roomGridX, int roomGridZ) {
+        DungeonKnownRoomCatalog.MatchedRoom match = matchContaining(renderPlan, roomGridX, roomGridZ);
+        if (match != null) return match.template().name();
+        DungeonKnownRoomCatalog.KnownCoreHint hint = renderPlan.hintAt(roomGridX, roomGridZ);
+        return hint != null ? hint.name() : "unknown";
+    }
+
+    private record Marker(BlockPos pos, String match, int x, int y, boolean clamped) {
     }
 
     private record ScanStats(int checkedChunks, int checkedBlockEntityPositions, int blockStateScannedChunks) {

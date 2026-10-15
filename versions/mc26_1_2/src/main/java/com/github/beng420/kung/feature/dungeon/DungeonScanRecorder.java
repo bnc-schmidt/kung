@@ -35,6 +35,7 @@ public final class DungeonScanRecorder {
     private int scanNumber;
     private boolean recording;
     private long lastCheckmarkTick = Long.MIN_VALUE;
+    private PlayerScanContext previousPlayer;
 
     public void initializeClient(DungeonStateTracker tracker) {
         ClientTickEvents.END_CLIENT_TICK.register(client -> tick(client, tracker));
@@ -65,12 +66,10 @@ public final class DungeonScanRecorder {
         if (!com.github.beng420.kung.skyblock.HypixelInstanceTracker.INSTANCE.positionKnown()) return;
         tracker.seedScanEntrance(mapSnapshot);
 
-        PlayerScanContext currentPlayerContext = PlayerScanContext.from(client);
-        if (!currentPlayerContext.isInsideDungeonGrid()) {
+        if (!observePlayer(PlayerScanContext.from(client))) {
             return;
         }
 
-        mapSnapshot.observePlayerGrid(currentPlayerContext.gridX(), currentPlayerContext.gridZ());
         observeVisibleTeammateRooms(client, tracker.runStats());
         observeMapState(client, tracker.runStats(), tracker.dungeonTick());
         lastScanTick = tracker.dungeonTick();
@@ -96,12 +95,10 @@ public final class DungeonScanRecorder {
         startRecording();
         if (!com.github.beng420.kung.skyblock.HypixelInstanceTracker.INSTANCE.positionKnown()) return;
         tracker.seedScanEntrance(mapSnapshot);
-        PlayerScanContext currentPlayerContext = PlayerScanContext.from(client);
-        if (!currentPlayerContext.isInsideDungeonGrid()) {
+        if (!observePlayer(PlayerScanContext.from(client))) {
             return;
         }
 
-        mapSnapshot.observePlayerGrid(currentPlayerContext.gridX(), currentPlayerContext.gridZ());
         observeVisibleTeammateRooms(client, tracker.runStats());
         long nowTick = tracker.dungeonTick();
         observeMapState(client, tracker.runStats(), nowTick);
@@ -117,6 +114,22 @@ public final class DungeonScanRecorder {
             if (!doors.isEmpty()) recordScan(client, tracker.runStats(), doors);
         }
         scanBatch(client, tracker, tracker.shouldFastScanDoors());
+    }
+
+    /** Records the player's room; false while the player is outside the dungeon grid. */
+    private boolean observePlayer(PlayerScanContext player) {
+        // Spirit Leap, AOTV, Etherwarp and pearls change rooms without walking through the door
+        // between them. The previous room is forgotten even outside the grid, so a jump from
+        // there cannot leave a stale room to pair with the next one.
+        if (previousPlayer != null && player.jumpedFrom(previousPlayer)) {
+            mapSnapshot.forgetPreviousPlayerRoom();
+        }
+        previousPlayer = player;
+        if (!DungeonScanUtils.isValidRoomGrid(player.gridX(), player.gridZ())) {
+            return false;
+        }
+        mapSnapshot.observePlayerGrid(player.gridX(), player.gridZ());
+        return true;
     }
 
     private void scanBatch(Minecraft client, DungeonStateTracker tracker, boolean fast) {
@@ -184,10 +197,10 @@ public final class DungeonScanRecorder {
         Set<UUID> assignedSlotUuids = new HashSet<>();
         int teammateSlotCursor = 1;
         for (MapDecoration decoration : mapData.getDecorations()) {
-            if (!isPlayerDecoration(decoration)) {
+            if (!DungeonMapCheckmarkReader.isPlayerDecoration(decoration)) {
                 continue;
             }
-            String name = decorationPlayerName(decoration);
+            String name = DungeonMapCheckmarkReader.decorationName(decoration);
             if (name.isEmpty()) {
                 SlotNameResult slotName = resolvedDecorationPlayerName(
                     decoration,
@@ -233,7 +246,8 @@ public final class DungeonScanRecorder {
             if (uuid.equals(client.player.getUUID())) {
                 continue;
             }
-            if (!(client.level.getPlayerByUUID(uuid) instanceof AbstractClientPlayer player)) {
+            AbstractClientPlayer player = DungeonScanUtils.playerByUuid(client, uuid);
+            if (player == null) {
                 continue;
             }
             if (player == client.player || player.isInvisible()) {
@@ -243,20 +257,6 @@ public final class DungeonScanRecorder {
             DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(player.blockPosition());
             mapSnapshot.observeVisitedRoom(grid.gridX(), grid.gridZ());
         }
-    }
-
-    private static boolean isPlayerDecoration(MapDecoration decoration) {
-        return decoration.type().equals(MapDecorationTypes.PLAYER)
-            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)
-            || decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)
-            || decoration.type().equals(MapDecorationTypes.BLUE_MARKER)
-            || decoration.type().equals(MapDecorationTypes.FRAME);
-    }
-
-    private static String decorationPlayerName(MapDecoration decoration) {
-        return decoration.name()
-            .map(component -> component.getString().replaceAll("\u00a7.", "").trim())
-            .orElse("");
     }
 
     private static SlotNameResult resolvedDecorationPlayerName(
@@ -331,7 +331,14 @@ public final class DungeonScanRecorder {
         return false;
     }
 
-    private record PlayerScanContext(int blockX, int blockY, int blockZ, int gridX, int gridZ) {
+    record PlayerScanContext(int blockX, int blockY, int blockZ, int gridX, int gridZ) {
+        /**
+         * Blocks a player can walk in one tick, with margin: legitimate walking is about 1.4-1.8.
+         * More is a teleport (Spirit Leap, a short AOTV or etherwarp hop next to a wall) or a position
+         * correction. A false jump costs one skipped traversal; a missed one draws a door through a wall.
+         */
+        static final int MAX_WALK_BLOCKS_PER_TICK = 3;
+
         static PlayerScanContext from(Minecraft client) {
             BlockPos position = client.player.blockPosition();
             DungeonScanUtils.GridPosition gridPosition = DungeonScanUtils.getRoomGridPosition(position);
@@ -344,11 +351,10 @@ public final class DungeonScanRecorder {
             );
         }
 
-        boolean isInsideDungeonGrid() {
-            return gridX >= 0
-                && gridZ >= 0
-                && gridX <= DungeonScanUtils.SCAN_GRID_SIZE / 2
-                && gridZ <= DungeonScanUtils.SCAN_GRID_SIZE / 2;
+        boolean jumpedFrom(PlayerScanContext earlier) {
+            int dx = blockX - earlier.blockX;
+            int dz = blockZ - earlier.blockZ;
+            return dx * dx + dz * dz > MAX_WALK_BLOCKS_PER_TICK * MAX_WALK_BLOCKS_PER_TICK;
         }
     }
 

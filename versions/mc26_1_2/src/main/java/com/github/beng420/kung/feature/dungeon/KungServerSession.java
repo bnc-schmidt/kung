@@ -1,10 +1,13 @@
 package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.util.KungDebugRecorder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.exceptions.AuthenticationException;
 import com.mojang.authlib.exceptions.AuthenticationUnavailableException;
+import com.mojang.authlib.exceptions.InvalidCredentialsException;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -26,6 +29,7 @@ public final class KungServerSession {
     public static final KungServerSession INSTANCE = new KungServerSession(KungServerSession::joinMojang);
 
     public static final String NOT_ALLOWED = "Not allowed on this server";
+    private static final String RESTART_HINT = "restart the game and the launcher";
     private static final long RENEW_BEFORE_MS = 5 * 60_000L;
     // A broken sign-in is reused this long, so live sync can't hammer Mojang or the server.
     // A refusal (not on the allowlist) is kept until the game restarts or the server URL changes.
@@ -153,13 +157,32 @@ public final class KungServerSession {
         User user = client.getUser();
         try {
             client.services().sessionService().joinServer(user.getProfileId(), user.getAccessToken(), serverId);
-        } catch (AuthenticationUnavailableException exception) {
-            throw new IllegalStateException("Mojang is unreachable");
         } catch (AuthenticationException exception) {
-            // Offline and non-Microsoft accounts have no Mojang session to join with.
-            throw new IllegalStateException("Mojang refused this account; offline accounts can't sign in");
+            String message = signInFailure(exception);
+            KungMod.LOGGER.warn("Kung server sign-in", exception);
+            KungDebugRecorder.event("kung-sign-in", exception.getClass().getSimpleName() + ": " + exception.getMessage());
+            KungMessages.send(client, KungMessages.Type.WARNING, "", "Kung server sign-in failed: " + message);
+            throw new IllegalStateException(message);
         }
         return user.getName();
+    }
+
+    /** Mirrors vanilla's authenticateServer: an expired token needs a restart, any other refusal keeps Mojang's own text. */
+    static String signInFailure(Throwable exception) {
+        if (exception instanceof AuthenticationUnavailableException) {
+            return "Mojang is unreachable";
+        }
+        if (exception instanceof InvalidCredentialsException) {
+            return "Invalid session: " + RESTART_HINT;
+        }
+        String detail = exception.getMessage();
+        return "Can't confirm your Mojang session ("
+            + (detail == null ? exception.getClass().getSimpleName() : detail) + "): " + RESTART_HINT;
+    }
+
+    /** True for a sign-in error that only restarting the game and the launcher fixes: the local Mojang session is unusable. */
+    public static boolean needsRestart(String error) {
+        return error != null && error.contains(RESTART_HINT);
     }
 
     private record Session(URI base, String token, long renewAt) {

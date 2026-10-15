@@ -149,7 +149,7 @@ public final class KungDebugRecorder {
         builder.append("reservedScoreLimit=").append(MAX_SCORE_EVENTS).append('\n');
         builder.append("reservedRoomLimit=").append(MAX_ROOM_EVENTS).append('\n');
         builder.append("suppressed=").append(suppressedTotal).append('\n');
-        builder.append("focus=door-title,map-change,map-check,map-discovery,map-topology,mimic-esp,player-markers,player-slots,dungeon-state,context-state,npc-dialogue\n");
+        builder.append("focus=door-title,map-change,map-check,map-discovery,map-topology,mimic-esp,mimic-rejected,player-markers,player-slots,dungeon-state,context-state,npc-dialogue\n");
         appendAreaSummary(builder);
         builder.append('\n');
         for (String line : snapshot) builder.append(line).append('\n');
@@ -292,6 +292,7 @@ public final class KungDebugRecorder {
         if (initialRoomPoint(area, message)) return true;
         String haystack = message.toLowerCase(Locale.ROOT);
         return haystack.contains("error")
+            || haystack.contains("anomaly")
             || haystack.contains("exception")
             || haystack.contains("failed")
             || haystack.contains("crash")

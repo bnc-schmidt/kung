@@ -7,6 +7,7 @@ import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog.RoomBounds;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -41,7 +42,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static final int CELL_GAP = 1;
     private static final int GRID_UNITS = DungeonScanUtils.SCAN_GRID_SIZE;
     private static final int GRID_PIXEL_SIZE = scanGridToPixel(GRID_UNITS);
-    private static final int HEADER_HEIGHT = 0;
     private static final int PLAYER_HEAD_SIZE = 10;
     private static final int TEAMMATE_HEAD_SIZE = 8;
     private static final float ROOM_LABEL_SCALE = 0.56F;
@@ -56,10 +56,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static final double PLAYER_MARKER_SMOOTHING = 18.0;
     private static final int PLAYER_MARKER_SNAP_DISTANCE = 18;
 
-    private static final int BACKGROUND = 0x00000000;
     private static final int PANEL = 0x5514171C;
-    private static final int EMPTY = 0x882A2E36;
-    private static final int UNSEEN = 0x66111318;
     private static final int MAP_BORDER = 0xFF9AA0A8;
     private static final int OPEN_DOOR = 0xFF82511F;
     private static final int WITHER_DOOR = 0xFF050506;
@@ -235,7 +232,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 // identity, but only draw teammates whose current world entity is available.
                 Set<UUID> drawn = new HashSet<>();
                 for (var slot : stats.dungeonPlayerSlots(client)) {
-                    AbstractClientPlayer player = playerByUuid(client, slot.uuid());
+                    AbstractClientPlayer player = DungeonScanUtils.playerByUuid(client, slot.uuid());
                     if (player == null || !drawn.add(player.getUUID())) continue;
                     boolean self = player.getUUID().equals(client.player.getUUID());
                     if (!self && (!player.isAlive()
@@ -415,7 +412,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             return cells;
         }
 
-        DungeonKnownRoomCatalog.MatchedRoom match = matchContaining(renderPlan, cell.x(), cell.z());
+        DungeonKnownRoomCatalog.MatchedRoom match = renderPlan.matchContaining(cell.x(), cell.z());
         if (match == null) {
             return Set.of(cell);
         }
@@ -504,19 +501,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         return new Rect(x, y, width, height);
     }
 
-    private static DungeonKnownRoomCatalog.MatchedRoom matchContaining(
-        DungeonLiveMapWriter.MatchRenderPlan renderPlan,
-        int roomGridX,
-        int roomGridZ
-    ) {
-        for (DungeonKnownRoomCatalog.MatchedRoom match : renderPlan.matches()) {
-            if (match.contains(roomGridX, roomGridZ)) {
-                return match;
-            }
-        }
-        return null;
-    }
-
     private static void drawRoomLabels(
         GuiGraphicsExtractor graphics,
         DungeonMapSnapshot snapshot,
@@ -550,7 +534,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
 
         DungeonScanUtils.GridPosition playerGrid =
             DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        if (!validRoomGrid(playerGrid.gridX(), playerGrid.gridZ())) {
+        if (!DungeonScanUtils.isValidRoomGrid(playerGrid.gridX(), playerGrid.gridZ())) {
             return;
         }
 
@@ -724,18 +708,15 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         LabelPlacement placement = labelPlacementFor(match, left, top);
         int secrets = match.template().secrets();
         int secretsFound = secretsFoundFor(match, stats, renderPlan);
-        boolean visited = false;
         boolean cleared = false;
         boolean completed = false;
         for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
-            visited = visited || renderPlan.isVisitedRoom(component.roomGridX(), component.roomGridZ());
             cleared = cleared || renderPlan.isClearedRoom(component.roomGridX(), component.roomGridZ());
             completed = completed || renderPlan.isCompletedRoom(component.roomGridX(), component.roomGridZ());
         }
         if (completed) {
             secretsFound = secrets;
         }
-        RoomTextState textState = roomTextState(match.template().type(), visited, cleared, completed, secretsFound, secrets);
         drawRoomText(
             graphics,
             placement.centerX(),
@@ -746,10 +727,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             secretsFound,
             secrets,
             match.template().crypts(),
-            textState,
+            roomTextColor(cleared, completed),
             DungeonRoomDebugFormatter.matchOverlayLines(match, renderPlan)
         );
-        drawPrinceIcon(graphics, roomBounds(match), stats, match.template().prince());
+        drawPrinceIcon(graphics, match.bounds(), stats, match.template().prince());
     }
 
     private static int secretsFoundFor(
@@ -774,7 +755,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         int left,
         int top
     ) {
-        RoomBounds bounds = roomBounds(match);
+        RoomBounds bounds = match.bounds();
         if ((match.components().size() == 2
                 && ((bounds.spanX() == 2 && bounds.spanZ() == 1)
                     || (bounds.spanX() == 1 && bounds.spanZ() == 2)))
@@ -811,20 +792,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         int spanX = Math.max(1, bounds.spanX());
         int width = ROOM_SIZE * spanX + (spanX - 1) * (DOOR_SIZE + CELL_GAP);
         return Math.max(ROOM_SIZE - 3, width - 4);
-    }
-
-    private static RoomBounds roomBounds(DungeonKnownRoomCatalog.MatchedRoom match) {
-        int minX = Integer.MAX_VALUE;
-        int maxX = Integer.MIN_VALUE;
-        int minZ = Integer.MAX_VALUE;
-        int maxZ = Integer.MIN_VALUE;
-        for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
-            minX = Math.min(minX, component.roomGridX());
-            maxX = Math.max(maxX, component.roomGridX());
-            minZ = Math.min(minZ, component.roomGridZ());
-            maxZ = Math.max(maxZ, component.roomGridZ());
-        }
-        return new RoomBounds(minX, maxX, minZ, maxZ);
     }
 
     private static DungeonKnownRoomCatalog.MatchedComponent labelComponentFor(
@@ -865,7 +832,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static DungeonKnownRoomCatalog.MatchedComponent lShapeCornerComponent(
         DungeonKnownRoomCatalog.MatchedRoom match
     ) {
-        RoomBounds bounds = roomBounds(match);
+        RoomBounds bounds = match.bounds();
         if (match.components().size() != 3 || bounds.spanX() != 2 || bounds.spanZ() != 2) {
             return null;
         }
@@ -1042,13 +1009,9 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             secretsFound,
             secrets,
             hint.crypts(),
-            roomTextState(
-                hint.type(),
-                renderPlan.isVisitedRoom(roomGridX, roomGridZ),
+            roomTextColor(
                 renderPlan.isClearedRoom(roomGridX, roomGridZ),
-                renderPlan.isCompletedRoom(roomGridX, roomGridZ),
-                secretsFound,
-                secrets
+                renderPlan.isCompletedRoom(roomGridX, roomGridZ)
             ),
             observedPoint == null
                 ? List.of()
@@ -1120,7 +1083,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         int secretsFound,
         int secrets,
         int crypts,
-        RoomTextState textState,
+        int textColor,
         List<String> debugLines
     ) {
         if (!shouldDrawRoomText(roomType)) {
@@ -1133,7 +1096,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         for (String labelLine : labelLines) {
             textLines.add(new RoomTextLine(labelLine, ROOM_LABEL_SCALE));
         }
-        if (secrets > 0 && textState.showSecrets()) {
+        if (secrets > 0) {
             textLines.add(new RoomTextLine(Math.min(secretsFound, secrets) + "/" + secrets, ROOM_SECRET_SCALE));
         }
         if (KungConfig.get().dungeon.debugRoomCrypts() && crypts >= 0) {
@@ -1154,28 +1117,18 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 line.text(),
                 centerX,
                 y + index * lineStep,
-                textState.color(),
+                textColor,
                 line.scale() * textScale,
                 true
             );
         }
     }
 
-    private static RoomTextState roomTextState(
-        RoomType roomType,
-        boolean visited,
-        boolean cleared,
-        boolean completed,
-        int secretsFound,
-        int secrets
-    ) {
+    private static int roomTextColor(boolean cleared, boolean completed) {
         if (completed) {
-            return new RoomTextState(COMPLETED_TEXT, true);
+            return COMPLETED_TEXT;
         }
-        if (cleared) {
-            return new RoomTextState(TEXT, true);
-        }
-        return new RoomTextState(MUTED_TEXT, true);
+        return cleared ? TEXT : MUTED_TEXT;
     }
 
     private static boolean shouldDrawRoomText(RoomType roomType) {
@@ -1466,7 +1419,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             }
         }
         List<DungeonRunStats.DungeonPlayerSlot> teammateSlots = teammateSlotsByDecoration(teammatePixels, playerSlots, slot -> {
-            AbstractClientPlayer loaded = playerByUuid(client, slot.uuid());
+            AbstractClientPlayer loaded = DungeonScanUtils.playerByUuid(client, slot.uuid());
             if (loaded == null) return null;
             SmoothPlayerTarget at = smoothTargetFromEntity(loaded, partialTick);
             return new DungeonMapCheckmarkReader.MapPixel(Math.round(at.x()), Math.round(at.y()));
@@ -1514,7 +1467,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             }
             resolved++;
 
-            AbstractClientPlayer loadedPlayer = playerByUuid(client, playerUuid);
+            AbstractClientPlayer loadedPlayer = DungeonScanUtils.playerByUuid(client, playerUuid);
             DungeonMapCheckmarkReader.MapPixel markerPixel = decorationPixel;
             if (markerPixel == null && loadedPlayer != null) {
                 SmoothPlayerTarget entityTarget = smoothTargetFromEntity(loadedPlayer, partialTick);
@@ -1774,7 +1727,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             .append(':')
             .append(action)
             .append(":type=")
-            .append(mapDecorationTypeName(decoration))
+            .append(DungeonMapCheckmarkReader.decorationTypeName(decoration))
             .append(":name=")
             .append(playerName == null || playerName.isEmpty() ? "<empty>" : playerName)
             .append(":raw=")
@@ -1811,25 +1764,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         return value.substring(0, Math.min(8, value.length()));
     }
 
-    private static String mapDecorationTypeName(MapDecoration decoration) {
-        if (decoration.type().equals(MapDecorationTypes.PLAYER)) {
-            return "PLAYER";
-        }
-        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_MAP)) {
-            return "PLAYER_OFF_MAP";
-        }
-        if (decoration.type().equals(MapDecorationTypes.PLAYER_OFF_LIMITS)) {
-            return "PLAYER_OFF_LIMITS";
-        }
-        if (decoration.type().equals(MapDecorationTypes.BLUE_MARKER)) {
-            return "BLUE_MARKER";
-        }
-        if (decoration.type().equals(MapDecorationTypes.FRAME)) {
-            return "FRAME";
-        }
-        return String.valueOf(decoration.type());
-    }
-
     private static String pixelText(DungeonMapCheckmarkReader.MapPixel pixel) {
         return pixel == null ? "null" : pixel.x() + "," + pixel.z();
     }
@@ -1845,13 +1779,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             builder.append(value, 0, Math.min(8, value.length()));
         }
         return builder.append(']').toString();
-    }
-
-    private static AbstractClientPlayer playerByUuid(Minecraft client, UUID uuid) {
-        if (client.level == null || uuid == null) {
-            return null;
-        }
-        return client.level.getPlayerByUUID(uuid) instanceof AbstractClientPlayer player ? player : null;
     }
 
     private static PlayerSkin skinForMarker(Minecraft client, UUID uuid, AbstractClientPlayer loadedPlayer) {
@@ -2292,7 +2219,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             if (client.player != null) {
                 DungeonScanUtils.GridPosition playerGrid =
                     DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-                if (validRoomGrid(playerGrid.gridX(), playerGrid.gridZ())) {
+                if (DungeonScanUtils.isValidRoomGrid(playerGrid.gridX(), playerGrid.gridZ())) {
                     bounds.includeScanCell(playerGrid.gridX() * 2, playerGrid.gridZ() * 2);
                 }
             }
@@ -2352,7 +2279,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                     }
                     DungeonMapCheckmarkReader.MapPixel pixel =
                         overlayPixelForDecorationOrRaw(decoration, client, snapshot);
-                    AbstractClientPlayer loadedPlayer = playerByUuid(client, playerSlot.uuid());
+                    AbstractClientPlayer loadedPlayer = DungeonScanUtils.playerByUuid(client, playerSlot.uuid());
                     if (pixel != null) {
                         bounds.includePixel(pixel.x(), pixel.z());
                         assignedDecorationUuids.add(playerSlot.uuid());
@@ -2365,7 +2292,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             }
 
             for (DungeonRunStats.DungeonPlayerSlot slot : stats.dungeonPlayerSlots(client)) {
-                AbstractClientPlayer player = playerByUuid(client, slot.uuid());
+                AbstractClientPlayer player = DungeonScanUtils.playerByUuid(client, slot.uuid());
                 if (player != null) {
                     bounds.includePixel(mapPixelForWorldX(player.getX()), mapPixelForWorldZ(player.getZ()));
                 }
@@ -2452,7 +2379,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         }
 
         private void includeRoom(int roomX, int roomZ) {
-            if (!validRoomGrid(roomX, roomZ)) {
+            if (!DungeonScanUtils.isValidRoomGrid(roomX, roomZ)) {
                 return;
             }
             minRoomX = Math.min(minRoomX, roomX);
@@ -2554,30 +2481,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         return (gridX & 1) != 0 && (gridZ & 1) == 0;
     }
 
-    private static boolean validRoomGrid(int gridX, int gridZ) {
-        return gridX >= 0
-            && gridZ >= 0
-            && gridX <= DungeonScanUtils.SCAN_GRID_SIZE / 2
-            && gridZ <= DungeonScanUtils.SCAN_GRID_SIZE / 2;
-    }
-
     private record LabelPlacement(int centerX, int centerY, int maxWidth) {
     }
 
-    private record RoomBounds(int minX, int maxX, int minZ, int maxZ) {
-        int spanX() {
-            return maxX - minX + 1;
-        }
-
-        int spanZ() {
-            return maxZ - minZ + 1;
-        }
-    }
-
     private record RoomTextLine(String text, float scale) {
-    }
-
-    private record RoomTextState(int color, boolean showSecrets) {
     }
 
     private record LabelLineKey(String label, int maxWidth) {

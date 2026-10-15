@@ -3,7 +3,10 @@ package com.github.beng420.kung.feature.dungeon;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.UUID;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.level.block.Block;
@@ -45,18 +48,20 @@ public final class DungeonScanUtils {
             && roomGridZ <= SCAN_GRID_SIZE / 2;
     }
 
+    /** The loaded client-side player with this UUID, or null when no level, no UUID or not a client player. */
+    static AbstractClientPlayer playerByUuid(Minecraft client, UUID uuid) {
+        if (client.level == null || uuid == null) {
+            return null;
+        }
+        return client.level.getPlayerByUUID(uuid) instanceof AbstractClientPlayer player ? player : null;
+    }
+
     public static int worldXForScanGrid(int gridX) {
         return START_X + gridX * SCAN_STEP_BLOCKS;
     }
 
     public static int worldZForScanGrid(int gridZ) {
         return START_Z + gridZ * SCAN_STEP_BLOCKS;
-    }
-
-    public static GridPosition nearestScanGridPosition(BlockPos pos) {
-        int gridX = Math.round((pos.getX() - START_X) / (float) SCAN_STEP_BLOCKS);
-        int gridZ = Math.round((pos.getZ() - START_Z) / (float) SCAN_STEP_BLOCKS);
-        return new GridPosition(gridX, gridZ);
     }
 
     public static boolean isRoomScanPoint(int gridX, int gridZ) {
@@ -83,15 +88,6 @@ public final class DungeonScanUtils {
             }
         }
         return true;
-    }
-
-    public static RoomCenter getRoomCenter(int worldX, int worldZ) {
-        int roomX = Math.round((worldX - START_X) / (float) ROOM_SIZE_BLOCKS);
-        int roomZ = Math.round((worldZ - START_Z) / (float) ROOM_SIZE_BLOCKS);
-        return new RoomCenter(
-            roomX * ROOM_SIZE_BLOCKS + START_X,
-            roomZ * ROOM_SIZE_BLOCKS + START_Z
-        );
     }
 
     public static GridPosition getRoomGridPosition(BlockPos pos) {
@@ -306,9 +302,6 @@ public final class DungeonScanUtils {
         for (int i = 0; i < amount; i++) {
             signature.append('0');
         }
-    }
-
-    public record RoomCenter(int worldX, int worldZ) {
     }
 
     public record GridPosition(int gridX, int gridZ) {

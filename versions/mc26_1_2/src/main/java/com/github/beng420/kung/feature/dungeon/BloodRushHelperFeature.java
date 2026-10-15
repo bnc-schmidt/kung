@@ -124,18 +124,11 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         if (!enabled() || !realRunStarted || message == null) {
             return;
         }
-        String clean = message.replaceAll("\u00a7.", "")
-            .replaceAll("\\s+", " ")
-            .trim()
-            .toLowerCase(Locale.ROOT);
+        String clean = DungeonLifecycleSignals.clean(message).toLowerCase(Locale.ROOT);
         if ("the blood door has been opened!".equals(clean)) {
             recordBloodRushDoorObservation(tracker.renderPlan(), tracker.mapSnapshot());
             showBloodRushDone(client);
         }
-    }
-
-    void observeBloodDoorOpened(Minecraft client) {
-        showBloodRushDone(client);
     }
 
     void observeProgress(Minecraft client, DungeonStateTracker tracker) {

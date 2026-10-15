@@ -31,7 +31,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
 
     private boolean allowMessage(Component message) {
         Minecraft client = Minecraft.getInstance();
-        if (!shouldHide(tracker, client, message)) {
+        if (!shouldHide(client, message)) {
             return true;
         }
 
@@ -39,8 +39,8 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
         return false;
     }
 
-    private boolean shouldHide(DungeonStateTracker tracker, Minecraft client, Component component) {
-        if (tracker == null || component == null) {
+    private boolean shouldHide(Minecraft client, Component component) {
+        if (component == null) {
             return false;
         }
 
@@ -49,7 +49,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
             return false;
         }
 
-        String message = clean(component.getString());
+        String message = DungeonLifecycleSignals.clean(component.getString());
         if (message.isEmpty() || message.startsWith("[Kung")) {
             return false;
         }
@@ -60,7 +60,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
         if (config.lootSpam() && isLootSpamMessage(message)) {
             return true;
         }
-        if (config.watcher() && isBossMessageFrom(message, "the watcher")) {
+        if (config.watcher() && "the watcher".equals(bossName(message))) {
             return true;
         }
         return config.bossMessages() && bossMessageEnabled(config, bossName(message));
@@ -84,10 +84,6 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
             || lower.contains("you picked up a defense orb")
             || lower.contains(" found a wither essence") && lower.contains("everyone gains an extra essence")
             || lower.contains(" essence! you found ");
-    }
-
-    private static boolean isBossMessageFrom(String message, String expectedBoss) {
-        return expectedBoss.equals(bossName(message));
     }
 
     private static String bossName(String message) {
@@ -119,11 +115,5 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
             case "the wither king", "wither king" -> config.witherKing();
             default -> false;
         };
-    }
-
-    private static String clean(String message) {
-        return message == null
-            ? ""
-            : message.replaceAll("\u00a7.", "").replaceAll("\\s+", " ").trim();
     }
 }

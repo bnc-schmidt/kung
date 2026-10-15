@@ -98,7 +98,7 @@ public final class DungeonMapSnapshot {
                     logMapChange("room-fully-loaded room=" + gridText(room));
                 }
             }
-            recordInitialRoomPoint(key, point, scanNumber, timestamp);
+            recordInitialRoomPoint(key, point, scanNumber);
             ObservedPoint previous = points.get(key);
             if (previous == null || shouldReplace(previous, point)) {
                 ObservedPoint initial = initialRoomPoints.get(key);
@@ -106,7 +106,7 @@ public final class DungeonMapSnapshot {
                 if (previous != null) DungeonKnownRoomCatalog.observePreloadTransition(previous.point(), point);
                 recordObservedCoreTransition(previous, point);
                 recordDoorTransition(previous, point);
-                points.put(key, new ObservedPoint(point, scanNumber, timestamp));
+                points.put(key, new ObservedPoint(point));
                 logMapChange("point scan=" + scanNumber
                     + " grid=" + gridText(key)
                     + " previous=" + pointText(previous == null ? null : previous.point())
@@ -157,6 +157,11 @@ public final class DungeonMapSnapshot {
         }
 
         previousPlayerRoom = currentPlayerRoom;
+    }
+
+    /** A teleport crosses rooms without a door: the next observation must not infer a traversal. */
+    void forgetPreviousPlayerRoom() {
+        previousPlayerRoom = null;
     }
 
     void observeStartRoom(int roomGridX, int roomGridZ) {
@@ -397,10 +402,6 @@ public final class DungeonMapSnapshot {
         return startRoom != null && startRoom.gridX() == gridX && startRoom.gridZ() == gridZ;
     }
 
-    public boolean isTraversedDoor(int gridX, int gridZ) {
-        return traversedDoors.contains(new GridKey(gridX, gridZ));
-    }
-
     public boolean isVisitedRoom(int roomGridX, int roomGridZ) {
         return visitedRooms.contains(new GridKey(roomGridX, roomGridZ));
     }
@@ -455,16 +456,6 @@ public final class DungeonMapSnapshot {
 
     public List<RemoteDoor> remoteDoors() {
         return List.copyOf(remoteDoors.values());
-    }
-
-    public void clearRemoteLiveData() {
-        if (remoteRooms.isEmpty() && remoteDoors.isEmpty()) {
-            return;
-        }
-        remoteRooms.clear();
-        remoteDoors.clear();
-        revision++;
-        logMapChange("remote-live-clear revision=" + revision);
     }
 
     public void replaceRemoteLiveData(List<RemoteRoom> rooms, List<RemoteDoor> doors) {
@@ -526,34 +517,6 @@ public final class DungeonMapSnapshot {
                     + " room=" + gridText(key)
                     + " name=" + merged.name()
                     + " type=" + merged.type());
-            }
-        }
-        if (changed) {
-            revision++;
-        }
-    }
-
-    public void mergeRemoteDoors(String source, List<RemoteDoor> doors) {
-        if (source == null || source.isBlank() || doors == null || doors.isEmpty()) {
-            return;
-        }
-
-        boolean changed = false;
-        for (RemoteDoor door : doors) {
-            if (door == null || !isValidDoorGrid(door.scanGridX(), door.scanGridZ())) {
-                continue;
-            }
-            RemoteDoor normalized = normalizeRemoteDoor(door, source);
-            GridKey key = new GridKey(normalized.scanGridX(), normalized.scanGridZ());
-            RemoteDoor previous = remoteDoors.get(key);
-            RemoteDoor merged = mergeRemoteDoor(previous, normalized);
-            remoteDoors.put(key, merged);
-            if (!merged.equals(previous)) {
-                changed = true;
-                logMapChange("remote-door source=" + source
-                    + " grid=" + gridText(key)
-                    + " kind=" + merged.kind()
-                    + " target=" + merged.targetType());
             }
         }
         if (changed) {
@@ -717,13 +680,13 @@ public final class DungeonMapSnapshot {
         return false;
     }
 
-    private void recordInitialRoomPoint(GridKey key, DungeonScanPoint point, int scanNumber, long timestamp) {
+    private void recordInitialRoomPoint(GridKey key, DungeonScanPoint point, int scanNumber) {
         if (point.kind() != DungeonScanPointKind.ROOM
             || DungeonRoomClassifier.isEmptyCore(point.coreHash())
             || initialRoomPoints.containsKey(key)) {
             return;
         }
-        initialRoomPoints.put(key, new ObservedPoint(point, scanNumber, timestamp));
+        initialRoomPoints.put(key, new ObservedPoint(point));
         logMapChange("initial-room-point scan=" + scanNumber
             + " grid=" + gridText(key)
             + " point=" + pointText(point));
@@ -882,7 +845,7 @@ public final class DungeonMapSnapshot {
     public record GridKey(int gridX, int gridZ) {
     }
 
-    public record ObservedPoint(DungeonScanPoint point, int scanNumber, long timestamp) {
+    public record ObservedPoint(DungeonScanPoint point) {
     }
 
     public record RemoteRoom(

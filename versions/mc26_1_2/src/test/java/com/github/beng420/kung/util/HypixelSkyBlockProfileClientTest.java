@@ -130,7 +130,14 @@ public final class HypixelSkyBlockProfileClientTest {
             {"Kung server returned HTTP 429", "CA data service is rate limited"},
             {"request timed out", "CA data service timed out"},
             {"Kung server returned HTTP 500", "CA data service unavailable"},
-            {KungServerSession.NOT_ALLOWED, "not allowed on the Kung server; set your own Hypixel API key"}};
+            {KungServerSession.NOT_ALLOWED, "not allowed on the Kung server; set your own Hypixel API key"},
+            {"Sign-in failed: Invalid session: restart the game and the launcher", MOJANG_SESSION_REPLY},
+            {"Sign-in failed: Can't confirm your Mojang session (Status: 429): restart the game and the launcher",
+                MOJANG_SESSION_REPLY},
+            {"Sign-in failed: Can't confirm your Mojang session (request timed out): restart the game and the launcher",
+                MOJANG_SESSION_REPLY},
+            {"Sign-in failed: Mojang is unreachable", "CA data service unavailable"},
+            {"Sign-in failed: too many attempts, try again later", "CA data service unavailable"}};
         for (String[] row : chat) {
             var combined = HypixelSkyBlockProfileClient.combine(ProfileResult.error(own), ProfileResult.error(row[0]));
             assertEquals(own + " | " + row[0], combined.error());
@@ -147,6 +154,8 @@ public final class HypixelSkyBlockProfileClientTest {
         assertSame(served, HypixelSkyBlockProfileClient.combine(ProfileResult.error(own), served));
     }
 
+    private static final String MOJANG_SESSION_REPLY =
+        "Kung sign-in failed (Mojang session invalid, the Kung user has to restart the game)";
     private static final List<String> PROVIDERS = List.of("Hypixel", "KungServer");
     private static HttpServer authServer;
     private static DungeonConfig previousDungeonConfig;

@@ -202,105 +202,36 @@ public final class KungConfig {
     }
 
     private static void migrateLegacyChatCommandSettings(KungConfig loaded, JsonObject miscJson) {
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "cataChatCommandEnabled",
-            "c50ChatCommandEnabled",
-            "ca50ChatCommandEnabled",
-            loaded.misc::setC50ChatCommandEnabled,
-            loaded.misc::setCa50ChatCommandEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "ca50ChatCommandEnabled",
-            "c50ChatCommandEnabled",
-            "ca50ChatCommandEnabled",
-            loaded.misc::setC50ChatCommandEnabled,
-            loaded.misc::setCa50ChatCommandEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "cataPartyCommandsEnabled",
-            "c50PartyCommandsEnabled",
-            "ca50PartyCommandsEnabled",
-            loaded.misc::setC50PartyCommandsEnabled,
-            loaded.misc::setCa50PartyCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "ca50PartyCommandsEnabled",
-            "c50PartyCommandsEnabled",
-            "ca50PartyCommandsEnabled",
-            loaded.misc::setC50PartyCommandsEnabled,
-            loaded.misc::setCa50PartyCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "cataGuildCommandsEnabled",
-            "c50GuildCommandsEnabled",
-            "ca50GuildCommandsEnabled",
-            loaded.misc::setC50GuildCommandsEnabled,
-            loaded.misc::setCa50GuildCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "ca50GuildCommandsEnabled",
-            "c50GuildCommandsEnabled",
-            "ca50GuildCommandsEnabled",
-            loaded.misc::setC50GuildCommandsEnabled,
-            loaded.misc::setCa50GuildCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "cataAllChatCommandsEnabled",
-            "c50AllChatCommandsEnabled",
-            "ca50AllChatCommandsEnabled",
-            loaded.misc::setC50AllChatCommandsEnabled,
-            loaded.misc::setCa50AllChatCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "ca50AllChatCommandsEnabled",
-            "c50AllChatCommandsEnabled",
-            "ca50AllChatCommandsEnabled",
-            loaded.misc::setC50AllChatCommandsEnabled,
-            loaded.misc::setCa50AllChatCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "cataPrivateCommandsEnabled",
-            "c50PrivateCommandsEnabled",
-            "ca50PrivateCommandsEnabled",
-            loaded.misc::setC50PrivateCommandsEnabled,
-            loaded.misc::setCa50PrivateCommandsEnabled
-        );
-        migrateLegacySharedCommandSetting(
-            miscJson,
-            "ca50PrivateCommandsEnabled",
-            "c50PrivateCommandsEnabled",
-            "ca50PrivateCommandsEnabled",
-            loaded.misc::setC50PrivateCommandsEnabled,
-            loaded.misc::setCa50PrivateCommandsEnabled
-        );
+        migrateLegacySharedCommandSetting(miscJson, "ChatCommandEnabled",
+            loaded.misc::setC50ChatCommandEnabled, loaded.misc::setCa50ChatCommandEnabled);
+        migrateLegacySharedCommandSetting(miscJson, "PartyCommandsEnabled",
+            loaded.misc::setC50PartyCommandsEnabled, loaded.misc::setCa50PartyCommandsEnabled);
+        migrateLegacySharedCommandSetting(miscJson, "GuildCommandsEnabled",
+            loaded.misc::setC50GuildCommandsEnabled, loaded.misc::setCa50GuildCommandsEnabled);
+        migrateLegacySharedCommandSetting(miscJson, "AllChatCommandsEnabled",
+            loaded.misc::setC50AllChatCommandsEnabled, loaded.misc::setCa50AllChatCommandsEnabled);
+        migrateLegacySharedCommandSetting(miscJson, "PrivateCommandsEnabled",
+            loaded.misc::setC50PrivateCommandsEnabled, loaded.misc::setCa50PrivateCommandsEnabled);
     }
 
+    /** The old shared "cata"/"ca50" key fills whichever of the "c50"/"ca50" keys the file leaves unset. */
     private static void migrateLegacySharedCommandSetting(
         JsonObject miscJson,
-        String legacyName,
-        String c50Name,
-        String ca50Name,
+        String suffix,
         java.util.function.Consumer<Boolean> c50Setter,
         java.util.function.Consumer<Boolean> ca50Setter
     ) {
-        if (!hasValue(miscJson, legacyName)) {
-            return;
-        }
-        boolean legacyValue = miscJson.get(legacyName).getAsBoolean();
-        if (!hasValue(miscJson, c50Name)) {
-            c50Setter.accept(legacyValue);
-        }
-        if (!hasValue(miscJson, ca50Name)) {
-            ca50Setter.accept(legacyValue);
+        for (String legacyName : new String[] {"cata" + suffix, "ca50" + suffix}) {
+            if (!hasValue(miscJson, legacyName)) {
+                continue;
+            }
+            boolean legacyValue = miscJson.get(legacyName).getAsBoolean();
+            if (!hasValue(miscJson, "c50" + suffix)) {
+                c50Setter.accept(legacyValue);
+            }
+            if (!hasValue(miscJson, "ca50" + suffix)) {
+                ca50Setter.accept(legacyValue);
+            }
         }
     }
 

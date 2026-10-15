@@ -6,6 +6,7 @@ import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -15,16 +16,19 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundPlayerInfoUpdatePacket;
 import net.minecraft.network.protocol.game.ClientboundSetPlayerTeamPacket;
+import net.minecraft.world.scores.Scoreboard;
 
 /** Receives applied packets on the client thread. All consumers share this session state. */
 public final class HypixelInstanceTracker {
     public static final HypixelInstanceTracker INSTANCE = new HypixelInstanceTracker();
     private final HypixelInstanceState state = new HypixelInstanceState();
     private final HypixelDungeonFloorState dungeonFloor = new HypixelDungeonFloorState();
-    private final SkyBlockSidebar.Pending pendingSidebar = new SkyBlockSidebar.Pending();
+    // Package-private with the constructor, so tests can run commitServerChange without a client.
+    final SkyBlockSidebar.Pending pendingSidebar = new SkyBlockSidebar.Pending();
     private final Map<UUID, String> tabRows = new HashMap<>();
     private List<String> tabHeaderFooter = List.of();
     private List<String> sidebarLines = List.of();
@@ -34,7 +38,7 @@ public final class HypixelInstanceTracker {
     private String lastLoggedState = "";
     private String lastAnnouncedContext = "";
 
-    private HypixelInstanceTracker() {}
+    HypixelInstanceTracker() {}
 
     public static void initializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(INSTANCE::tick);
@@ -132,7 +136,43 @@ public final class HypixelInstanceTracker {
             sidebarLines = sidebar;
             resolve(client, true);
         }
+        String server = state.confirmedServerChange(sidebarLines);
+        if (!server.isEmpty()) {
+            // Keeps the raw rows of the committed transfer for the trace.
+            KungDebugRecorder.event("context-state", "server-change " + state.serverId() + " -> " + server
+                + " sidebar=" + sidebarLines);
+            var connection = client.getConnection();
+            commitServerChange(server, client.level.getScoreboard(),
+                connection == null ? List.of() : connection.getOnlinePlayers());
+            publish(client, "server-change");
+        }
         announce(client);
+    }
+
+    /**
+     * A different server id stayed on the sidebar: a new instance session. No world packet follows,
+     * so a static row such as "The Catacombs (M7)" is never re-sent; dropping the evidence would leave
+     * the location and floor unknown for the rest of the run. The rows still live on the scoreboard
+     * and tab list after the hold are the truth for the new id, so they are read again here instead.
+     * Package-private so tests can run it without a client.
+     */
+    void commitServerChange(String server, Scoreboard board, Collection<PlayerInfo> players) {
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.UNKNOWN, server);
+        dungeonFloor.worldChanged(System.currentTimeMillis());
+        // Same owners as tick() polls: rows the server never touched in this world stay ineligible.
+        pendingSidebar.changed();
+        sidebarLines = pendingSidebar.poll(board);
+        tabRows.clear();
+        for (PlayerInfo info : players) {
+            Component name = info.getTabListDisplayName();
+            if (name != null) tabRows.put(info.getProfile().id(), name.getString());
+        }
+        ArrayList<String> lines = evidenceLines();
+        visibleLines = List.copyOf(lines);
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(sidebarLines), server);
+        state.observe(HypixelInstanceState.Source.TAB,
+            HypixelLocation.parse(lines.subList(sidebarLines.size(), lines.size())), server);
+        dungeonFloor.observe(state.location(), visibleLines, System.currentTimeMillis());
     }
 
     private void disconnect(Minecraft client) {
@@ -158,21 +198,26 @@ public final class HypixelInstanceTracker {
         visibleLines = List.of();
     }
 
-    private void resolve(Minecraft client, boolean sidebarPacket) {
+    private ArrayList<String> evidenceLines() {
         ArrayList<String> lines = new ArrayList<>(sidebarLines);
         lines.addAll(tabHeaderFooter);
         lines.addAll(tabRows.values());
+        return lines;
+    }
+
+    private void resolve(Minecraft client, boolean sidebarPacket) {
+        ArrayList<String> lines = evidenceLines();
         if (visibleLines.equals(lines)) return;
         visibleLines = List.copyOf(lines);
         HypixelLocation location = HypixelLocation.parse(sidebarPacket ? sidebarLines
             : lines.subList(sidebarLines.size(), lines.size()));
-        boolean serverChanged = state.observe(sidebarPacket ? HypixelInstanceState.Source.SIDEBAR : HypixelInstanceState.Source.TAB,
-            location, HypixelLocation.serverId(sidebarLines));
-        if (serverChanged) {
-            // A server row can change before the old location row is removed. Never pair the two.
-            clearEvidence();
-            dungeonFloor.worldChanged(System.currentTimeMillis());
-        }
+        String server = HypixelLocation.serverId(sidebarLines);
+        // A world packet is the real transfer. A different id without one may be a one-tick
+        // rewrite of the row, so it only counts once tick() saw it stay (commitServerChange).
+        // The id is unchanged past this point, so observe() never starts a new session here.
+        if (state.holdServerChange(server)) return;
+        state.observe(sidebarPacket ? HypixelInstanceState.Source.SIDEBAR : HypixelInstanceState.Source.TAB,
+            location, server);
         dungeonFloor.observe(state.location(), visibleLines, System.currentTimeMillis());
         publish(client, "context-packet");
     }

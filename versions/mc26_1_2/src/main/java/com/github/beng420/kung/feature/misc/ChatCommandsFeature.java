@@ -5,6 +5,7 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.HypixelChatSender;
 import com.github.beng420.kung.skyblock.HypixelGuildTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayDeque;
@@ -85,7 +86,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         if (client == null || client.player == null || rawMessage == null || rawMessage.isBlank()) {
             return;
         }
-        String clean = cleanLine(rawMessage);
+        String clean = HypixelLocation.clean(rawMessage);
         ChatContext chatContext = chatContext(client, clean);
         if (chatContext == null) {
             return;
@@ -379,13 +380,9 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private static String senderName(String rawSender) {
-        String clean = cleanLine(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
+        String clean = HypixelLocation.clean(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
         Matcher matcher = USERNAME_PATTERN.matcher(clean);
         return matcher.find() ? matcher.group() : "";
-    }
-
-    private static String cleanLine(String rawLine) {
-        return rawLine.replaceAll("\u00a7.", "").replaceAll("\\s+", " ").trim();
     }
 
     private static String stripChatTimestamp(String cleanLine) {

@@ -14,7 +14,6 @@ import com.github.beng420.kung.feature.dungeon.DungeonRoomDataSyncClient;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomClassifier;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomProject;
 import com.github.beng420.kung.feature.dungeon.DungeonScanUtils;
-import com.github.beng420.kung.feature.dungeon.DungeonSplitTracker;
 import com.github.beng420.kung.feature.dungeon.KungServerSession;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
@@ -35,7 +34,6 @@ import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.client.Minecraft;
-import net.minecraft.commands.SharedSuggestionProvider;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -157,6 +155,14 @@ final class KungCommandActions {
         CommandContext<FabricClientCommandSource> context,
         DungeonStateTracker dungeonStateTracker
     ) {
+        return learnCurrentRoomInput(context, dungeonStateTracker, false);
+    }
+
+    private static int learnCurrentRoomInput(
+        CommandContext<FabricClientCommandSource> context,
+        DungeonStateTracker dungeonStateTracker,
+        boolean multiRoom
+    ) {
         RoomLearnInput input = parseRoomLearnInput(context);
         if (input == null) {
             return 0;
@@ -175,13 +181,11 @@ final class KungCommandActions {
             }
         }
 
-        DungeonStateTracker.LearnRoomResult result = dungeonStateTracker.learnCurrentRoom(
-            client,
-            input.name(),
-            input.type(),
-            input.secrets(),
-            input.crypts()
-        );
+        DungeonStateTracker.LearnRoomResult result = multiRoom
+            ? dungeonStateTracker.learnCurrentMultiRoom(
+                client, input.name(), input.type(), input.secrets(), input.crypts())
+            : dungeonStateTracker.learnCurrentRoom(
+                client, input.name(), input.type(), input.secrets(), input.crypts());
         context.getSource().sendFeedback(roomWriteMessage(result.message(), result.learned()));
         return result.learned() ? 1 : 0;
     }
@@ -210,33 +214,7 @@ final class KungCommandActions {
         CommandContext<FabricClientCommandSource> context,
         DungeonStateTracker dungeonStateTracker
     ) {
-        RoomLearnInput input = parseRoomLearnInput(context);
-        if (input == null) {
-            return 0;
-        }
-
-        Minecraft client = context.getSource().getClient();
-        if (!input.hasExplicitMetadata()) {
-            input = resolveRoomLearnInput(
-                context,
-                client,
-                client.player == null ? null : client.player.blockPosition(),
-                input
-            );
-            if (input == null) {
-                return 0;
-            }
-        }
-
-        DungeonStateTracker.LearnRoomResult result = dungeonStateTracker.learnCurrentMultiRoom(
-            client,
-            input.name(),
-            input.type(),
-            input.secrets(),
-            input.crypts()
-        );
-        context.getSource().sendFeedback(roomWriteMessage(result.message(), result.learned()));
-        return result.learned() ? 1 : 0;
+        return learnCurrentRoomInput(context, dungeonStateTracker, true);
     }
 
     static int exportRoomInput(
@@ -249,14 +227,9 @@ final class KungCommandActions {
         }
 
         Minecraft client = context.getSource().getClient();
-        if (!input.hasExplicitMetadata()) {
-            DungeonKnownRoomCatalog.KnownRoomInfo info = client.player == null
-                ? knownRoomInfo(context, input.name())
-                : knownRoomInfo(context, client, client.player.blockPosition(), input.name());
-            if (info == null) {
-                return 0;
-            }
-            input = new RoomLearnInput(info.name(), info.secrets(), info.type(), info.crypts(), true);
+        input = resolveKnownRoomInput(context, client, input);
+        if (input == null) {
+            return 0;
         }
 
         DungeonStateTracker.RoomDataResult result = dungeonStateTracker.exportCurrentRoom(
@@ -283,14 +256,9 @@ final class KungCommandActions {
         }
 
         Minecraft client = context.getSource().getClient();
-        if (!input.hasExplicitMetadata()) {
-            DungeonKnownRoomCatalog.KnownRoomInfo info = client.player == null
-                ? knownRoomInfo(context, input.name())
-                : knownRoomInfo(context, client, client.player.blockPosition(), input.name());
-            if (info == null) {
-                return 0;
-            }
-            input = new RoomLearnInput(info.name(), info.secrets(), info.type(), info.crypts(), true);
+        input = resolveKnownRoomInput(context, client, input);
+        if (input == null) {
+            return 0;
         }
 
         DungeonStateTracker.RoomDataResult result = dungeonStateTracker.exportCurrentRoom(
@@ -308,6 +276,23 @@ final class KungCommandActions {
         DungeonRoomDataSyncClient.INSTANCE.pushRoomReportAsync(client, result.clipboardText());
         context.getSource().sendFeedback(commandMessage("Room Sync push started: " + input.name()));
         return 1;
+    }
+
+    /** The input itself when it names type and secrets, else the known room's data; null after the lookup already reported. */
+    private static RoomLearnInput resolveKnownRoomInput(
+        CommandContext<FabricClientCommandSource> context,
+        Minecraft client,
+        RoomLearnInput input
+    ) {
+        if (input.hasExplicitMetadata()) {
+            return input;
+        }
+        DungeonKnownRoomCatalog.KnownRoomInfo info = client.player == null
+            ? knownRoomInfo(context, input.name())
+            : knownRoomInfo(context, client, client.player.blockPosition(), input.name());
+        return info == null
+            ? null
+            : new RoomLearnInput(info.name(), info.secrets(), info.type(), info.crypts(), true);
     }
 
     static int pullRoomSync(CommandContext<FabricClientCommandSource> context) {

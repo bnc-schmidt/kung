@@ -27,7 +27,7 @@ public final class DungeonDeathTracker {
     public DeathEvent observeMessage(String raw, MessageSource source, UUID self,
         Function<String, UUID> knownRosterLookup, long nowTick) {
         if (source != MessageSource.SYSTEM) return null;
-        Matcher matcher = DEATH.matcher(clean(raw));
+        Matcher matcher = DEATH.matcher(DungeonLifecycleSignals.clean(raw));
         if (!matcher.matches()) return null;
         String name = matcher.group("name");
         UUID uuid = name.equalsIgnoreCase("You") ? self : knownRosterLookup.apply(name);
@@ -83,21 +83,17 @@ public final class DungeonDeathTracker {
     }
 
     public static int teamTotal(String line) {
-        Matcher matcher = TEAM_TOTAL.matcher(clean(line));
+        Matcher matcher = TEAM_TOTAL.matcher(DungeonLifecycleSignals.clean(line));
         return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 
     public static int playerTotal(String line) {
-        Matcher matcher = PLAYER_TOTAL.matcher(clean(line));
+        Matcher matcher = PLAYER_TOTAL.matcher(DungeonLifecycleSignals.clean(line));
         return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 
     private int attributedDeaths() {
         return players.values().stream().mapToInt(PlayerDeaths::deaths).sum();
-    }
-
-    private static String clean(String raw) {
-        return raw == null ? "" : raw.replaceAll("§.", "").replaceAll("\\s+", " ").trim();
     }
 
     private static final class PlayerDeaths {

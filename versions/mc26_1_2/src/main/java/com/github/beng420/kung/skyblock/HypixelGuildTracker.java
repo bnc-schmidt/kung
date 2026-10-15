@@ -104,7 +104,7 @@ public final class HypixelGuildTracker {
         if (rawMessage == null || rawMessage.isBlank()) {
             return;
         }
-        String message = cleanLine(rawMessage);
+        String message = HypixelLocation.clean(rawMessage);
         if (message.isBlank()) {
             return;
         }
@@ -214,7 +214,7 @@ public final class HypixelGuildTracker {
     }
 
     private static String senderName(String rawSender) {
-        String clean = cleanLine(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
+        String clean = HypixelLocation.clean(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
         Matcher matcher = PLAYER_NAME_PATTERN.matcher(clean);
         String last = "";
         while (matcher.find()) {
@@ -229,10 +229,6 @@ public final class HypixelGuildTracker {
         } catch (NumberFormatException ignored) {
             return 0;
         }
-    }
-
-    private static String cleanLine(String rawLine) {
-        return rawLine == null ? "" : rawLine.replaceAll("\u00a7.", "").replaceAll("\\s+", " ").trim();
     }
 
     private static boolean isPlayerName(String name) {

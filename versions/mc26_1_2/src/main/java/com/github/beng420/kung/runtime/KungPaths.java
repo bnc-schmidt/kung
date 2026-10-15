@@ -8,14 +8,6 @@ public final class KungPaths {
     private KungPaths() {
     }
 
-    public static Path gameDirectory() {
-        try {
-            return FabricLoader.getInstance().getGameDir();
-        } catch (IllegalStateException exception) {
-            return Path.of("").toAbsolutePath().normalize();
-        }
-    }
-
     public static Path dungeonDataDirectory() {
         return fileLayout().dungeonDataDirectory();
     }

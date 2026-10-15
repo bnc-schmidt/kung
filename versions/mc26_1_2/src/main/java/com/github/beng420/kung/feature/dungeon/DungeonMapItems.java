@@ -42,31 +42,6 @@ final class DungeonMapItems {
         return cachedMapData;
     }
 
-    static MapItemSavedData liveMapData(Minecraft client) {
-        if (client.level == null || client.player == null) {
-            clearCache();
-            return null;
-        }
-
-        if (cachedLevel != client.level) {
-            cachedLevel = client.level;
-            clearMapDataCache();
-        }
-
-        int tick = client.player.tickCount;
-        if (cachedLookupTick == tick) {
-            return cachedLookupMapData;
-        }
-
-        MapItemSavedData found = findMapData(client);
-        cachedLookupTick = tick;
-        cachedLookupMapData = found;
-        if (found != null) {
-            cachedMapData = found;
-        }
-        return found;
-    }
-
     private static void clearCache() {
         cachedLevel = null;
         clearMapDataCache();

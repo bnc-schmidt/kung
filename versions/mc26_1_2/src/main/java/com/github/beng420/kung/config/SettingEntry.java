@@ -62,6 +62,11 @@ public record SettingEntry(
         return create(label, SettingKind.TOGGLE, supplier, toggle, null, null, 0, 0, 0, null, null, null, null);
     }
 
+    /** A toggle that flips its value through {@code set}, e.g. {@code toggle("X", cfg::x, cfg::setX)}. */
+    public static SettingEntry toggle(String label, BooleanSupplier supplier, Consumer<Boolean> set) {
+        return toggle(label, supplier, () -> set.accept(!supplier.getAsBoolean()));
+    }
+
     public static SettingEntry stepper(
         String label,
         IntSupplier supplier,
@@ -82,10 +87,6 @@ public record SettingEntry(
         int step
     ) {
         return create(label, SettingKind.SLIDER, null, null, supplier, consumer, min, max, step, null, null, null, null);
-    }
-
-    public static SettingEntry choice(String label, Supplier<String> supplier, Runnable cycle) {
-        return create(label, SettingKind.CHOICE, null, null, null, null, 0, 0, 0, supplier, cycle, null, null);
     }
 
     /** A choice whose options only exist at runtime, such as the font files in the folder. */
@@ -133,10 +134,6 @@ public record SettingEntry(
 
     public static SettingEntry group(String label) {
         return create(label, SettingKind.GROUP, null, null, null, null, 0, 0, 0, null, null, null, null);
-    }
-
-    public static SettingEntry keybind(String label, Supplier<String> supplier, Consumer<String> consumer) {
-        return keybind(label, supplier, supplier, consumer);
     }
 
     public static SettingEntry keybind(String label, Supplier<String> display, Supplier<String> raw,

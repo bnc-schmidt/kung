@@ -227,12 +227,6 @@ public final class DungeonSplitTracker {
         if (!currentSplitName.equals(normalizedName)) completeCurrentAndStart(normalizedName, true, "manual:" + normalizedName);
     }
 
-    public boolean markIfCurrent(String currentName, String nextSplitName, long nowTick) {
-        if (!hasCurrentSplit() || !currentSplitName.equals(normalizeName(currentName))) return false;
-        mark(nextSplitName, nowTick);
-        return true;
-    }
-
     public void serverTick(long realNowMillis) {
         // Start-room evidence distinguishes a stall immediately after countdown
         // from a connection on which no usable tick stream has ever been seen.

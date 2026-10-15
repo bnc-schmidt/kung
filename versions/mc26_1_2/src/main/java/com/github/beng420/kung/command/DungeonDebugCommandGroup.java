@@ -6,10 +6,13 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitTracker;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
+import com.github.beng420.kung.feature.misc.FrozenBlazeCapture;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
+import com.mojang.brigadier.context.CommandContext;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import net.minecraft.commands.SharedSuggestionProvider;
 
@@ -43,6 +46,22 @@ final class DungeonDebugCommandGroup {
                         ))))
                 .then(literal("save").executes(KungCommandActions::saveDebugLog))
                 .then(literal("clear").executes(KungCommandActions::clearDebugLog)))
+            .then(literal("fbcapture")
+                .executes(context -> {
+                    FrozenBlazeCapture.USAGE.forEach(line -> reply(context, line));
+                    return 1;
+                })
+                .then(literal("start")
+                    .executes(context -> reply(context, FrozenBlazeCapture.start(
+                        context.getSource().getClient(), FrozenBlazeCapture.DEFAULT_SECONDS)))
+                    .then(argument("seconds", IntegerArgumentType.integer(1, FrozenBlazeCapture.MAX_SECONDS))
+                        .executes(context -> reply(context, FrozenBlazeCapture.start(
+                            context.getSource().getClient(), IntegerArgumentType.getInteger(context, "seconds"))))))
+                .then(literal("mark").then(argument("label", StringArgumentType.greedyString())
+                    .suggests((context, builder) -> SharedSuggestionProvider.suggest(FrozenBlazeCapture.MARKS, builder))
+                    .executes(context -> reply(context, FrozenBlazeCapture.mark(StringArgumentType.getString(context, "label"))))))
+                .then(literal("stop").executes(context -> reply(context, FrozenBlazeCapture.stop(
+                    context.getSource().getClient(), "stop")))))
             .then(literal("door").then(literal("probe")
                 .executes(KungCommandActions::probeDoorAhead)
                 .then(argument("direction", StringArgumentType.word())
@@ -53,5 +72,10 @@ final class DungeonDebugCommandGroup {
                     .suggests((context, builder) -> SharedSuggestionProvider.suggest(DungeonSplitTracker.defaultSplitNames(), builder))
                     .executes(context -> KungCommandActions.markSplit(context, tracker))))
                 .then(literal("reset").executes(context -> KungCommandActions.resetSplits(context, tracker))));
+    }
+
+    private static int reply(CommandContext<FabricClientCommandSource> context, String text) {
+        context.getSource().sendFeedback(KungMessages.info("FB capture", text));
+        return 1;
     }
 }

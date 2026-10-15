@@ -43,7 +43,7 @@ final class BowDrawThresholdSettings implements Supplier<List<SettingEntry>> {
             lines.add(SettingEntry.dynamicLabel(() -> dragons.drawRangeLines().get(line)));
         }
         next.add(SettingEntry.toggle("M7 Dragon Ticks", config::bowDrawDragonTicksEnabled,
-                () -> config.setBowDrawDragonTicksEnabled(!config.bowDrawDragonTicksEnabled()))
+                config::setBowDrawDragonTicksEnabled)
             .withChildren(lines)
             .withTooltip("Live markers on the bar while an M7 dragon spawns. Needs Wither Dragons on.",
                 "Kung predicts where the dragon's body will be and flies every draw from 3 to 20",

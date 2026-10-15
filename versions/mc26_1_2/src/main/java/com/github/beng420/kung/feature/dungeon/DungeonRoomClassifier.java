@@ -20,24 +20,6 @@ public final class DungeonRoomClassifier {
     public static final int EMPTY_CORE_HASH = -318865360;
     private static final String BUNDLED_ROOM_TYPES_RESOURCE = "/kung-dungeon-scans/known-room-types.properties";
 
-    private static final Map<Integer, RoomType> DEFAULT_ROOM_TYPES = Map.ofEntries(
-        Map.entry(400135283, RoomType.BLOOD),
-        Map.entry(-706847847, RoomType.BLOOD),
-        Map.entry(1547681127, RoomType.START),
-        Map.entry(-1957101940, RoomType.START),
-        Map.entry(-871624328, RoomType.FAIRY),
-        Map.entry(-2129401661, RoomType.PUZZLE),
-        Map.entry(1313676499, RoomType.PUZZLE),
-        Map.entry(-918031760, RoomType.PUZZLE),
-        Map.entry(-1577181988, RoomType.PUZZLE),
-        Map.entry(931625578, RoomType.PUZZLE),
-        Map.entry(1351916417, RoomType.PUZZLE),
-        Map.entry(494549040, RoomType.TRAP),
-        Map.entry(-272406096, RoomType.TRAP),
-        Map.entry(-1956926881, RoomType.TRAP),
-        Map.entry(2028709181, RoomType.YELLOW)
-    );
-
     private static Map<Integer, RoomType> knownRoomTypes;
 
     private DungeonRoomClassifier() {
@@ -65,12 +47,7 @@ public final class DungeonRoomClassifier {
 
         Path file = knownRoomTypesFile();
 
-        Properties properties = new Properties();
-        if (Files.exists(file)) {
-            try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                properties.load(reader);
-            }
-        }
+        Properties properties = readProperties(file);
 
         properties.setProperty(Integer.toString(coreHash), roomType.name());
         writeRoomTypes(file, properties);
@@ -87,12 +64,7 @@ public final class DungeonRoomClassifier {
         }
 
         Path file = knownRoomTypesFile();
-        Properties properties = new Properties();
-        if (Files.exists(file)) {
-            try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                properties.load(reader);
-            }
-        }
+        Properties properties = readProperties(file);
         boolean changed = false;
         for (int coreHash : coreHashes) {
             changed = properties.remove(Integer.toString(coreHash)) != null || changed;
@@ -112,25 +84,28 @@ public final class DungeonRoomClassifier {
         boolean project = DungeonRoomProject.enabled();
         Map<Integer, RoomType> roomTypes = new HashMap<>();
         if (!project) {
-            roomTypes.putAll(DEFAULT_ROOM_TYPES);
             loadPropertiesInto(roomTypes, bundledProperties());
             if (!KungConfig.get().dungeon.localRoomDataEnabled()) return roomTypes;
         }
         Path file = knownRoomTypesFile();
 
         try {
-            if (!Files.exists(file)) return roomTypes;
-
-            Properties properties = new Properties();
-            try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-                properties.load(reader);
-            }
-            loadPropertiesInto(roomTypes, properties);
+            loadPropertiesInto(roomTypes, readProperties(file));
         } catch (IOException | IllegalArgumentException exception) {
             KungMod.LOGGER.warn("Failed to load known dungeon room types from {}.", file.toAbsolutePath(), exception);
         }
 
         return roomTypes;
+    }
+
+    private static Properties readProperties(Path file) throws IOException {
+        Properties properties = new Properties();
+        if (Files.exists(file)) {
+            try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
+                properties.load(reader);
+            }
+        }
+        return properties;
     }
 
     private static Properties bundledProperties() {

@@ -1,6 +1,7 @@
 package com.github.beng420.kung.util;
 
 import com.github.beng420.kung.feature.garden.FeastContext;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
 import java.util.EnumMap;
 import java.util.Map;
@@ -58,7 +59,7 @@ public final class CatacombsRecentXpTracker {
     }
 
     synchronized void observeMessage(String rawMessage) {
-        String line = cleanLine(rawMessage);
+        String line = HypixelLocation.clean(rawMessage);
         if (line.isBlank() || isDuplicate(line)) {
             return;
         }
@@ -118,9 +119,5 @@ public final class CatacombsRecentXpTracker {
             }
         }
         return null;
-    }
-
-    private static String cleanLine(String rawLine) {
-        return rawLine == null ? "" : rawLine.replaceAll("§.", "").replaceAll("\\s+", " ").trim();
     }
 }

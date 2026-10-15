@@ -28,16 +28,19 @@ final class KungUpdateDownload {
 
     static String version(Path jar) throws IOException {
         try (var zip = new ZipFile(jar.toFile())) {
-            var entry = zip.getEntry("fabric.mod.json");
-            if (entry == null || entry.getSize() <= 0 || entry.getSize() > 65_536) {
-                throw new IOException("Missing or oversized Fabric metadata.");
-            }
-            try (var input = zip.getInputStream(entry)) {
-                return JsonParser.parseString(new String(input.readNBytes(65_537), StandardCharsets.UTF_8))
-                    .getAsJsonObject().get("version").getAsString();
-            }
+            return metadata(zip).get("version").getAsString();
         } catch (RuntimeException exception) {
             throw new IOException("Invalid release version.", exception);
+        }
+    }
+
+    private static JsonObject metadata(ZipFile zip) throws IOException {
+        var entry = zip.getEntry("fabric.mod.json");
+        if (entry == null || entry.getSize() <= 0 || entry.getSize() > 65_536) {
+            throw new IOException("Missing or oversized Fabric metadata.");
+        }
+        try (var input = zip.getInputStream(entry)) {
+            return JsonParser.parseString(new String(input.readNBytes(65_537), StandardCharsets.UTF_8)).getAsJsonObject();
         }
     }
 
@@ -70,14 +73,7 @@ final class KungUpdateDownload {
     static void validate(Path jar, String version, Map<String, String> installed) throws IOException {
         KungUpdateInstaller.validateJar(jar);
         try (var zip = new ZipFile(jar.toFile())) {
-            var entry = zip.getEntry("fabric.mod.json");
-            if (entry == null || entry.getSize() <= 0 || entry.getSize() > 65_536) {
-                throw new IOException("Missing or oversized Fabric metadata.");
-            }
-            JsonObject metadata;
-            try (var input = zip.getInputStream(entry)) {
-                metadata = JsonParser.parseString(new String(input.readNBytes(65_537), StandardCharsets.UTF_8)).getAsJsonObject();
-            }
+            JsonObject metadata = metadata(zip);
             if (!"kung".equals(metadata.get("id").getAsString())
                 || !version.equals(metadata.get("version").getAsString())
                 || (metadata.has("environment") && "server".equals(metadata.get("environment").getAsString()))

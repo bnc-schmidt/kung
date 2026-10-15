@@ -36,6 +36,7 @@ import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.phys.Vec3;
@@ -69,6 +70,7 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
         });
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST,
             Identifier.fromNamespaceAndPath(KungMod.MOD_ID, "frozen_blaze_hud"), (graphics, delta) -> render(graphics));
+        FrozenBlazeCapture.register();
     }
 
     @Override
@@ -77,7 +79,7 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     private void tick(Minecraft client) {
         var player = client.player;
         set = isEnabled() && player != null ? setName(Stream.of(EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET)
-            .map(slot -> player.getItemBySlot(slot).getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getStringOr("id", ""))
+            .map(slot -> skyblockId(player.getItemBySlot(slot)))
             .toList()) : null;
         if (set == null) {
             onReset();
@@ -176,6 +178,11 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
 
     /** The aura needs walking and mouse movement, so the older of the two inputs decides when it runs out. */
     static int idleTicks(int moveIdle, int lookIdle) { return Math.max(moveIdle, lookIdle); }
+
+    /** The SkyBlock item id of a stack ("" when the client has no custom data for it). */
+    static String skyblockId(ItemStack stack) {
+        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getStringOr("id", "");
+    }
 
     /** SkyBlock armor IDs, helmet to boots; only a full set grants the aura. */
     static String setName(List<String> ids) {

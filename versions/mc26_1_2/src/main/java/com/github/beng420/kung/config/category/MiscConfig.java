@@ -1,10 +1,8 @@
 package com.github.beng420.kung.config.category;
 
-import java.util.HashMap;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
-import java.util.Map;
 
 public final class MiscConfig extends ConfigCategory {
     private boolean lobbyHopHelperEnabled = false;
@@ -317,15 +315,8 @@ public final class MiscConfig extends ConfigCategory {
     public boolean tpsPrivateCommandsEnabled() { return tpsPrivateCommandsEnabled; }
     public void setTpsPrivateCommandsEnabled(boolean value) { tpsPrivateCommandsEnabled = value; save(); }
     public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
-    public void setCataChatCommandEnabled(boolean value) { setC50ChatCommandEnabled(value); setCa50ChatCommandEnabled(value); }
     public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled && ca50PartyCommandsEnabled; }
-    public void setCataPartyCommandsEnabled(boolean value) { setC50PartyCommandsEnabled(value); setCa50PartyCommandsEnabled(value); }
     public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled && ca50GuildCommandsEnabled; }
-    public void setCataGuildCommandsEnabled(boolean value) { setC50GuildCommandsEnabled(value); setCa50GuildCommandsEnabled(value); }
-    public boolean cataAllChatCommandsEnabled() { return c50AllChatCommandsEnabled && ca50AllChatCommandsEnabled; }
-    public void setCataAllChatCommandsEnabled(boolean value) { setC50AllChatCommandsEnabled(value); setCa50AllChatCommandsEnabled(value); }
-    public boolean cataPrivateCommandsEnabled() { return c50PrivateCommandsEnabled && ca50PrivateCommandsEnabled; }
-    public void setCataPrivateCommandsEnabled(boolean value) { setC50PrivateCommandsEnabled(value); setCa50PrivateCommandsEnabled(value); }
     public boolean loadoutsAutoCloseEnabled() { return loadoutsAutoCloseEnabled; }
     public void setLoadoutsAutoCloseEnabled(boolean value) { loadoutsAutoCloseEnabled = value; save(); }
     public boolean loadoutsCloseOnlyOnChange() { return loadoutsCloseOnlyOnChange; }

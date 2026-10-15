@@ -10,24 +10,20 @@ final class DungeonSecretCounts {
 
     private DungeonSecretCounts() { }
 
-    static String clean(String raw) {
-        return raw == null ? "" : raw.replaceAll("§.", "").replaceAll("\\s+", " ").trim();
-    }
-
     static int partyFound(String raw) {
-        var match = PARTY_FOUND.matcher(clean(raw));
+        var match = PARTY_FOUND.matcher(DungeonLifecycleSignals.clean(raw));
         return match.matches() ? Integer.parseInt(match.group(1).replace(",", "")) : -1;
     }
 
     static double percent(String raw) {
-        var match = PERCENT.matcher(clean(raw));
+        var match = PERCENT.matcher(DungeonLifecycleSignals.clean(raw));
         if (!match.matches()) return -1;
         double value = Double.parseDouble(match.group(1));
         return value <= 100 ? value : -1;
     }
 
     static Fraction party(String raw) {
-        var match = PARTY.matcher(clean(raw));
+        var match = PARTY.matcher(DungeonLifecycleSignals.clean(raw));
         if (!match.matches()) return null;
         int found = Integer.parseInt(match.group(1));
         int total = match.group(2).equals("?") ? -1 : Integer.parseInt(match.group(2));

@@ -90,6 +90,25 @@ public final class DungeonRuntimeRegressionTest {
         assertEquals(new DungeonMapSnapshot.GridKey(2, 10), snapshot.startRoom());
     }
 
+    @Test public void teleportingBetweenAdjacentRoomsDoesNotCreateATraversedDoor() {
+        DungeonMapSnapshot walked = new DungeonMapSnapshot();
+        walked.observePlayerGrid(1, 3);
+        walked.observePlayerGrid(1, 4);
+        assertEquals(Set.of(new DungeonMapSnapshot.GridKey(2, 7)), walked.traversedDoors());
+
+        DungeonMapSnapshot leaped = new DungeonMapSnapshot();
+        leaped.observePlayerGrid(1, 3);
+        leaped.forgetPreviousPlayerRoom(); // what the scan recorder does when the player jumps
+        leaped.observePlayerGrid(1, 4);
+        assertTrue(leaped.traversedDoors().isEmpty());
+        leaped.observePlayerGrid(1, 5);
+        assertEquals(Set.of(new DungeonMapSnapshot.GridKey(2, 9)), leaped.traversedDoors());
+
+        var before = new DungeonScanRecorder.PlayerScanContext(-120, 70, -90, 1, 3);
+        assertFalse(new DungeonScanRecorder.PlayerScanContext(-117, 70, -90, 1, 3).jumpedFrom(before));
+        assertTrue(new DungeonScanRecorder.PlayerScanContext(-120, 70, -86, 1, 4).jumpedFrom(before));
+    }
+
     @Test public void roomTemplateCannotSwallowAnObservedDoor() {
         var hint = new DungeonKnownRoomCatalog.KnownCoreHint("Repeated room", RoomType.NORMAL, 3);
         var template = new DungeonKnownRoomCatalog.RoomTemplate("Repeated room", RoomType.NORMAL, 3, 0,
