@@ -15,6 +15,14 @@ const fixtures = path.join(here, "../../versions/mc26_1_2/src/test/resources/cat
 const rawFixture = JSON.parse(fs.readFileSync(path.join(fixtures, "salty-whale-profiles.json"), "utf8"));
 const strippedFixture = fs.readFileSync(path.join(fixtures, "salty-whale-profiles-stripped.json"), "utf8");
 const fixtureUuid = new URL(rawFixture._source).searchParams.get("uuid");
+const dataFile = path.join(os.tmpdir(), `kung-room-sync-test-${process.pid}.json`);
+const roomReport = {
+  kind: "kung-room-export",
+  name: "Test Room",
+  type: "NORMAL",
+  secrets: 1,
+  cells: [{ dx: 0, dz: 0, hashes: [{ coreHash: 1, stableCoreHash: 2 }] }],
+};
 
 const owner = { id: "69617dbf568e46329ee980bf67d534d9", name: "Beng114" };
 const friend = { id: "0123456789abcdef0123456789abcdef", name: "Friend_1" };
@@ -57,6 +65,7 @@ after(() => {
     server.closeAllConnections();
     server.close();
   }
+  fs.rmSync(dataFile, { force: true });
 });
 
 test("health needs no session", async () => {
@@ -101,12 +110,79 @@ test("a challenge expires", async () => {
   assert.equal((await login(server, owner.name, challenge)).status, 401);
 });
 
-test("a non-empty allowlist only lets its players in", async () => {
-  const server = await startServer({ KUNG_ALLOWED_UUIDS: " 69617DBF-568E-4632-9EE9-80BF67D534D9 , ffffffffffffffffffffffffffffffff" });
-  assert.equal((await signIn(server, owner)).status, 200);
-  const refused = await signIn(server, friend);
+test("any verified player signs in and reads, whatever the lists say", async () => {
+  const server = await startServer({ KUNG_ALLOWED_UUIDS: owner.id, KUNG_ROOM_WRITER_UUIDS: owner.id });
+  const session = await signIn(server, friend);
+  assert.equal(session.status, 200);
+  const profiles = await call(server, "GET", `/hypixel/profiles?uuid=${fixtureUuid}`, { token: session.body.token });
+  assert.equal(profiles.status, 200);
+  assert.equal(profiles.text, strippedFixture);
+  assert.equal((await call(server, "GET", "/rooms", { token: session.body.token })).status, 200);
+});
+
+test("only writers upload rooms; the old allowlist is the fallback and empty means nobody", async () => {
+  const fallback = await startServer({ KUNG_ALLOWED_UUIDS: " 69617DBF-568E-4632-9EE9-80BF67D534D9 , ffffffffffffffffffffffffffffffff" });
+  const writer = (await signIn(fallback, owner)).body.token;
+  const reader = (await signIn(fallback, friend)).body.token;
+  assert.equal((await call(fallback, "POST", "/rooms/report", { token: writer, body: roomReport })).status, 200);
+  assert.match(fallback.output(), /any verified player; room uploads: 2 writer\(s\)/);
+  const refused = await call(fallback, "POST", "/rooms/report", { token: reader, body: roomReport });
   assert.equal(refused.status, 403);
-  assert.deepEqual(refused.body, { error: "not allowed" });
+  assert.deepEqual(refused.body, { error: "not allowed to upload" });
+
+  // The new variable wins over the old one.
+  const renamed = await startServer({ KUNG_ALLOWED_UUIDS: owner.id, KUNG_ROOM_WRITER_UUIDS: friend.id });
+  const friendToken = (await signIn(renamed, friend)).body.token;
+  const ownerToken = (await signIn(renamed, owner)).body.token;
+  assert.equal((await call(renamed, "POST", "/rooms/report", { token: friendToken, body: roomReport })).status, 200);
+  assert.equal((await call(renamed, "POST", "/rooms/report", { token: ownerToken, body: roomReport })).status, 403);
+
+  // Set but blank means nobody, even with the old variable present.
+  const blank = await startServer({ KUNG_ALLOWED_UUIDS: owner.id, KUNG_ROOM_WRITER_UUIDS: "" });
+  const blankToken = (await signIn(blank, owner)).body.token;
+  assert.equal((await call(blank, "POST", "/rooms/report", { token: blankToken, body: roomReport })).status, 403);
+
+  // main has no lists at all.
+  const nobody = (await signIn(main, owner)).body.token;
+  assert.equal((await call(main, "POST", "/rooms/report", { token: nobody, body: roomReport })).status, 403);
+});
+
+test("rate limits are per signed-in player, not per IP", async () => {
+  const server = await startServer({
+    KUNG_PROFILE_USER_LIMIT_PER_5_MIN: "2",
+    KUNG_LIVE_REPORT_LIMIT_PER_5_MIN: "1",
+    KUNG_ROOM_REPORT_LIMIT_PER_5_MIN: "1",
+    KUNG_ROOM_WRITER_UUIDS: `${owner.id},${friend.id}`,
+  });
+  const live = { kind: "kung-live-room-sync", runKey: "run-1", players: [{ name: "Beng114" }] };
+  const requests = [
+    ["GET", `/hypixel/profiles?uuid=${fixtureUuid}`, undefined, 2],
+    ["POST", "/runs/live/report", live, 1],
+    ["POST", "/rooms/report", roomReport, 1],
+  ];
+  const ownerToken = (await signIn(server, owner)).body.token;
+  const friendToken = (await signIn(server, friend)).body.token;
+  for (const [method, route, body, allowed] of requests) {
+    for (let index = 0; index < allowed; index += 1) {
+      assert.equal((await call(server, method, route, { token: ownerToken, body })).status, 200, `${route} #${index}`);
+    }
+    const limited = await call(server, method, route, { token: ownerToken, body });
+    assert.equal(limited.status, 429, route);
+    assert.deepEqual(limited.body, { error: "too many requests" });
+    // Same IP, other player: unaffected.
+    assert.equal((await call(server, method, route, { token: friendToken, body })).status, 200, route);
+  }
+});
+
+test("signing in again replaces the player's earlier session", async () => {
+  const first = (await signIn(main, owner)).body.token;
+  const other = (await signIn(main, friend)).body.token;
+  assert.equal((await call(main, "GET", "/rooms", { token: first })).status, 200);
+  const second = (await signIn(main, owner)).body.token;
+  assert.notEqual(second, first);
+  assert.equal((await call(main, "GET", "/rooms", { token: first })).status, 401);
+  assert.equal((await call(main, "GET", "/rooms", { token: second })).status, 200);
+  assert.equal((await call(main, "GET", "/rooms", { token: other })).status, 200);
 });
 
 test("every other endpoint needs a valid session", async () => {
@@ -218,14 +294,19 @@ async function startServer(env) {
       ...process.env,
       PORT: "0",
       KUNG_ROOM_SYNC_HOST: "127.0.0.1",
-      KUNG_ROOM_DATA_PATH: path.join(os.tmpdir(), `kung-room-sync-test-${process.pid}.json`),
+      KUNG_ROOM_DATA_PATH: dataFile,
       KUNG_MOJANG_SESSION_URL: `http://127.0.0.1:${mojang.address().port}`,
       KUNG_HYPIXEL_API_URL: `http://127.0.0.1:${hypixel.address().port}`,
       HYPIXEL_API_KEY: "test-key",
       KUNG_ALLOWED_UUIDS: "",
+      KUNG_ROOM_WRITER_UUIDS: undefined, // unset, so it falls back to KUNG_ALLOWED_UUIDS
       KUNG_CHALLENGE_TTL_MS: "",
       KUNG_SESSION_TTL_MS: "",
       KUNG_AUTH_LIMIT_PER_5_MIN: "",
+      KUNG_PROFILE_LIMIT_PER_5_MIN: "",
+      KUNG_PROFILE_USER_LIMIT_PER_5_MIN: "",
+      KUNG_LIVE_REPORT_LIMIT_PER_5_MIN: "",
+      KUNG_ROOM_REPORT_LIMIT_PER_5_MIN: "",
       ...env,
     },
   });

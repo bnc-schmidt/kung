@@ -20,7 +20,10 @@ const profileCache = new Map();
 // Sign-in is the vanilla server-join handshake: we hand out a challenge, the client joins it at
 // Mojang with its own access token, and hasJoined tells us who did. No shared secret in the jar.
 const mojangSessionUrl = process.env.KUNG_MOJANG_SESSION_URL || "https://sessionserver.mojang.com";
-const allowedUuids = new Set(String(process.env.KUNG_ALLOWED_UUIDS || "").split(",")
+// Any Mojang-verified account may sign in. Only room uploads (POST /rooms/report, a file everyone
+// downloads) need the writers list: KUNG_ROOM_WRITER_UUIDS, else the older KUNG_ALLOWED_UUIDS.
+// Empty means nobody uploads.
+const roomWriters = new Set(String(process.env.KUNG_ROOM_WRITER_UUIDS ?? process.env.KUNG_ALLOWED_UUIDS ?? "").split(",")
   .map((uuid) => uuid.trim().replace(/-/g, "").toLowerCase())
   .filter(Boolean));
 const challengeTtlMillis = Number(process.env.KUNG_CHALLENGE_TTL_MS || 60_000);
@@ -58,12 +61,21 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, await readDatabase());
     }
     if (request.method === "POST" && request.url === "/rooms/report") {
+      if (!roomWriters.has(session.uuid)) {
+        return json(response, 403, { error: "not allowed to upload" });
+      }
+      if (!withinLimit(roomReportRequests, roomReportLimit, request, session.uuid)) {
+        return json(response, 429, { error: "too many requests" });
+      }
       const report = await readJson(request);
       const result = await mergeRoomReport(report);
       return json(response, 200, result);
     }
     if (request.method === "POST" && request.url === "/runs/live/report") {
       // The session says who reports; report.player is ignored so nobody can post as someone else.
+      if (!withinLimit(liveReportRequests, liveReportLimit, request, session.uuid)) {
+        return json(response, 429, { error: "too many requests" });
+      }
       const report = await readJson(request);
       const result = mergeLiveRunReport(report, session.name);
       return json(response, 200, result);
@@ -79,7 +91,8 @@ const server = http.createServer(async (request, response) => {
       // One line per lookup for journalctl -f; only a checked uuid, never a token, key or body.
       let outcome = "error";
       try {
-        if (!withinLimit(profileRequests, profileLimit, request)) {
+        if (!withinLimit(profileRequests, profileLimit, request)
+          || !withinLimit(profileUserRequests, profileUserLimit, request, session.uuid)) {
           outcome = "rate limited 429";
           return json(response, 429, { error: "too many requests" });
         }
@@ -112,31 +125,40 @@ const server = http.createServer(async (request, response) => {
 server.listen(port, host, () => {
   console.log(`Kung room sync server listening on ${host}:${server.address().port}`);
   console.log(`Data file: ${dataFile}`);
-  console.log(allowedUuids.size ? `Auth: Mojang sign-in, ${allowedUuids.size} on the allowlist` : "Auth: Mojang sign-in, any player");
+  console.log(`Auth: Mojang sign-in, any verified player; room uploads: ${roomWriters.size} writer(s)`);
   console.log(hypixelKey ? `Hypixel proxy: on, cache ${profileCacheMillis} ms` : "Hypixel proxy: off (no HYPIXEL_API_KEY)");
 });
 
 // Per client IP, so one person cannot burn the shared Hypixel key or spam Mojang. Behind Cloudflare
 // Tunnel every request comes from cloudflared, the real address is in CF-Connecting-IP.
+// The per-user limits are keyed on the session's UUID instead. The client posts a live report at most
+// every 10 ticks (2/s, 600 per 5 min), so its default is 3x that; a room report is a manual learn.
 const profileLimit = Number(process.env.KUNG_PROFILE_LIMIT_PER_5_MIN || 30);
 const profileRequests = new Map();
+const profileUserLimit = Number(process.env.KUNG_PROFILE_USER_LIMIT_PER_5_MIN || 30);
+const profileUserRequests = new Map();
+const liveReportLimit = Number(process.env.KUNG_LIVE_REPORT_LIMIT_PER_5_MIN || 1800);
+const liveReportRequests = new Map();
+const roomReportLimit = Number(process.env.KUNG_ROOM_REPORT_LIMIT_PER_5_MIN || 30);
+const roomReportRequests = new Map();
 const authLimit = Number(process.env.KUNG_AUTH_LIMIT_PER_5_MIN || 20);
 const authRequests = new Map();
 
-function withinLimit(requests, limit, request) {
+// Fixed 5 minute window per key; the key defaults to the client IP.
+function withinLimit(requests, limit, request,
+  key = String(request.headers["cf-connecting-ip"] || request.socket.remoteAddress || "?")) {
   const now = Date.now();
-  const ip = String(request.headers["cf-connecting-ip"] || request.socket.remoteAddress || "?");
-  for (const [key, window] of requests) {
+  for (const [tracked, window] of requests) {
     if (now - window.start > 300_000) {
-      requests.delete(key);
+      requests.delete(tracked);
     }
   }
-  if (!requests.has(ip)) {
+  if (!requests.has(key)) {
     roomFor(requests, maxTrackedIps);
   }
-  const window = requests.get(ip) || { start: now, count: 0 };
+  const window = requests.get(key) || { start: now, count: 0 };
   window.count += 1;
-  requests.set(ip, window);
+  requests.set(key, window);
   return window.count <= limit;
 }
 
@@ -172,10 +194,14 @@ async function login(body) {
   if (!/^[0-9a-f]{32}$/.test(uuid)) {
     return [401, { error: "not verified" }];
   }
-  if (allowedUuids.size > 0 && !allowedUuids.has(uuid)) {
-    return [403, { error: "not allowed" }];
-  }
   pruneExpired(sessions);
+  // One session per player: signing in again replaces the old token, so repeated logins cannot fill the table.
+  // ponytail: O(n) over at most maxSessions per login; a uuid -> token map if logins ever get hot.
+  for (const [old, entry] of sessions) {
+    if (entry.uuid === uuid) {
+      sessions.delete(old);
+    }
+  }
   roomFor(sessions, maxSessions);
   const token = randomBytes(32).toString("hex");
   const session = { uuid, name: String(profile.name || name), expiresAt: Date.now() + sessionTtlMillis };
