@@ -59,6 +59,63 @@ public final class GreenhouseSummaryTest {
         assertEquals("Zombud 2 / 2 (0.91 expected)", summary.firstLine());
     }
 
+    private static GreenhouseSolver.SolveResult withCosts(double total, java.util.Map<String, Integer> ingredients) {
+        java.util.Map<String, Double> unit = new java.util.LinkedHashMap<>();
+        ingredients.keySet().forEach(crop -> unit.put(crop, 1.0));
+        return new SolveResult(new GreenhouseGrid(), List.of(goal("Zombud", 2, 2.0, 2)), List.of(), ingredients,
+            0, 0, List.of(), 1_200, List.of(), false, total, unit);
+    }
+
+    @Test
+    public void theCostLineNamesTheTotalAndMarksGuessedPrices() {
+        java.util.Map<String, GreenhouseCosts.Quote> quotes = new java.util.LinkedHashMap<>();
+        quotes.put("Fire", new GreenhouseCosts.Quote(0, GreenhouseCosts.Basis.FREE));
+        quotes.put("Carrot", new GreenhouseCosts.Quote(30, GreenhouseCosts.Basis.MEASURED));
+        quotes.put("Cactus", new GreenhouseCosts.Quote(8, GreenhouseCosts.Basis.ESTIMATED));
+        java.util.Map<String, Integer> measured = java.util.Map.of("Carrot", 4, "Fire", 6);
+        java.util.Map<String, Integer> guessed = java.util.Map.of("Carrot", 4, "Cactus", 2);
+
+        assertEquals("Cost: 13.9k coins", GreenhouseSummary.costLine(withCosts(13_900, measured),
+            GreenhouseCosts.CostMode.BAZAAR, quotes));
+        assertEquals("Cost: 13.9k coins (incl. estimated prices)", GreenhouseSummary.costLine(
+            withCosts(13_900, guessed), GreenhouseCosts.CostMode.BAZAAR, quotes));
+        assertEquals("Cost: 96 coins", GreenhouseSummary.costLine(
+            withCosts(96, measured), GreenhouseCosts.CostMode.BAZAAR, quotes));
+        assertEquals("Cost: difficulty 340 (by rarity)", GreenhouseSummary.costLine(withCosts(340, guessed),
+            GreenhouseCosts.CostMode.IRONMAN, quotes));
+        // A cheap crop that is a guess but not in the list does not mark the line.
+        assertEquals("Cost: 5.0 coins", GreenhouseSummary.costLine(
+            withCosts(5, java.util.Map.of("Carrot", 4)), GreenhouseCosts.CostMode.BAZAAR, quotes));
+    }
+
+    @Test
+    public void noModeOrNoUnitCostsLeavesTheCostLineEmpty() {
+        SolveResult plain = new SolveResult(new GreenhouseGrid(), List.of(), List.of(), java.util.Map.of(), 0, 0,
+            List.of(), 100, List.of(), false);
+
+        assertEquals("", GreenhouseSummary.costLine(withCosts(1, java.util.Map.of("Carrot", 1)), null, java.util.Map.of()));
+        assertEquals("", GreenhouseSummary.costLine(plain, GreenhouseCosts.CostMode.BAZAAR, java.util.Map.of()));
+        assertEquals("", GreenhouseSummary.of(plain).costLine());
+        assertEquals("", GreenhouseSummary.of(plain, GreenhouseCosts.CostMode.IRONMAN, java.util.Map.of()).costLine());
+    }
+
+    @Test
+    public void theCostLineIsSavedAndASummaryWithoutOneStillLoads() {
+        String layout = "\"layout\":[[0,0,\"Carrot\",1]]";
+        String goal = "{\"text\":\"Zombud 2 / 2\",\"level\":\"REACHED\",\"note\":\"\"}";
+        String withLine = "{\"version\":1," + layout + ",\"summary\":{\"goals\":[" + goal
+            + "],\"notes\":[],\"elapsedMillis\":900,\"fixed\":1,\"met\":1,\"costLine\":\"Cost: 13.9k coins\"}}";
+        String without = "{\"version\":1," + layout + ",\"summary\":{\"goals\":[" + goal
+            + "],\"notes\":[],\"elapsedMillis\":900,\"fixed\":1,\"met\":1}}";
+        String tooLong = withLine.replace("Cost: 13.9k coins", "x".repeat(301));
+
+        assertEquals("Cost: 13.9k coins", GreenhouseState.fromJson(withLine).summary().costLine());
+        assertEquals("", GreenhouseState.fromJson(without).summary().costLine());
+        assertEquals(null, GreenhouseState.fromJson(tooLong).summary());
+        GreenhouseState round = GreenhouseState.fromJson(withLine);
+        assertEquals(round.summary(), GreenhouseState.fromJson(round.toJson()).summary());
+    }
+
     @Test
     public void aMaximizeGoalShowsItsSitesAndIsNeverShort() {
         GreenhouseSummary summary = of(goal("Glasscorn", -1, 5.6, 7), goal("Zombud", 2, 2.0, 2));

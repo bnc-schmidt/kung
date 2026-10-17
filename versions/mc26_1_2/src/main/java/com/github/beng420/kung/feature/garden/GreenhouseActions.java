@@ -27,10 +27,23 @@ final class GreenhouseActions {
 
     private GreenhouseActions() { }
 
-    /** "Show in world": the displayed layout, which must hold at least one cell; {@code show} is not called otherwise. */
-    static Outcome showLayout(GreenhouseGrid layout, Function<GreenhouseGrid, GreenhouseHologram.ShowResult> show) {
+    /** The screen stays and says a solve is running: the grid on show is only a moving preview of it. */
+    static Outcome busy() { return Outcome.stay(GreenhouseSession.BUSY, GreenhouseSession.BUSY, Tone.WARNING); }
+
+    /**
+     * "Show in world": the displayed layout, which must hold at least one cell; {@code show} is not called
+     * otherwise. While {@code solving} the grid is an interim preview, so nothing is shown from it.
+     */
+    static Outcome showLayout(GreenhouseGrid layout, boolean solving,
+                              Function<GreenhouseGrid, GreenhouseHologram.ShowResult> show) {
+        if (solving) return busy();
         if (layout.filled() == 0) return Outcome.stay(NO_LAYOUT, NO_LAYOUT, Tone.WARNING);
         return Outcome.close(show.apply(layout).message());
+    }
+
+    /** {@link #showLayout(GreenhouseGrid, boolean, Function)} with no solve running. */
+    static Outcome showLayout(GreenhouseGrid layout, Function<GreenhouseGrid, GreenhouseHologram.ShowResult> show) {
+        return showLayout(layout, false, show);
     }
 
     /** "Show in world (clipboard)": {@code show} is empty when the clipboard holds no valid layout code. */

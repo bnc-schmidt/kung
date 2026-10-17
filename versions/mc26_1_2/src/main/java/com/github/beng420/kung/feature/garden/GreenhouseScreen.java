@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.feature.garden.GreenhouseSession.Tone;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.ui.UiMenuFont;
@@ -61,11 +62,17 @@ public final class GreenhouseScreen extends Screen {
     private static final int SEL_HEAD_Y = 128;
     private static final int SEL_Y = 142;
     private static final int SEL_ROW = 20;
-    private static final int SEL_ROWS = 11;
+    private static final int SEL_ROWS = 10;
     private static final int SOLVE_Y = SEL_Y + SEL_ROWS * SEL_ROW + 10;
-    private static final int BAR_Y = SOLVE_Y + 30;
+    /** The Prices switch sits between the Solve row and the progress bar. */
+    private static final int PRICE_Y = SOLVE_Y + 28;
+    private static final int PRICE_SEG_X = 44;
+    private static final int PRICE_SEG_W = 112;
+    private static final int BAR_Y = SOLVE_Y + 52;
+    private static final int STOP_EARLY_X = 212;
+    private static final int STOP_EARLY_W = 58;
     /** The hologram buttons under the progress line: Show and Hide side by side, then the clipboard one. */
-    private static final int HOLO_Y = BAR_Y + 38;
+    private static final int HOLO_Y = BAR_Y + 54;
     private static final int HOLO_CLIP_Y = HOLO_Y + 24;
     private static final int HOLO_H = 20;
     private static final int HOLO_W = 132;
@@ -108,8 +115,9 @@ public final class GreenhouseScreen extends Screen {
     private static final int HALF = 146;
     private static final int CROPS_X = MX + 156;
     private static final int SOIL_Y = 459;
-    private static final int NOTE_Y = 471;
-    private static final int NOTE_LINES = 4;
+    private static final int COST_Y = SOIL_Y + 11;
+    private static final int NOTE_Y = COST_Y + 12;
+    private static final int NOTE_LINES = 3;
     private static final int TOGGLE_W = 96;
     private static final int ARROW_UP = 0;
     private static final int ARROW_DOWN = 1;
@@ -128,6 +136,14 @@ public final class GreenhouseScreen extends Screen {
     private static final int PLUS_X = 242;
     private static final int STEP_W = 16;
 
+    private static final List<String> PRIORITY_TIP = List.of("Crop priorities", "Higher = use that crop less.",
+        "A tie-breaker after cost/difficulty:", "it only decides between layouts that cost the same.");
+    private static final List<String> STOP_EARLY_TIP = List.of("Stop early",
+        "Ends the search when its restarts agree;", "it may miss slightly better layouts.");
+    private static final List<String> BAZAAR_TIP = List.of("Prices: Bazaar", "Minimises the coins to buy the crops.",
+        "Applies to the next solve.");
+    private static final List<String> IRONMAN_TIP = List.of("Prices: Ironman", "Minimises difficulty by rarity,",
+        "not coins. Applies to the next solve.");
     private static final String[] TOOLS = {"Rotate left", "Rotate right", "Mirror", "Clear", "Paste", "Copy code"};
     private static final String[] TOOL_RESULTS = {"Rotated left", "Rotated right", "Mirrored", "Layout cleared"};
     /** Room kept free left and right of a button label before it counts as too long. */
@@ -140,6 +156,8 @@ public final class GreenhouseScreen extends Screen {
     private static final int KIND_CROP = 6;
     private static final int KIND_STATUS = 7;
     private static final int KIND_SOIL = 8;
+    private static final int KIND_COST = 9;
+    private static final int KIND_PRICE = 10;
     private static final int NOTICE_Y = 32;
     private static final int NOTICE_H = 24;
     private static final int NOTICE_X_W = 16;
@@ -150,7 +168,7 @@ public final class GreenhouseScreen extends Screen {
 
     private record GoalRow(String text, int color, String note) { }
 
-    private record CropRow(String name, String text) { }
+    private record CropRow(String name, String text, int count) { }
 
     /** Truncated strings by source text; cleared when the font or the device scale changes. */
     private static final class Fit {
@@ -210,10 +228,12 @@ public final class GreenhouseScreen extends Screen {
     private final Fit statusText = new Fit(MW);
     private final Fit soilFit = new Fit(MW);
     private final Fit noticeFit = new Fit(NOTICE_MAX_W - 40);
+    private final Fit costFit = new Fit(MW);
+    private final Fit priceFit = new Fit(LW);
     /** Slow ping-pong scroll for labels that do not fit: always for buttons, only while hovered for list text. */
     private final GreenhouseMarquee marquee = new GreenhouseMarquee(() -> System.nanoTime() / 1_000_000L);
     private final List<Fit> fits = List.of(targetName, dropName, dropRequirement, priorityName, goalText, cropText,
-        statusText, soilFit, noticeFit);
+        statusText, soilFit, noticeFit, costFit, priceFit);
     private final Counted cellsHead = new Counted("", " / " + GreenhouseState.CELLS + " cells");
     private final Counted targetsHead = new Counted("Selected targets (", ")");
     private final Counted cropsHead = new Counted("Crops to plant (", ")");
@@ -231,6 +251,8 @@ public final class GreenhouseScreen extends Screen {
     private List<GoalRow> goalRows = List.of();
     private List<CropRow> cropRows = List.of();
     private List<String> notes = List.of();
+    /** More wrapped note lines exist than fit under the lists; hovering them shows all. */
+    private boolean notesCut;
     private List<FormattedCharSequence> noteLines;
     private List<GreenhouseMutations.Mutation> matches = List.of();
     private String soilText = "";
@@ -296,6 +318,8 @@ public final class GreenhouseScreen extends Screen {
         // Heads draw the default skin until their texture arrives, so start every download now.
         GreenhouseIcons.warm();
         session.viewerOpened();
+        // Bazaar prices are fetched in the background and only when missing or old; never waited for here.
+        session.refreshPrices();
         layout();
     }
 
@@ -559,6 +583,22 @@ public final class GreenhouseScreen extends Screen {
             editingSeconds ? numberEdit.text() : Integer.toString(state.seconds()), editingSeconds,
             inside(mx, my, left + TIME_FIELD_X, solveY + 2, TIME_FIELD_W, 18), THEME.text());
         text(graphics, "s", left + TIME_FIELD_X + TIME_FIELD_W + 6, solveY + 7, THEME.muted());
+        boolean hoverStop = inside(mx, my, left + STOP_EARLY_X, solveY + 2, STOP_EARLY_W, 18);
+        button(graphics, left + STOP_EARLY_X, solveY + 2, STOP_EARLY_W, 18, "Stop early", hoverStop,
+            state.stopEarly() ? THEME.accent() : THEME.control(), THEME.text());
+        if (hoverStop) tooltip = STOP_EARLY_TIP;
+
+        int priceY = y + PRICE_Y;
+        boolean ironman = state.costMode() == CostMode.IRONMAN;
+        boolean hoverBazaar = inside(mx, my, left + PRICE_SEG_X, priceY, PRICE_SEG_W, 18);
+        boolean hoverIronman = inside(mx, my, left + PRICE_SEG_X + PRICE_SEG_W, priceY, PRICE_SEG_W, 18);
+        text(graphics, "Prices", left, priceY + 5, THEME.muted());
+        button(graphics, left + PRICE_SEG_X, priceY, PRICE_SEG_W, 18, "Bazaar", hoverBazaar,
+            ironman ? THEME.control() : THEME.accent(), THEME.text());
+        button(graphics, left + PRICE_SEG_X + PRICE_SEG_W, priceY, PRICE_SEG_W, 18, "Ironman", hoverIronman,
+            ironman ? THEME.accent() : THEME.control(), THEME.text());
+        if (hoverBazaar) tooltip = BAZAAR_TIP;
+        else if (hoverIronman) tooltip = IRONMAN_TIP;
 
         fill(graphics, left, y + BAR_Y, LW, 8, THEME.panelSoft());
         if (running) {
@@ -571,10 +611,12 @@ public final class GreenhouseScreen extends Screen {
                 progressText = String.format(Locale.ROOT, "Solving... %.1f / %d s", elapsed / 1000.0,
                     session.budgetMillis() / 1000);
             }
-            text(graphics, progressText, left, y + BAR_Y + 14, THEME.muted());
+            text(graphics, progressText, left, y + BAR_Y + 12, THEME.muted());
         } else if (shownSummary != null) {
-            text(graphics, lastSolveText, left, y + BAR_Y + 14, THEME.muted());
+            text(graphics, lastSolveText, left, y + BAR_Y + 12, THEME.muted());
         }
+        fitted(graphics, priceFit, session.priceLine(), left, y + BAR_Y + 23, THEME.muted(),
+            inside(mx, my, left, y + BAR_Y + 22, LW, menuFont.lineHeight + 2), KIND_PRICE, 0);
 
         button(graphics, left, y + HOLO_Y, HOLO_W, HOLO_H, "Show in world", inside(mx, my, left, y + HOLO_Y, HOLO_W, HOLO_H),
             THEME.control(), THEME.text());
@@ -718,6 +760,7 @@ public final class GreenhouseScreen extends Screen {
             icon(graphics, row.name(), x + CROPS_X + 1, top + 1);
             fitted(graphics, cropText, row.text(), x + CROPS_X + 20, top + 5, THEME.text(),
                 inside(mx, my, x + CROPS_X + 20, top, HALF - 26, RESULT_ROW), KIND_CROP, cropScroll.offset() + slot);
+            if (inside(mx, my, x + CROPS_X, top, MW - 156, RESULT_ROW)) tooltip = cropTooltip(row);
         }
         scrollbar(graphics, x + MX + MW - 3, y + RESULT_Y, RESULT_ROWS * RESULT_ROW, cropScroll, cropRows.size(),
             RESULT_ROWS);
@@ -726,10 +769,26 @@ public final class GreenhouseScreen extends Screen {
             fitted(graphics, soilFit, soilText, left, y + SOIL_Y, THEME.muted(),
                 inside(mx, my, left, y + SOIL_Y - 1, MW, menuFont.lineHeight + 2), KIND_SOIL, 0);
         }
+        String cost = shownSummary == null ? "" : shownSummary.costLine();
+        if (!cost.isEmpty()) {
+            fitted(graphics, costFit, cost, left, y + COST_Y, THEME.text(),
+                inside(mx, my, left, y + COST_Y - 1, MW, menuFont.lineHeight + 2), KIND_COST, 0);
+        }
         if (noteLines == null) noteLines = wrapNotes();
         for (int i = 0; i < noteLines.size(); i++) {
             graphics.text(menuFont, noteLines.get(i), left, y + NOTE_Y + i * 11, THEME.warning(), false);
         }
+        if (notesCut && inside(mx, my, left, y + NOTE_Y, MW, NOTE_LINES * 11)) tooltip = notes;
+    }
+
+    /** What one crop of the shopping list costs and what all of its cells cost, for the weighting chosen now. */
+    private List<String> cropTooltip(CropRow row) {
+        var quotes = session.quotes();
+        var quote = quotes.get(GreenhouseCrops.canonical(row.name()));
+        String each = GreenhouseCosts.describe(row.name(), quotes);
+        if (quote == null || quote.basis() == GreenhouseCosts.Basis.FREE) return List.of(row.name() + " x" + row.count(), each);
+        return List.of(row.name() + " x" + row.count(), "Each: " + each,
+            "All: " + GreenhouseCosts.formatTotal(quote.cost() * row.count(), state.costMode()));
     }
 
     /** The lines are rebuilt only when the hovered cell, the grid or the lock on the cell changes, not every frame. */
@@ -763,6 +822,7 @@ public final class GreenhouseScreen extends Screen {
         int left = x + RX;
         text(graphics, "Crop priorities", left, y + 38, THEME.text());
         text(graphics, "Higher = use less", left, y + 50, THEME.muted());
+        if (inside(mx, my, left, y + 36, RW - 116, 24)) tooltip = PRIORITY_TIP;
         button(graphics, left + RW - 112, y + 34, 112, 18, "Reset priorities",
             inside(mx, my, left + RW - 112, y + 34, 112, 18), THEME.control(), THEME.text());
         fill(graphics, left, y + PRIO_Y, RW, PRIO_ROWS * PRIO_ROW, THEME.panelSoft());
@@ -869,9 +929,12 @@ public final class GreenhouseScreen extends Screen {
         if (plan != shownPlan) {
             shownPlan = plan;
             List<CropRow> rows = new ArrayList<>();
-            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, crop + " x" + count)));
+            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, crop + " x" + count, count)));
             cropRows = List.copyOf(rows);
-            cropScroll.reset();
+            // A live preview replaces the lists several times a second: keep the player's scroll position then,
+            // but never past the end of a list that just got shorter.
+            if (!session.running()) cropScroll.reset();
+            cropScroll.scrollBy(0, cropRows.size(), RESULT_ROWS);
             soilText = plan.soils().isEmpty() ? "" : "Soil: " + String.join(", ", plan.soils());
         }
         GreenhouseSummary summary = session.summary();
@@ -884,7 +947,8 @@ public final class GreenhouseScreen extends Screen {
                 }
             }
             goalRows = List.copyOf(rows);
-            goalScroll.reset();
+            if (!session.running()) goalScroll.reset();
+            goalScroll.scrollBy(0, goalRows.size(), RESULT_ROWS);
             notes = summary == null ? List.of() : summary.notes();
             noteLines = null;
             lastSolveText = summary == null ? "" : summary.lastSolve();
@@ -893,11 +957,9 @@ public final class GreenhouseScreen extends Screen {
 
     private List<FormattedCharSequence> wrapNotes() {
         List<FormattedCharSequence> lines = new ArrayList<>();
-        for (String note : notes) {
-            if (lines.size() >= NOTE_LINES) break;
-            lines.addAll(menuFont.split(Component.literal(note), MW));
-        }
-        return lines.size() > NOTE_LINES ? List.copyOf(lines.subList(0, NOTE_LINES)) : List.copyOf(lines);
+        for (String note : notes) lines.addAll(menuFont.split(Component.literal(note), MW));
+        notesCut = lines.size() > NOTE_LINES;
+        return notesCut ? List.copyOf(lines.subList(0, NOTE_LINES)) : List.copyOf(lines);
     }
 
     /** Loads link text into the grid; the field mirrors what was loaded, and a failure also opens the popup. */
@@ -909,6 +971,11 @@ public final class GreenhouseScreen extends Screen {
 
     /** Puts Kung's layout key (not a Sky Mutations link) in the clipboard and the link field. */
     private void copy() {
+        if (session.running()) {
+            // The grid on show is an interim preview of the running solve: copy nothing from it.
+            perform(GreenhouseActions.busy());
+            return;
+        }
         GreenhouseGrid grid = session.plan().grid();
         String code = GreenhouseCode.encode(grid);
         Minecraft.getInstance().keyboardHandler.setClipboard(code);
@@ -1137,8 +1204,23 @@ public final class GreenhouseScreen extends Screen {
             }
             return true;
         }
+        if (inside(mx, my, left + STOP_EARLY_X, y + SOLVE_Y + 2, STOP_EARLY_W, 18)) {
+            state.setStopEarly(!state.stopEarly());
+            session.persist();
+            say(state.stopEarly() ? "Stop early on: the search may end before the time limit"
+                : "Stop early off: the search uses the whole time limit", Tone.MUTED);
+            return true;
+        }
+        if (inside(mx, my, left + PRICE_SEG_X, y + PRICE_Y, PRICE_SEG_W, 18)) {
+            setCostMode(CostMode.BAZAAR);
+            return true;
+        }
+        if (inside(mx, my, left + PRICE_SEG_X + PRICE_SEG_W, y + PRICE_Y, PRICE_SEG_W, 18)) {
+            setCostMode(CostMode.IRONMAN);
+            return true;
+        }
         if (inside(mx, my, left, y + HOLO_Y, HOLO_W, HOLO_H)) {
-            perform(GreenhouseActions.showLayout(session.plan().grid(), GreenhouseHologram::show));
+            perform(GreenhouseActions.showLayout(session.plan().grid(), session.running(), GreenhouseHologram::show));
             return true;
         }
         if (GreenhouseHologram.isShowing() && inside(mx, my, left + LW - HOLO_W, y + HOLO_Y, HOLO_W, HOLO_H)) {
@@ -1163,6 +1245,16 @@ public final class GreenhouseScreen extends Screen {
             }
         }
         return false;
+    }
+
+    /** The weighting only matters to the next solve; nothing is re-run, and the price line below follows the choice. */
+    private void setCostMode(CostMode mode) {
+        if (state.costMode() == mode) return;
+        state.setCostMode(mode);
+        session.persist();
+        say(mode == CostMode.IRONMAN ? "Prices: Ironman, the next solve weighs by rarity"
+            : "Prices: Bazaar, the next solve weighs by coins", Tone.MUTED);
+        session.refreshPrices();
     }
 
     private void clickTarget(int index, int dx, int dy, boolean shift) {

@@ -36,6 +36,25 @@ public final class GreenhouseActionsTest {
     }
 
     @Test
+    public void nothingIsShownOrCopiedFromTheInterimGridOfARunningSolve() {
+        AtomicInteger calls = new AtomicInteger();
+
+        GreenhouseActions.Outcome outcome = GreenhouseActions.showLayout(oneCell(), true, grid -> {
+            calls.incrementAndGet();
+            return new ShowResult("unused", true);
+        });
+
+        assertFalse(outcome.closeScreen());
+        assertEquals(GreenhouseSession.BUSY, outcome.notice());
+        assertEquals(GreenhouseSession.BUSY, outcome.status());
+        assertEquals(Tone.WARNING, outcome.tone());
+        assertEquals(0, calls.get());
+        assertEquals(outcome, GreenhouseActions.busy());
+        // With no solve running the same call shows the layout.
+        assertTrue(GreenhouseActions.showLayout(oneCell(), false, grid -> new ShowResult("shown", false)).closeScreen());
+    }
+
+    @Test
     public void anEmptyLayoutStaysOpenWithAPopupAndNeverTouchesTheHologram() {
         AtomicInteger calls = new AtomicInteger();
 

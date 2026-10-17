@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.ui.UiNumberField;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -51,15 +52,17 @@ final class GreenhouseState {
     /** {@code prioritiesOpen} is false in files written before the column could be collapsed. */
     private record SavedGoal(String text, String level, String note) { }
 
-    private record SavedSummary(List<SavedGoal> goals, List<String> notes, long elapsedMillis, int fixed, int met) { }
+    private record SavedSummary(List<SavedGoal> goals, List<String> notes, long elapsedMillis, int fixed, int met,
+                                String costLine) { }
 
     /**
      * {@code layout} is the shown grid as the site's entry list and {@code summary} the last solve's lines; both are
-     * absent in files written before the planner kept its result.
+     * absent in files written before the planner kept its result. {@code costMode} (BAZAAR or IRONMAN) and
+     * {@code stopEarly} are absent in files written before costs existed and then take their defaults.
      */
     private record Saved(int version, String unlocked, List<SavedTarget> targets, int seconds,
                          Map<String, Integer> priorities, boolean prioritiesOpen, JsonElement layout,
-                         SavedSummary summary) { }
+                         SavedSummary summary, String costMode, boolean stopEarly) { }
 
     private final boolean[] unlocked = new boolean[CELLS];
     private final List<Target> targets = new ArrayList<>();
@@ -68,6 +71,8 @@ final class GreenhouseState {
     private final Map<String, Integer> priorities = new TreeMap<>();
     private int seconds = DEFAULT_SECONDS;
     private boolean prioritiesOpen;
+    private CostMode costMode = CostMode.BAZAAR;
+    private boolean stopEarly;
     private GreenhouseGrid layout;
     private GreenhouseSummary summary;
     private boolean painting;
@@ -199,6 +204,18 @@ final class GreenhouseState {
         return count;
     }
 
+    // --- costs and stopping --------------------------------------------------------------------------------
+
+    /** Which weighting the next solve minimises after the goal counts: Bazaar coins or Ironman difficulty. */
+    CostMode costMode() { return costMode; }
+
+    void setCostMode(CostMode mode) { costMode = mode == null ? CostMode.BAZAAR : mode; }
+
+    /** Whether the search may end before the time budget once it stopped improving; off by default. */
+    boolean stopEarly() { return stopEarly; }
+
+    void setStopEarly(boolean stopEarly) { this.stopEarly = stopEarly; }
+
     // --- what was solved -------------------------------------------------------------------------------------
 
     /** The grid that was on show when the state was saved; null when none was kept. */
@@ -263,7 +280,8 @@ final class GreenhouseState {
             saved.add(new SavedTarget(target.mutation(), target.mode().name().toLowerCase(Locale.ROOT), target.count()));
         }
         return JSON.toJson(new Saved(FILE_VERSION, mask.toString(), saved, seconds, new TreeMap<>(priorities),
-            prioritiesOpen, layout == null ? null : GreenhouseLayoutCodec.entries(layout), savedSummary()));
+            prioritiesOpen, layout == null ? null : GreenhouseLayoutCodec.entries(layout), savedSummary(),
+            costMode.name(), stopEarly));
     }
 
     /**
@@ -293,6 +311,8 @@ final class GreenhouseState {
         }
         state.setSeconds(saved.seconds() == 0 ? DEFAULT_SECONDS : saved.seconds());
         state.prioritiesOpen = saved.prioritiesOpen();
+        state.stopEarly = saved.stopEarly();
+        state.costMode = storedCostMode(saved.costMode());
         state.layout = storedLayout(saved.layout());
         // A result without its layout would describe a grid nobody can see.
         state.summary = state.layout == null ? null : storedSummary(saved.summary());
@@ -312,7 +332,8 @@ final class GreenhouseState {
         for (GreenhouseSummary.Goal goal : summary.goals()) {
             goals.add(new SavedGoal(goal.text(), goal.level().name(), goal.note()));
         }
-        return new SavedSummary(goals, summary.notes(), summary.elapsedMillis(), summary.fixed(), summary.met());
+        return new SavedSummary(goals, summary.notes(), summary.elapsedMillis(), summary.fixed(), summary.met(),
+            summary.costLine());
     }
 
     /** The grid for stored entries, or null when they are missing or break the pasted-link rules. */
@@ -346,7 +367,20 @@ final class GreenhouseState {
         for (String note : saved.notes()) {
             if (!fits(note)) return null;
         }
-        return new GreenhouseSummary(goals, saved.notes(), saved.elapsedMillis(), saved.fixed(), saved.met());
+        // A summary saved before costs existed has no line; one with an over-long line is not trusted.
+        if (saved.costLine() != null && !fits(saved.costLine())) return null;
+        return new GreenhouseSummary(goals, saved.notes(), saved.elapsedMillis(), saved.fixed(), saved.met(),
+            saved.costLine());
+    }
+
+    /** The stored mode, or the default for a missing or unknown name. */
+    private static CostMode storedCostMode(String name) {
+        if (name == null) return CostMode.BAZAAR;
+        try {
+            return CostMode.valueOf(name);
+        } catch (IllegalArgumentException unknown) {
+            return CostMode.BAZAAR;
+        }
     }
 
     private static boolean fits(String text) { return text != null && text.length() <= MAX_LINE_LENGTH; }

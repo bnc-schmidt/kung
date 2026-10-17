@@ -13,6 +13,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 
 /**
@@ -24,11 +25,21 @@ import java.util.function.LongSupplier;
  * whose ring meets its recipe, shared with other recipes or not) than requested, so it may fall short but
  * never overshoot. The solver never refuses: it returns the best layout it found and reports achieved against
  * requested.
+ *
+ * <p>Among layouts that are equal on all of that, the cheaper one wins (see {@link SolveRequest#costs()}),
+ * then the one with fewer priority points, then the one with fewer crops.
  */
 final class GreenhouseSolver {
     static final long DEFAULT_BUDGET_MILLIS = 1500;
     /** {@link Goal#quantity()} value that asks for as many as the plot allows. */
     static final int MAX = -1;
+    /**
+     * Costs are searched as whole multiples of 1/{@value} of a coin per cell: 100 cells at the cap of
+     * {@link #COST_CAP} come to 1e17, far inside a long, so adding and removing a crop cancels exactly.
+     */
+    static final long COST_SCALE = 1000;
+    /** Largest cost accepted for one planted cell. */
+    static final double COST_CAP = 1e12;
     /** Cheapest base crop, used only to fence off the extra sites of a fixed Lonelily. */
     private static final String FILLER_CROP = "Wheat Seeds";
     /** Quantities above this are capped here; nothing fits that many anyway. */
@@ -43,14 +54,18 @@ final class GreenhouseSolver {
 
     /**
      * {@code unlocked} is row-major, 100 entries; locked cells hold neither crops nor targets (null: all open).
-     * {@code priorities} maps a crop name (loose matching) to 0..100, higher meaning "use this crop less". It
-     * is a tie-breaker only: of two layouts with the same goal counts and the same ambiguity, the one with
-     * fewer priority points (sum of priority per planted crop) wins.
+     * {@code priorities} maps a crop name (loose matching) to 0..100, higher meaning "use this crop less".
+     * {@code costs} maps a crop name to what one planted cell costs (0 when missing, limited to 0..1e12, with a
+     * resolution of 0.001). Both are tie-breakers only: among layouts with the same goal counts and the same
+     * ambiguity, the one with the lower total cost wins, then the one with fewer priority points (sum of
+     * priority per planted crop), then the one with fewer crops. A cost never lowers a goal count.
      */
-    record SolveRequest(List<Goal> goals, boolean[] unlocked, Map<String, Integer> priorities) {
+    record SolveRequest(List<Goal> goals, boolean[] unlocked, Map<String, Integer> priorities,
+                        Map<String, Double> costs) {
         SolveRequest {
             goals = List.copyOf(goals);
             priorities = priorities == null ? Map.of() : Map.copyOf(priorities);
+            costs = costs == null ? Map.of() : Map.copyOf(costs);
             if (unlocked == null) {
                 unlocked = new boolean[GreenhouseSearch.CELLS];
                 Arrays.fill(unlocked, true);
@@ -61,12 +76,20 @@ final class GreenhouseSolver {
             }
         }
 
-        SolveRequest(List<Goal> goals, boolean[] unlocked) { this(goals, unlocked, Map.of()); }
+        SolveRequest(List<Goal> goals, boolean[] unlocked, Map<String, Integer> priorities) {
+            this(goals, unlocked, priorities, Map.of());
+        }
+
+        SolveRequest(List<Goal> goals, boolean[] unlocked) { this(goals, unlocked, Map.of(), Map.of()); }
 
         static SolveRequest of(Goal... goals) { return new SolveRequest(List.of(goals), null); }
 
         SolveRequest withPriorities(Map<String, Integer> priorities) {
-            return new SolveRequest(goals, unlocked, priorities);
+            return new SolveRequest(goals, unlocked, priorities, costs);
+        }
+
+        SolveRequest withCosts(Map<String, Double> costs) {
+            return new SolveRequest(goals, unlocked, priorities, costs);
         }
     }
 
@@ -85,19 +108,40 @@ final class GreenhouseSolver {
      * {@code ingredients} is the shopping list (crop to cell count); {@code ambiguousTargets} counts target
      * sites that another mutation can also take; {@code unrequestedSites} counts empty sites that would grow
      * only mutations nobody asked for; {@code soils} lists the soil of every mutation the plan grows;
-     * {@code stoppedEarly} is set when the search ended before its time budget because it had stopped improving.
+     * {@code stoppedEarly} is set when the search ended before its time budget because it had stopped improving
+     * (only when that was asked for). {@code totalCost} is the sum over the shopping list of count times the unit
+     * cost in {@code unitCosts}, which holds the cost used for each ingredient (0 when none was given).
      */
     record SolveResult(GreenhouseGrid grid, List<GoalResult> goals, List<Target> targets,
                        Map<String, Integer> ingredients, int ambiguousTargets, int unrequestedSites,
-                       List<String> soils, long elapsedMillis, List<String> notes, boolean stoppedEarly) { }
+                       List<String> soils, long elapsedMillis, List<String> notes, boolean stoppedEarly,
+                       double totalCost, Map<String, Double> unitCosts) {
+        SolveResult(GreenhouseGrid grid, List<GoalResult> goals, List<Target> targets,
+                    Map<String, Integer> ingredients, int ambiguousTargets, int unrequestedSites,
+                    List<String> soils, long elapsedMillis, List<String> notes, boolean stoppedEarly) {
+            this(grid, goals, targets, ingredients, ambiguousTargets, unrequestedSites, soils, elapsedMillis, notes,
+                stoppedEarly, 0, Map.of());
+        }
+    }
 
     /**
      * Run settings behind the public overloads. {@code clock} reads nanoseconds (tests inject their own);
      * {@code stopOnStagnation} lets the search end early once it has stopped improving; {@code observer} is for
-     * tuning and may be null.
+     * tuning and may be null; {@code onBest} (may be null) receives a complete result every time the best plan
+     * improves, on the thread that runs the solve, at most once per quarter second plus a last one at the end.
      */
     record Options(long maxIterations, BooleanSupplier cancelled, LongSupplier clock, boolean stopOnStagnation,
-                   GreenhouseSearch.Observer observer) { }
+                   GreenhouseSearch.Observer observer, Consumer<SolveResult> onBest) {
+        Options(long maxIterations, BooleanSupplier cancelled, LongSupplier clock, boolean stopOnStagnation,
+                GreenhouseSearch.Observer observer) {
+            this(maxIterations, cancelled, clock, stopOnStagnation, observer, null);
+        }
+
+        /** The settings of the public overloads: real clock, no early stop. */
+        static Options standard(long maxIterations, BooleanSupplier cancelled, Consumer<SolveResult> onBest) {
+            return new Options(maxIterations, cancelled, System::nanoTime, false, null, onBest);
+        }
+    }
 
     private GreenhouseSolver() { }
 
@@ -111,7 +155,7 @@ final class GreenhouseSolver {
         return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
     }
 
-    /** Time-budget run: ends at the budget, or earlier once it has stopped improving. */
+    /** Time-budget run: uses the whole budget. */
     static SolveResult solve(SolveRequest request, long budgetMillis, long seed) {
         return solve(request, budgetMillis, seed, Long.MAX_VALUE, () -> false);
     }
@@ -122,10 +166,28 @@ final class GreenhouseSolver {
      */
     static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
                                                      BooleanSupplier cancelled) {
+        return solveAsync(request, budgetMillis, seed, cancelled, null, false);
+    }
+
+    /**
+     * Like the four-argument form, and {@code onBest} receives a complete snapshot (grid, goals, ingredients,
+     * cost) on the worker thread whenever the best plan improves: at most one call per quarter second, and the
+     * last improvement is always delivered before the future completes.
+     */
+    static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
+                                                     BooleanSupplier cancelled, Consumer<SolveResult> onBest) {
+        return solveAsync(request, budgetMillis, seed, cancelled, onBest, false);
+    }
+
+    /** With {@code stopOnStagnation} the run may also end early once it has stopped improving (opt-in). */
+    static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
+                                                     BooleanSupplier cancelled, Consumer<SolveResult> onBest,
+                                                     boolean stopOnStagnation) {
         CompletableFuture<SolveResult> result = new CompletableFuture<>();
         Thread worker = new Thread(() -> {
             try {
-                result.complete(solve(request, budgetMillis, seed, Long.MAX_VALUE, cancelled));
+                result.complete(solve(request, budgetMillis, seed, new Options(Long.MAX_VALUE, cancelled,
+                    System::nanoTime, stopOnStagnation, null, onBest)));
             } catch (Throwable failure) {
                 // An Error (stack overflow, out of memory) would otherwise end the thread with no result and
                 // leave the caller waiting for a future that never completes.
@@ -143,12 +205,11 @@ final class GreenhouseSolver {
      * Runs the search until the time budget, {@code maxIterations} or {@code cancelled} ends it; the calling
      * thread's interrupt flag also stops it. The same request, seed and iteration cap (reached before the
      * budget) always give the same result; with only a time budget, machine speed decides how many annealing
-     * rounds fit, and the run may end early on stagnation (an iteration cap switches that off).
+     * rounds fit.
      */
     static SolveResult solve(SolveRequest request, long budgetMillis, long seed, long maxIterations,
                              BooleanSupplier cancelled) {
-        return solve(request, budgetMillis, seed, new Options(maxIterations, cancelled, System::nanoTime,
-            maxIterations == Long.MAX_VALUE, null));
+        return solve(request, budgetMillis, seed, Options.standard(maxIterations, cancelled, null));
     }
 
     static SolveResult solve(SolveRequest request, long budgetMillis, long seed, Options options) {
@@ -246,7 +307,7 @@ final class GreenhouseSolver {
         }
         if (maximizing > 1) notes.add("Several maximize goals share the leftover space equally");
 
-        // Priorities: unknown names are reported and skipped; crops no goal needs cannot be planted anyway.
+        // Priorities and costs: unknown names are reported and skipped; crops no goal needs cannot be planted.
         int[] cropPriority = new int[cropIndex.size()];
         for (Map.Entry<String, Integer> entry : new TreeMap<>(request.priorities()).entrySet()) {
             String crop = GreenhouseCrops.canonical(entry.getKey());
@@ -259,88 +320,145 @@ final class GreenhouseSolver {
             Integer index = cropIndex.get(crop);
             if (index != null) cropPriority[index] = value;
         }
+        long[] cropCost = new long[cropIndex.size()];
+        for (Map.Entry<String, Double> entry : new TreeMap<>(request.costs()).entrySet()) {
+            String crop = GreenhouseCrops.canonical(entry.getKey());
+            if (!GreenhouseCrops.NAMES.contains(crop)) {
+                notes.add("Unknown crop in costs, ignored: " + entry.getKey());
+                continue;
+            }
+            double given = entry.getValue();
+            double value = Double.isNaN(given) ? 0 : Math.max(0, Math.min(COST_CAP, given));
+            if (value != given) notes.add("Cost for " + crop + " limited to " + quantity(value));
+            Integer index = cropIndex.get(crop);
+            if (index != null) cropCost[index] = Math.round(value * COST_SCALE);
+        }
 
+        Plan plan = new Plan(results, resolved, included, includedAt, possible, aims, aimGoal,
+            new ArrayList<>(cropIndex.keySet()), cropCost, List.copyOf(notes));
         GreenhouseSearch search = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
-            aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, seed);
+            aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
+        Consumer<byte[]> preview = null;
+        if (options.onBest() != null) {
+            // The running search's state must not be disturbed, so snapshots are scored on a twin.
+            GreenhouseSearch twin = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
+                aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
+            preview = labels -> {
+                SolveResult snapshot = plan.build(labels, twin.evaluate(labels),
+                    (options.clock().getAsLong() - started) / 1_000_000L, List.of(), false);
+                try {
+                    options.onBest().accept(snapshot);
+                } catch (RuntimeException ignored) {
+                    // A faulty listener must not end the search.
+                }
+            };
+        }
         // Leave room for pruning and building the result, which are not interruptible.
         long reserve = Math.min(50_000_000L, budgetNanos / 10);
         byte[] labels = search.search(new GreenhouseSearch.Limits(started + budgetNanos - reserve,
-            options.maxIterations(), cancelled, options.clock(), options.stopOnStagnation(), options.observer()));
-        boolean cancelledRun = cancelled.getAsBoolean() || Thread.currentThread().isInterrupted();
-        GreenhouseSearch.Evaluation evaluation = search.evaluate(labels);
-
-        double[] achieved = new double[included.size()];
-        int[] sites = new int[included.size()];
-        for (int a = 0; a < aims.size(); a++) {
-            achieved[aimGoal.get(a)] = evaluation.goalTotals()[a];
-            sites[aimGoal.get(a)] = evaluation.candidates()[a];
+            options.maxIterations(), cancelled, options.clock(), options.stopOnStagnation(), options.observer(),
+            preview));
+        List<String> ending = new ArrayList<>();
+        if (cancelled.getAsBoolean() || Thread.currentThread().isInterrupted()) {
+            ending.add("Search stopped early; this is the best layout found so far");
         }
-        for (int k = 0; k < included.size(); k++) {
-            Goal goal = included.get(k);
-            results[includedAt.get(k)] = new GoalResult(resolved.get(k).name(), goal.quantity(), achieved[k],
-                sites[k], true, shortfall(goal, achieved[k], sites[k]));
-        }
-        for (int i = 0; i < results.length; i++) {
-            if (!results[i].supported() || results[i].note().isEmpty() || !results[i].note().startsWith("Listed")) continue;
-            for (int k = 0; k < included.size(); k++) {
-                if (resolved.get(k).name().equals(results[i].mutation())) {
-                    results[i] = new GoalResult(results[i].mutation(), results[i].requested(), achieved[k],
-                        sites[k], true, results[i].note());
-                }
-            }
-        }
-
-        GreenhouseGrid grid = new GreenhouseGrid();
-        List<String> cropNames = new ArrayList<>(cropIndex.keySet());
-        Map<String, Integer> counted = new LinkedHashMap<>();
-        for (int p = 0; p < GreenhouseSearch.CELLS; p++) {
-            if (labels[p] == GreenhouseSearch.EMPTY) continue;
-            String crop = cropNames.get(labels[p]);
-            grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
-                new GreenhouseGrid.Cell(crop, GreenhouseGrid.INGREDIENT));
-            counted.merge(crop, 1, Integer::sum);
-        }
-        Map<String, Integer> ingredients = new LinkedHashMap<>();
-        counted.entrySet().stream()
-            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
-            .forEach(entry -> ingredients.put(entry.getKey(), entry.getValue()));
-
-        // A site is named after the highest-priority goal it can grow.
-        List<Target> targets = new ArrayList<>();
-        for (GreenhouseSearch.Site site : evaluation.sites()) {
-            int named = 0;
-            while ((site.recipes() >> aims.get(named).recipe() & 1L) == 0) named++;
-            GreenhouseMutations.Mutation mutation = possible.get(aims.get(named).recipe());
-            for (int p : site.cells()) {
-                grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
-                    new GreenhouseGrid.Cell(mutation.name(), GreenhouseGrid.TARGET));
-            }
-            int anchor = Arrays.stream(site.cells()).min().orElse(0);
-            targets.add(new Target(mutation.name(), anchor / GreenhouseGrid.SIZE, anchor % GreenhouseGrid.SIZE,
-                mutation.width(), mutation.height(), Long.bitCount(site.recipes())));
-        }
-        targets.sort((a, b) -> a.row() != b.row() ? Integer.compare(a.row(), b.row())
-            : Integer.compare(a.column(), b.column()));
-
-        Set<String> soils = new LinkedHashSet<>();
-        for (int a = 0; a < aims.size(); a++) {
-            if (achieved[aimGoal.get(a)] > 0) soils.addAll(resolved.get(aimGoal.get(a)).soil());
-        }
-        if (cancelledRun) notes.add("Search stopped early; this is the best layout found so far");
         if (search.stagnated()) {
-            notes.add("Stopped early: no improvement for " + String.format(Locale.ROOT, "%.1f s",
+            ending.add("Stopped early: no improvement for " + String.format(Locale.ROOT, "%.1f s",
                 search.idleNanos() / 1e9) + ", the last " + search.consistentRestarts()
                 + " restarts all ended on the same plan");
         }
-        if (evaluation.ambiguous() > 0) {
-            notes.add(evaluation.ambiguous() + " target site(s) can also grow another mutation; counts are expected values");
+        return plan.build(labels, search.evaluate(labels), (options.clock().getAsLong() - started) / 1_000_000L,
+            ending, search.stagnated());
+    }
+
+    /** Everything resolved from a request, and how to turn a layout into a {@link SolveResult}. */
+    private record Plan(GoalResult[] template, List<GreenhouseMutations.Mutation> resolved, List<Goal> included,
+                        List<Integer> includedAt, List<GreenhouseMutations.Mutation> possible,
+                        List<GreenhouseSearch.Aim> aims, List<Integer> aimGoal, List<String> cropNames,
+                        long[] cropCost, List<String> baseNotes) {
+
+        /**
+         * {@code ending} are the notes that belong to a finished run (cancelled, stagnated); they go before the
+         * notes derived from the layout.
+         */
+        SolveResult build(byte[] labels, GreenhouseSearch.Evaluation evaluation, long elapsedMillis,
+                          List<String> ending, boolean stoppedEarly) {
+            GoalResult[] results = template.clone();
+            double[] achieved = new double[included.size()];
+            int[] sites = new int[included.size()];
+            for (int a = 0; a < aims.size(); a++) {
+                achieved[aimGoal.get(a)] = evaluation.goalTotals()[a];
+                sites[aimGoal.get(a)] = evaluation.candidates()[a];
+            }
+            for (int k = 0; k < included.size(); k++) {
+                Goal goal = included.get(k);
+                results[includedAt.get(k)] = new GoalResult(resolved.get(k).name(), goal.quantity(), achieved[k],
+                    sites[k], true, shortfall(goal, achieved[k], sites[k]));
+            }
+            for (int i = 0; i < results.length; i++) {
+                if (!results[i].supported() || results[i].note().isEmpty()
+                    || !results[i].note().startsWith("Listed")) continue;
+                for (int k = 0; k < included.size(); k++) {
+                    if (resolved.get(k).name().equals(results[i].mutation())) {
+                        results[i] = new GoalResult(results[i].mutation(), results[i].requested(), achieved[k],
+                            sites[k], true, results[i].note());
+                    }
+                }
+            }
+
+            GreenhouseGrid grid = new GreenhouseGrid();
+            Map<String, Integer> counted = new LinkedHashMap<>();
+            long costUnits = 0;
+            for (int p = 0; p < GreenhouseSearch.CELLS; p++) {
+                if (labels[p] == GreenhouseSearch.EMPTY) continue;
+                String crop = cropNames.get(labels[p]);
+                grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
+                    new GreenhouseGrid.Cell(crop, GreenhouseGrid.INGREDIENT));
+                counted.merge(crop, 1, Integer::sum);
+                costUnits += cropCost[labels[p]];
+            }
+            Map<String, Integer> ingredients = new LinkedHashMap<>();
+            counted.entrySet().stream()
+                .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .forEach(entry -> ingredients.put(entry.getKey(), entry.getValue()));
+            Map<String, Double> unitCosts = new LinkedHashMap<>();
+            for (String crop : ingredients.keySet()) {
+                unitCosts.put(crop, cropCost[cropNames.indexOf(crop)] / (double) COST_SCALE);
+            }
+
+            // A site is named after the highest-priority goal it can grow.
+            List<Target> targets = new ArrayList<>();
+            for (GreenhouseSearch.Site site : evaluation.sites()) {
+                int named = 0;
+                while ((site.recipes() >> aims.get(named).recipe() & 1L) == 0) named++;
+                GreenhouseMutations.Mutation mutation = possible.get(aims.get(named).recipe());
+                for (int p : site.cells()) {
+                    grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
+                        new GreenhouseGrid.Cell(mutation.name(), GreenhouseGrid.TARGET));
+                }
+                int anchor = Arrays.stream(site.cells()).min().orElse(0);
+                targets.add(new Target(mutation.name(), anchor / GreenhouseGrid.SIZE, anchor % GreenhouseGrid.SIZE,
+                    mutation.width(), mutation.height(), Long.bitCount(site.recipes())));
+            }
+            targets.sort((a, b) -> a.row() != b.row() ? Integer.compare(a.row(), b.row())
+                : Integer.compare(a.column(), b.column()));
+
+            Set<String> soils = new LinkedHashSet<>();
+            for (int a = 0; a < aims.size(); a++) {
+                if (achieved[aimGoal.get(a)] > 0) soils.addAll(resolved.get(aimGoal.get(a)).soil());
+            }
+            List<String> notes = new ArrayList<>(baseNotes);
+            notes.addAll(ending);
+            if (evaluation.ambiguous() > 0) {
+                notes.add(evaluation.ambiguous() + " target site(s) can also grow another mutation; counts are expected values");
+            }
+            if (resolved.stream().anyMatch(GreenhouseMutations.Mutation::emptyRing)) {
+                notes.add("Lonelily needs a ring without crops, so those cells stay free of ingredients");
+            }
+            return new SolveResult(grid, List.of(results), List.copyOf(targets), Collections.unmodifiableMap(ingredients),
+                evaluation.ambiguous(), evaluation.unrequested(), List.copyOf(soils), elapsedMillis, List.copyOf(notes),
+                stoppedEarly, costUnits / (double) COST_SCALE, Collections.unmodifiableMap(unitCosts));
         }
-        if (resolved.stream().anyMatch(GreenhouseMutations.Mutation::emptyRing)) {
-            notes.add("Lonelily needs a ring without crops, so those cells stay free of ingredients");
-        }
-        return new SolveResult(grid, List.of(results), List.copyOf(targets), Collections.unmodifiableMap(ingredients),
-            evaluation.ambiguous(), evaluation.unrequested(), List.copyOf(soils),
-            (options.clock().getAsLong() - started) / 1_000_000L, List.copyOf(notes), search.stagnated());
     }
 
     /** Why a fixed goal is not fully met, or an empty note when it is. */

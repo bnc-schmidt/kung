@@ -1,12 +1,17 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
+import com.github.beng420.kung.feature.garden.GreenhouseCosts.Quote;
 import com.github.beng420.kung.runtime.KungPaths;
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.function.UnaryOperator;
 
@@ -33,10 +38,16 @@ final class GreenhouseSession {
         void warn(String message, Throwable cause);
     }
 
+    /**
+     * Starts a solve on a worker. {@code onBest} is called on that worker with a full snapshot whenever the best
+     * layout improves; {@code stopEarly} lets the search end before the budget once it stopped improving.
+     */
     @FunctionalInterface
     interface Starter {
         CompletableFuture<GreenhouseSolver.SolveResult> start(GreenhouseSolver.SolveRequest request, long budgetMillis,
-                                                              long seed, BooleanSupplier cancelled);
+                                                              long seed, BooleanSupplier cancelled,
+                                                              Consumer<GreenhouseSolver.SolveResult> onBest,
+                                                              boolean stopEarly);
     }
 
     static final String HINT = "Add mutation targets, then press Solve.";
@@ -53,12 +64,28 @@ final class GreenhouseSession {
     private final Starter starter;
     private final LongSupplier clock;
     private final GreenhouseState state;
+    /** Where the Bazaar prices come from; null in tests of the rest, then every Bazaar cost is an estimate. */
+    private final GreenhousePrices prices;
     private GreenhousePlan plan;
     private GreenhouseSummary summary;
-    /** The plan on show when the running solve started; a different one at the end means it was changed meanwhile. */
+    /** The plan and result on show when the running solve started; previews are undone back to these. */
     private GreenhousePlan runPlan;
+    private GreenhouseSummary runSummary;
+    /** The plan the last preview put on show; a live preview is never saved and the final result replaces it. */
+    private GreenhousePlan previewPlan;
+    private boolean previewing;
+    /** The weighting and quotes the running solve was started with; switching the mode mid-run changes neither. */
+    private CostMode runMode = CostMode.BAZAAR;
+    private Map<String, Quote> runQuotes = Map.of();
+    private Map<String, Quote> quotesCache = Map.of();
+    private CostMode quotesMode;
+    private int quotesVersion = Integer.MIN_VALUE;
+    private String priceLine = "";
+    private long priceLineKey = Long.MIN_VALUE;
     private String status = HINT;
     private Tone tone = Tone.MUTED;
+    /** The status is still the run's own text ("Solving...", "Searching..."): previews may update it, nothing else. */
+    private boolean statusIsRunText;
     private boolean viewing;
     private boolean running;
     /** Stop was pressed: the solver is winding down and its best layout will still be applied. */
@@ -71,10 +98,15 @@ final class GreenhouseSession {
     private boolean saveFailureLogged;
 
     GreenhouseSession(Path file, Host host, Starter starter, LongSupplier nanoClock) {
+        this(file, host, starter, nanoClock, null);
+    }
+
+    GreenhouseSession(Path file, Host host, Starter starter, LongSupplier nanoClock, GreenhousePrices prices) {
         this.file = file;
         this.host = host;
         this.starter = starter;
         this.clock = nanoClock;
+        this.prices = prices;
         state = GreenhouseState.load(file);
         GreenhouseGrid layout = state.layout();
         plan = GreenhousePlan.of(layout == null ? new GreenhouseGrid() : layout);
@@ -86,7 +118,7 @@ final class GreenhouseSession {
     static GreenhouseSession get() {
         if (instance == null) {
             instance = new GreenhouseSession(KungPaths.fileLayout().settingsDirectory().resolve("greenhouse.json"),
-                GreenhouseClientHost.INSTANCE, GreenhouseSolver::solveAsync, System::nanoTime);
+                GreenhouseClientHost.INSTANCE, GreenhouseSolver::solveAsync, System::nanoTime, GreenhousePrices.get());
             GreenhouseClientHost.install(instance);
         }
         return instance;
@@ -104,6 +136,13 @@ final class GreenhouseSession {
     void say(String message, Tone tone) {
         status = message;
         this.tone = tone;
+        statusIsRunText = false;
+    }
+
+    /** The running solve's own status text, which a later message from anywhere else replaces for good. */
+    private void sayRun(String message) {
+        say(message, Tone.MUTED);
+        statusIsRunText = true;
     }
 
     /** Like {@link #say} for a change to the shown grid, which ignores the mask: warns if crops now sit on locked cells. */
@@ -114,6 +153,40 @@ final class GreenhouseSession {
         } else {
             say(message + ". " + locked + (locked == 1 ? " crop sits" : " crops sit") + " on locked cells", Tone.WARNING);
         }
+    }
+
+    // --- prices ------------------------------------------------------------------------------------------------
+
+    /** Starts a Bazaar fetch when the prices are missing or old; never blocks (a no-op without a price source). */
+    void refreshPrices() {
+        if (prices != null) prices.refreshIfStale();
+    }
+
+    /** Quotes for the weighting chosen now (what the next solve would use), rebuilt only when the prices or mode change. */
+    Map<String, Quote> quotes() {
+        CostMode mode = state.costMode();
+        int version = prices == null ? -1 : prices.version();
+        if (mode != quotesMode || version != quotesVersion) {
+            quotesMode = mode;
+            quotesVersion = version;
+            quotesCache = GreenhouseCosts.quotes(mode, prices);
+        }
+        return quotesCache;
+    }
+
+    /** "Bazaar prices: fresh 2 min ago", "Bazaar offline: using estimates" or "Ironman: by rarity"; cached per change. */
+    String priceLine() {
+        CostMode mode = state.costMode();
+        GreenhousePrices.Status status = prices == null ? null : prices.status();
+        long age = prices == null ? -1 : prices.ageMillis();
+        boolean refreshing = prices != null && prices.refreshing();
+        long key = mode.ordinal() | (status == null ? 15L : status.ordinal()) << 4 | (refreshing ? 1L : 0L) << 8
+            | (age < 0 ? 0L : age / 15_000L + 1) << 9;
+        if (key != priceLineKey) {
+            priceLineKey = key;
+            priceLine = GreenhousePriceLine.of(mode, status, age, refreshing);
+        }
+        return priceLine;
     }
 
     // --- who is looking ----------------------------------------------------------------------------------------
@@ -196,11 +269,20 @@ final class GreenhouseSession {
         runStartNanos = clock.getAsLong();
         budgetMillis = state.seconds() * 1000L;
         runPlan = plan;
-        say("Solving...", Tone.MUTED);
+        runSummary = summary;
+        previewPlan = null;
+        previewing = false;
+        refreshPrices();
+        runMode = state.costMode();
+        runQuotes = GreenhouseCosts.quotes(runMode, prices);
+        Map<String, Double> costs = new LinkedHashMap<>();
+        runQuotes.forEach((crop, quote) -> costs.put(crop, quote.cost()));
+        sayRun("Solving...");
         persist();
         CompletableFuture<GreenhouseSolver.SolveResult> future;
         try {
-            future = Objects.requireNonNull(starter.start(state.request(), budgetMillis, runStartNanos, stop::get));
+            future = Objects.requireNonNull(starter.start(state.request().withCosts(costs), budgetMillis, runStartNanos,
+                stop::get, best -> host.runOnClient(() -> preview(id, best)), state.stopEarly()));
         } catch (Throwable failure) {
             // The worker never started (no thread, out of memory): without this the run would look live until Stop.
             abandon();
@@ -243,6 +325,35 @@ final class GreenhouseSession {
         running = false;
         stopping = false;
         runId++;
+        revertPreview();
+    }
+
+    /**
+     * A snapshot of the best layout so far, from the worker through the client thread. It becomes the shown grid
+     * and result lines but is not saved, and an abandoned or already finished run's snapshot is ignored. Edits
+     * are refused while solving, so the display cannot have been changed by anyone else.
+     */
+    private void preview(int id, GreenhouseSolver.SolveResult best) {
+        if (id != runId || !running) return;
+        GreenhouseSummary seen = GreenhouseSummary.of(best, runMode, runQuotes);
+        plan = GreenhousePlan.of(best.grid());
+        previewPlan = plan;
+        summary = seen;
+        previewing = true;
+        // "Stopping..." stays on the status line while the last snapshots still arrive, and so does any message
+        // the player's own clicks put there (a snapshot four times a second must not wipe it).
+        if (!stopping && statusIsRunText) {
+            String cost = best.unitCosts().isEmpty() ? "" : ", cost " + GreenhouseCosts.formatTotal(best.totalCost(), runMode);
+            sayRun("Searching... best so far: " + (seen.goals().isEmpty() ? "no goals" : seen.firstLine()) + cost);
+        }
+    }
+
+    /** Puts back the grid and result a run started from, when it ends without a result of its own. */
+    private void revertPreview() {
+        if (!previewing) return;
+        plan = runPlan;
+        summary = runSummary;
+        previewing = false;
     }
 
     /** On the client thread. A run that was abandoned or replaced is ignored; any other ends here and, with no screen open, toasts. */
@@ -254,13 +365,15 @@ final class GreenhouseSession {
         String message;
         if (failure != null || solved == null) {
             message = "Solver failed: " + (failure == null ? "no result" : GreenhouseSolver.describe(failure));
+            revertPreview();
             say(message, Tone.ERROR);
-        } else if (plan != runPlan) {
+        } else if (plan != runPlan && plan != previewPlan) {
             // The edits are refused while solving, so this is a guard: never overwrite what the player is looking at.
             message = "Finished, not applied: the layout changed meanwhile";
             say(message, Tone.WARNING);
         } else {
-            GreenhouseSummary made = GreenhouseSummary.of(solved);
+            GreenhouseSummary made = GreenhouseSummary.of(solved, runMode, runQuotes);
+            previewing = false;
             replace(solved.grid(), made);
             sayAboutGrid(made.headline(stopped, solved.stoppedEarly()), made.allMet() ? Tone.SUCCESS : Tone.WARNING);
             message = (stopped ? "Stopped: " : "Finished: ") + (made.goals().isEmpty() ? "no goals" : made.firstLine());

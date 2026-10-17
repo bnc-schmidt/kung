@@ -65,7 +65,7 @@ public final class GreenhouseSolverTest {
         .filter(GreenhouseMutations.Mutation::supported).toList();
 
     /** Expected count and number of candidate sites (sites whose ring meets the recipe) per mutation. */
-    private record Outcome(Map<String, Double> expected, Map<String, Integer> sites) { }
+    private record Outcome(Map<String, Double> expected, Map<String, Integer> sites, int shared) { }
 
     private static Map<String, Double> reference(String[] cropAt, boolean[] unlocked) {
         return outcome(cropAt, unlocked).expected();
@@ -75,6 +75,7 @@ public final class GreenhouseSolverTest {
     private static Outcome outcome(String[] cropAt, boolean[] unlocked) {
         Map<String, Double> out = new HashMap<>();
         Map<String, Integer> candidates = new HashMap<>();
+        int[] shared = new int[1];
         boolean[] claimed = new boolean[SIZE * SIZE];
         for (int pass = 0; pass < 2; pass++) {
             for (int row = 0; row < SIZE; row++) {
@@ -82,16 +83,17 @@ public final class GreenhouseSolverTest {
                     for (int[] shape : new int[][] {{2, 2}, {3, 3}, {1, 1}}) {
                         // Sized footprints first, so a cell they take is not also a 1x1 site.
                         if ((shape[0] == 1) != (pass == 1)) continue;
-                        site(cropAt, unlocked, claimed, out, candidates, row, column, shape[0], shape[1]);
+                        site(cropAt, unlocked, claimed, out, candidates, shared, row, column, shape[0], shape[1]);
                     }
                 }
             }
         }
-        return new Outcome(out, candidates);
+        return new Outcome(out, candidates, shared[0]);
     }
 
     private static void site(String[] cropAt, boolean[] unlocked, boolean[] claimed, Map<String, Double> out,
-                             Map<String, Integer> candidates, int row, int column, int width, int height) {
+                             Map<String, Integer> candidates, int[] shared, int row, int column, int width,
+                             int height) {
         if (row + height > SIZE || column + width > SIZE) return;
         for (int r = row; r < row + height; r++) {
             for (int c = column; c < column + width; c++) {
@@ -122,6 +124,7 @@ public final class GreenhouseSolverTest {
             if (met) hits.add(mutation);
         }
         if (hits.isEmpty()) return;
+        if (hits.size() > 1) shared[0]++;
         double chances = hits.stream().mapToInt(GreenhouseMutations.Mutation::chancePct).sum();
         for (GreenhouseMutations.Mutation hit : hits) {
             out.merge(hit.name(), hit.chancePct() / chances, Double::sum);
@@ -592,6 +595,8 @@ public final class GreenhouseSolverTest {
         FakeClock(long stepNanos) { this.stepNanos = stepNanos; }
 
         @Override public long getAsLong() { return now += stepNanos; }
+
+        long now() { return now; }
     }
 
     private static GreenhouseSolver.Options stagnating(LongSupplier clock, long maxIterations,
@@ -626,6 +631,60 @@ public final class GreenhouseSolverTest {
     }
 
     @Test
+    public void stagnationStillFiresWhenCostsAreOn() {
+        // Cost and priority points are tie-breakers: a cheaper typing must neither reset the idle clock nor keep
+        // the restarts from agreeing on the plan. With the price in the plan this run never stopped (99 s of fake
+        // time, 13 s of real time, no stop); without it, it stops at about 15 s of fake time.
+        SolveRequest request = SolveRequest.of(Goal.maximize("Cindershade"))
+            .withCosts(Map.of("Ashwreath", 500.0, "Witherbloom", 100.0))
+            .withPriorities(Map.of("Ashwreath", 40));
+
+        SolveResult result = GreenhouseSolver.solve(request, 100_000, SEED,
+            stagnating(new FakeClock(1_000_000), Long.MAX_VALUE, null));
+
+        assertTrue(result.stoppedEarly());
+        assertTrue(result.notes().toString(), result.notes().stream().anyMatch(n -> n.startsWith("Stopped early: no improvement for ")));
+        assertTrue("elapsed " + result.elapsedMillis(), result.elapsedMillis() >= GreenhouseSearch.MIN_RUNTIME_NANOS / 1_000_000);
+        assertTrue("elapsed " + result.elapsedMillis(), result.elapsedMillis() < 50_000);
+        assertEquals(16, goal(result, "Cindershade").sites());
+        assertTrue(result.totalCost() > 0);
+    }
+
+    /** Every crop gets a price, so the exact re-typing has real work around all the sites of six goals. */
+    private static SolveRequest pricedSixGoals() {
+        Map<String, Double> costs = new HashMap<>();
+        for (String crop : GreenhouseCrops.NAMES) costs.put(crop, 10.0 + Math.abs(crop.hashCode() % 500));
+        return new SolveRequest(List.of(Goal.fixed("Cindershade", 2), Goal.fixed("Zombud", 2), Goal.fixed("Snoozling", 1),
+            Goal.fixed("Coalroot", 3), Goal.fixed("Dustgrain", 5), Goal.maximize("Glasscorn")), null).withCosts(costs);
+    }
+
+    @Test
+    public void stopReturnsPromptlyEvenWhileTheExactTypingIsBusy() throws Exception {
+        // Exact re-typing used to run to its node limit after the flag was set (seconds with six goals).
+        java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
+        CompletableFuture<SolveResult> future = GreenhouseSolver.solveAsync(pricedSixGoals(), 60_000, 1, stop::get);
+
+        Thread.sleep(1_500);
+        long stopped = System.nanoTime();
+        stop.set(true);
+        SolveResult result = future.get(20, TimeUnit.SECONDS);
+
+        long latencyMillis = (System.nanoTime() - stopped) / 1_000_000;
+        assertTrue("stop latency " + latencyMillis + " ms", latencyMillis < 800);
+        assertTrue(result.notes().toString(), result.notes().stream().anyMatch(n -> n.startsWith("Search stopped early")));
+        assertNotNull(result.grid());
+    }
+
+    @Test
+    public void aRunEndsNearItsBudgetEvenWhenTheExactTypingIsBusy() {
+        long started = System.nanoTime();
+        GreenhouseSolver.solve(pricedSixGoals(), 2_000, 1);
+
+        long overshootMillis = (System.nanoTime() - started) / 1_000_000 - 2_000;
+        assertTrue("overshoot " + overshootMillis + " ms", overshootMillis < 300);
+    }
+
+    @Test
     public void stagnationNeverFiresBeforeTheMinimumRuntime() {
         // A run of 400000 iterations on this clock lasts a few milliseconds, however long it has been idle.
         SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 600_000, SEED,
@@ -649,7 +708,13 @@ public final class GreenhouseSolverTest {
     }
 
     @Test
-    public void anIterationCapSwitchesStagnationOff() {
+    public void everyPublicOverloadRunsTheWholeBudgetByDefault() {
+        assertFalse(GreenhouseSolver.Options.standard(Long.MAX_VALUE, () -> false, null).stopOnStagnation());
+        assertFalse(GreenhouseSolver.Options.standard(ITERATIONS, () -> false, null).stopOnStagnation());
+    }
+
+    @Test
+    public void anIterationCapRunDoesNotStopEarlyEither() {
         SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 600_000, SEED,
             ITERATIONS, () -> false);
 
@@ -682,6 +747,302 @@ public final class GreenhouseSolverTest {
             assertTrue("improvement " + i + " is not strictly better", at < keys.get(i).length && keys.get(i)[at] > keys.get(i - 1)[at]);
         }
         for (int i = 1; i < boundaries.size(); i++) assertTrue(boundaries.get(i) > boundaries.get(i - 1));
+    }
+
+    // ----- costs -----
+
+    @Test
+    public void theCheaperOfTwoEquallyGoodLayoutsWinsExhaustively() {
+        // 3x4 plot, wheat (cost 1) and cocoa (cost 5) feed two maximize goals in one tier. Among the layouts with
+        // the best expected total, then the fewest shared sites, the solver must take the cheapest.
+        boolean[] open = region(4, 3, 3, 4);
+        int[] cells = IntStream.range(0, SIZE * SIZE).filter(p -> open[p]).toArray();
+        double[] best = null;
+        String[] cropAt = new String[SIZE * SIZE];
+        int states = 1;
+        for (int i = 0; i < cells.length; i++) states *= 3;
+        for (int state = 0; state < states; state++) {
+            int rest = state;
+            double cost = 0;
+            for (int cell : cells) {
+                int kind = rest % 3;
+                rest /= 3;
+                cropAt[cell] = new String[] {null, "Wheat Seeds", "Cocoa Beans"}[kind];
+                cost += new double[] {0, 1, 5}[kind];
+            }
+            Outcome counts = outcome(cropAt, open);
+            double[] value = {counts.expected().getOrDefault("Dustgrain", 0.0) + counts.expected().getOrDefault("Choconut", 0.0),
+                -counts.shared(), -cost};
+            if (best == null || lexicographicallyBetter(value, best)) best = value;
+        }
+
+        SolveResult result = solve(new SolveRequest(List.of(Goal.maximize("Dustgrain"), Goal.maximize("Choconut")), open)
+            .withCosts(Map.of("Wheat Seeds", 1.0, "Cocoa Beans", 5.0)));
+
+        assertEquals(best[0], total(result), EPS);
+        assertEquals(-best[1], result.ambiguousTargets(), EPS);
+        assertEquals(-best[2], result.totalCost(), EPS);
+    }
+
+    @Test
+    public void costsNeverLowerWhatTheGoalsAchieve() {
+        // Proven optima again, with a cost on every crop the goals use.
+        assertEquals(72.0, goal(solveLong(SolveRequest.of(Goal.maximize("Dustgrain"))
+            .withCosts(Map.of("Wheat Seeds", 1e9))), "Dustgrain").achieved(), EPS);
+        assertEquals(16.0, goal(solveLong(SolveRequest.of(Goal.maximize("Cindershade"))
+            .withCosts(Map.of("Ashwreath", 5000.0, "Witherbloom", 1.0))), "Cindershade").achieved(), EPS);
+        assertEquals(4.0, goal(solveLong(SolveRequest.of(Goal.maximize("Snoozling"))
+            .withCosts(Map.of("Creambloom", 1e6, "Dustgrain", 7.0, "Thornshade", 300.0))), "Snoozling").achieved(), EPS);
+
+        SolveRequest mixed = SolveRequest.of(Goal.fixed("Cindershade", 3), Goal.maximize("Dustgrain"))
+            .withCosts(Map.of("Wheat Seeds", 50.0, "Ashwreath", 100.0));
+        SolveResult result = solveLong(mixed);
+        assertEquals(3.0, goal(result, "Cindershade").achieved(), EPS);
+        assertEquals(3, goal(result, "Cindershade").sites());
+        assertTrue(goal(result, "Dustgrain").achieved() >= 54);
+    }
+
+    @Test
+    public void anExpensiveIngredientIsSharedBetweenRings() {
+        // A 5x5 plot holds four Zombud sites at most. Fleshtrap (1000 each) can be shared between neighbouring
+        // rings, Dead Plants (free) cannot be saved on, so the plan should use few Fleshtrap cells, each next to
+        // two or more sites, instead of eight single-use ones.
+        boolean[] open = region(2, 2, 5, 5);
+        SolveRequest request = new SolveRequest(List.of(Goal.maximize("Zombud")), open)
+            .withCosts(Map.of("Fleshtrap", 1000.0, "Cindershade", 300.0, "Dead Plants", 0.0));
+
+        SolveResult result = solveLong(request);
+
+        assertEquals(4, goal(result, "Zombud").sites());
+        int fleshtraps = result.ingredients().get("Fleshtrap");
+        assertTrue("fleshtraps " + fleshtraps, fleshtraps <= 4);
+        for (int row = 0; row < SIZE; row++) {
+            for (int column = 0; column < SIZE; column++) {
+                GreenhouseGrid.Cell cell = result.grid().get(row, column);
+                if (cell == null || !cell.name().equals("Fleshtrap")) continue;
+                int fed = 0;
+                for (int dr = -1; dr <= 1; dr++) {
+                    for (int dc = -1; dc <= 1; dc++) {
+                        GreenhouseGrid.Cell near = GreenhouseGrid.inside(row + dr, column + dc)
+                            ? result.grid().get(row + dr, column + dc) : null;
+                        if (near != null && near.flag() == GreenhouseGrid.TARGET) fed++;
+                    }
+                }
+                assertTrue("fleshtrap at " + row + "," + column + " feeds " + fed, fed >= 2);
+            }
+        }
+        // And it is cheaper than the same plot planned without costs, which counts crops only.
+        SolveResult plain = solveLong(new SolveRequest(List.of(Goal.maximize("Zombud")), open));
+        double plainCost = plain.ingredients().getOrDefault("Fleshtrap", 0) * 1000.0
+            + plain.ingredients().getOrDefault("Cindershade", 0) * 300.0;
+        assertTrue(result.totalCost() + " vs " + plainCost, result.totalCost() <= plainCost);
+        assertEquals(fleshtraps * 1000.0 + result.ingredients().get("Cindershade") * 300.0, result.totalCost(), EPS);
+    }
+
+    @Test
+    public void theResultReportsTheUnitCostsAndTheirTotal() {
+        SolveResult result = solve(SolveRequest.of(Goal.fixed("Cindershade", 2))
+            .withCosts(Map.of("ashwreath", 12.5, "Witherbloom", 0.25)));
+
+        double total = 0;
+        for (Map.Entry<String, Integer> entry : result.ingredients().entrySet()) {
+            total += entry.getValue() * result.unitCosts().get(entry.getKey());
+        }
+        assertEquals(12.5, result.unitCosts().get("Ashwreath"), EPS);
+        assertEquals(0.25, result.unitCosts().get("Witherbloom"), EPS);
+        assertEquals(total, result.totalCost(), EPS);
+        assertTrue(result.totalCost() > 0);
+        assertEquals(0.0, solve(SolveRequest.of(Goal.fixed("Cindershade", 2))).totalCost(), EPS);
+    }
+
+    @Test
+    public void unknownAndOutOfRangeCostsAreReportedAndClamped() {
+        SolveResult result = solve(SolveRequest.of(Goal.fixed("Dustgrain", 4)).withCosts(
+            Map.of("Not a crop", 5.0, "Wheat Seeds", -3.0, "Carrot", 9.0)));
+
+        assertEquals(4.0, goal(result, "Dustgrain").achieved(), EPS);
+        assertTrue(result.notes().toString(), result.notes().contains("Unknown crop in costs, ignored: Not a crop"));
+        assertTrue(result.notes().toString(), result.notes().contains("Cost for Wheat Seeds limited to 0"));
+        assertEquals(0.0, result.unitCosts().get("Wheat Seeds"), EPS);
+
+        SolveResult huge = solve(SolveRequest.of(Goal.fixed("Dustgrain", 4)).withCosts(
+            Map.of("Wheat Seeds", Double.POSITIVE_INFINITY)));
+        assertEquals(GreenhouseSolver.COST_CAP, huge.unitCosts().get("Wheat Seeds"), 1.0);
+        assertEquals(4.0, goal(huge, "Dustgrain").achieved(), EPS);
+        SolveResult nan = solve(SolveRequest.of(Goal.fixed("Dustgrain", 4)).withCosts(Map.of("Wheat Seeds", Double.NaN)));
+        assertEquals(0.0, nan.unitCosts().get("Wheat Seeds"), EPS);
+    }
+
+    @Test
+    public void aLatticeOfSitesIsTypedAtItsProvenCheapestCost() {
+        // 7x7 plot: nine Zombud sites fit only on the one lattice, whose ring union is 40 cells. An exhaustive
+        // branch and bound (outside this suite) proves 8 Fleshtrap + 8 Cindershade, 10400, the cheapest typing.
+        boolean[] open = region(0, 0, 7, 7);
+        Map<String, Double> prices = Map.of("Fleshtrap", 1000.0, "Cindershade", 300.0, "Dead Plants", 0.0);
+
+        SolveResult result = solveLong(new SolveRequest(List.of(Goal.maximize("Zombud")), open).withCosts(prices));
+
+        assertEquals(9, goal(result, "Zombud").sites());
+        assertEquals(40, result.ingredients().values().stream().mapToInt(Integer::intValue).sum());
+        assertEquals(10400.0, result.totalCost(), EPS);
+        assertEquals(8, (int) result.ingredients().get("Fleshtrap"));
+        assertEquals(8, (int) result.ingredients().get("Cindershade"));
+    }
+
+    @Test
+    public void theFullPlotKeepsItsProvenZombudSiteCropAndCostFigures() {
+        // 16 sites is the packing maximum on 10x10 and 65 crops the smallest ring union among the 281571
+        // arrangements of 16 (checked by enumeration outside the suite). On the aligned lattice the cheapest
+        // typing at Fleshtrap 1000 / Cindershade 300 / Dead Plants 0 costs 13900 (proven there).
+        SolveRequest plain = SolveRequest.of(Goal.maximize("Zombud"));
+        SolveResult unpriced = solveLong(plain);
+        assertEquals(16, goal(unpriced, "Zombud").sites());
+        assertEquals(65, unpriced.ingredients().values().stream().mapToInt(Integer::intValue).sum());
+
+        SolveResult priced = solveLong(plain.withCosts(
+            Map.of("Fleshtrap", 1000.0, "Cindershade", 300.0, "Dead Plants", 0.0)));
+        assertEquals(16, goal(priced, "Zombud").sites());
+        assertTrue("cost " + priced.totalCost(), priced.totalCost() <= 13900.0 + EPS);
+        assertEquals(65, priced.ingredients().values().stream().mapToInt(Integer::intValue).sum());
+    }
+
+    @Test
+    public void retypingNeverReturnsAnAssignmentThatIsNotBetterThanTheCurrentOne() {
+        // The 7x7 Zombud lattice typed at its proven cheapest cost (10400), plus two Fleshtrap far from every ring.
+        // Those two are not re-typed, so their price must not be counted as room to improve: nothing is better.
+        String[] rows = {"DDDDDDD", "D.F.F.D", "FCCDCFC", "D.D.D.D", "DDFDFDD", "D.D.D.D", "FCCDCFC"};
+        byte[] layout = new byte[SIZE * SIZE];
+        Arrays.fill(layout, GreenhouseSearch.EMPTY);
+        for (int row = 0; row < rows.length; row++) {
+            for (int column = 0; column < 7; column++) {
+                char letter = rows[row].charAt(column);
+                if (letter != '.') layout[row * SIZE + column] = (byte) "DFC".indexOf(letter);
+            }
+        }
+        layout[8 * SIZE + 8] = 1;
+        layout[9 * SIZE + 9] = 1;
+        GreenhouseSearch.Recipe zombud = new GreenhouseSearch.Recipe(1, 1, new int[] {0, 1, 2}, new int[] {4, 2, 2}, false, 25);
+        boolean[] open = new boolean[SIZE * SIZE];
+        Arrays.fill(open, true);
+        GreenhouseSearch search = new GreenhouseSearch(open, 3, new GreenhouseSearch.Recipe[] {zombud},
+            new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[3],
+            new long[] {0, 1_000_000, 300_000}, 1);
+
+        assertNull(search.retype(layout, 300_000, Long.MAX_VALUE));
+
+        // Make Dead Plants the dear crop instead: the same lattice now has a cheaper typing with fewer of them.
+        GreenhouseSearch repriced = new GreenhouseSearch(open, 3, new GreenhouseSearch.Recipe[] {zombud},
+            new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[3],
+            new long[] {1_000_000, 10_000, 10_000}, 1);
+        byte[] cheaper = repriced.retype(layout, 2_000_000, Long.MAX_VALUE);
+        assertNotNull(cheaper);
+        int before = 0;
+        int after = 0;
+        for (int p = 0; p < layout.length; p++) {
+            if (layout[p] == 0) before++;
+            if (cheaper[p] == 0) after++;
+        }
+        assertTrue(after + " Dead Plants instead of " + before, after < before);
+    }
+
+    // ----- live preview -----
+
+    /** Collected previews with the fake time each arrived at. */
+    private static final class Previews {
+        final List<SolveResult> results = new ArrayList<>();
+        final List<Long> arrivals = new ArrayList<>();
+    }
+
+    private static Previews preview(FakeClock clock, SolveRequest request, long budgetMillis, long maxIterations) {
+        Previews previews = new Previews();
+        SolveResult last = GreenhouseSolver.solve(request, budgetMillis, SEED, new GreenhouseSolver.Options(
+            maxIterations, () -> false, clock, false, null, snapshot -> {
+                previews.results.add(snapshot);
+                previews.arrivals.add(clock.now());
+            }));
+        previews.results.add(last);
+        previews.arrivals.add(-1L);
+        return previews;
+    }
+
+    @Test
+    public void previewsArriveInOrderThrottledAndEndWithTheFinalPlan() {
+        // One reading is 1 ms, so a quarter second is 250 readings.
+        FakeClock clock = new FakeClock(1_000_000);
+        Previews previews = preview(clock, SolveRequest.of(Goal.maximize("Cindershade")), 8_000, Long.MAX_VALUE);
+
+        int n = previews.results.size() - 1;
+        assertTrue("previews " + n, n >= 2);
+        double previous = -1;
+        for (int i = 0; i < n; i++) {
+            SolveResult snapshot = previews.results.get(i);
+            assertNotNull(snapshot.grid());
+            assertEquals(1, snapshot.goals().size());
+            double achieved = goal(snapshot, "Cindershade").achieved();
+            assertTrue("a preview never shows a worse plan", achieved >= previous - EPS);
+            previous = achieved;
+            if (i > 0) {
+                assertTrue(snapshot.elapsedMillis() >= previews.results.get(i - 1).elapsedMillis());
+            }
+        }
+        for (int i = 1; i < n - 1; i++) {
+            long gap = previews.arrivals.get(i) - previews.arrivals.get(i - 1);
+            assertTrue("gap " + gap, gap >= GreenhouseSearch.PREVIEW_INTERVAL_NANOS);
+        }
+        // The last improvement is always delivered, and it is the plan the run ends with.
+        assertEquals(previews.results.get(n).grid(), previews.results.get(n - 1).grid());
+        assertEquals(previews.results.get(n).ingredients(), previews.results.get(n - 1).ingredients());
+        assertEquals(16.0, goal(previews.results.get(n - 1), "Cindershade").achieved(), EPS);
+    }
+
+    @Test
+    public void aShortRunStillDeliversItsFinalImprovement() {
+        // Under a quarter second there is one throttled slot, yet the end result must still arrive.
+        FakeClock clock = new FakeClock(100_000);
+        Previews previews = preview(clock, SolveRequest.of(Goal.maximize("Dustgrain")), 600_000, 60_000);
+
+        int n = previews.results.size() - 1;
+        assertTrue("previews " + n, n >= 1);
+        assertEquals(previews.results.get(n).grid(), previews.results.get(n - 1).grid());
+    }
+
+    @Test
+    public void aFailingPreviewListenerDoesNotEndTheRun() {
+        SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 600_000, SEED,
+            new GreenhouseSolver.Options(ITERATIONS, () -> false, new FakeClock(1_000_000), false, null, snapshot -> {
+                throw new IllegalStateException("listener failure");
+            }));
+
+        assertEquals(6.0, goal(result, "Dustgrain").achieved(), EPS);
+    }
+
+    @Test
+    public void previewsCarryTheCostAndIngredientsOfTheirPlan() {
+        FakeClock clock = new FakeClock(1_000_000);
+        SolveRequest request = SolveRequest.of(Goal.maximize("Cindershade")).withCosts(Map.of("Ashwreath", 10.0));
+        Previews previews = preview(clock, request, 3_000, Long.MAX_VALUE);
+
+        for (SolveResult snapshot : previews.results) {
+            int ashwreath = snapshot.ingredients().getOrDefault("Ashwreath", 0);
+            assertEquals(ashwreath * 10.0, snapshot.totalCost(), EPS);
+        }
+    }
+
+    @Test
+    public void solveAsyncDeliversPreviewsOnTheWorkerThread() throws Exception {
+        List<SolveResult> seen = java.util.Collections.synchronizedList(new ArrayList<>());
+        List<String> threads = java.util.Collections.synchronizedList(new ArrayList<>());
+
+        SolveResult result = GreenhouseSolver.solveAsync(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1,
+            () -> false, snapshot -> {
+                seen.add(snapshot);
+                threads.add(Thread.currentThread().getName());
+            }).get(10, TimeUnit.SECONDS);
+
+        assertFalse(seen.isEmpty());
+        assertEquals(List.of("Kung greenhouse solver"), List.copyOf(new java.util.LinkedHashSet<>(threads)));
+        assertEquals(result.grid(), seen.get(seen.size() - 1).grid());
+        assertFalse(result.stoppedEarly());
     }
 
     @Test

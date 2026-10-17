@@ -450,6 +450,38 @@ public final class GreenhouseStateTest {
     }
 
     @Test
+    public void costModeAndStopEarlyDefaultToBazaarAndOffAndRoundTrip() {
+        GreenhouseState fresh = new GreenhouseState();
+        assertEquals(GreenhouseCosts.CostMode.BAZAAR, fresh.costMode());
+        assertFalse(fresh.stopEarly());
+
+        fresh.setCostMode(GreenhouseCosts.CostMode.IRONMAN);
+        fresh.setStopEarly(true);
+        GreenhouseState loaded = GreenhouseState.fromJson(fresh.toJson());
+
+        assertEquals(GreenhouseCosts.CostMode.IRONMAN, loaded.costMode());
+        assertTrue(loaded.stopEarly());
+        fresh.setCostMode(null);
+        assertEquals(GreenhouseCosts.CostMode.BAZAAR, fresh.costMode());
+    }
+
+    @Test
+    public void filesWithoutOrWithBadCostSettingsKeepTheDefaults() {
+        GreenhouseState old = GreenhouseState.fromJson(
+            "{\"version\":1,\"seconds\":12,\"unlocked\":\"" + "1".repeat(100) + "\"}");
+        assertEquals(GreenhouseCosts.CostMode.BAZAAR, old.costMode());
+        assertFalse(old.stopEarly());
+        assertEquals(12, old.seconds());
+
+        for (String mode : new String[] {"\"HARD\"", "\"bazaar\"", "5", "null", "\"\""}) {
+            GreenhouseState bad = GreenhouseState.fromJson("{\"version\":1,\"costMode\":" + mode + "}");
+            assertEquals(mode, GreenhouseCosts.CostMode.BAZAAR, bad.costMode());
+        }
+        assertEquals(GreenhouseCosts.CostMode.IRONMAN,
+            GreenhouseState.fromJson("{\"version\":1,\"costMode\":\"IRONMAN\",\"stopEarly\":true}").costMode());
+    }
+
+    @Test
     public void nullDocumentGivesDefaults() {
         assertNotNull(GreenhouseState.fromJson(null));
         assertDefaults(GreenhouseState.fromJson(null));

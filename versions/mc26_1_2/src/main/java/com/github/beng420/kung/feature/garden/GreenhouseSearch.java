@@ -5,6 +5,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.SplittableRandom;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.LongSupplier;
 import java.util.stream.IntStream;
 
@@ -46,6 +47,9 @@ final class GreenhouseSearch {
     private static final int CHECK_MASK = 127;
     /** Compaction rounds are too cold to give up an expected mutation but may still trade crops. */
     private static final double COMPACT_HOT = 0.02;
+    /** A typed lattice already works; annealing only has to fit more around it. */
+    private static final double SEED_HOT = 0.12;
+    private static final double SEED_COLD = 0.01;
     private static final double COMPACT_COLD = 0.004;
     /**
      * What one site over a fixed goal's limit costs while annealing is still warm, in expected mutations of the
@@ -57,6 +61,12 @@ final class GreenhouseSearch {
     private static final double EXCESS_HARD_BELOW = 0.3;
     /** Tie-breaker value of one fewer ambiguous site / priority point / planted crop, in expected mutations. */
     private static final double AMBIGUITY_PENALTY = 0.05 * UNIT;
+    /**
+     * Annealing weight of cost: the dearest crop's cell weighs this many expected mutations, and cheaper cells
+     * in proportion. The exact key compares the cost itself, so the weight only sets how readily the walk
+     * trades cost, never whether the goal counts come first.
+     */
+    private static final double COST_SPAN = 0.02;
     /** One priority point; a full-priority (100) crop weighs 0.1 mutations. */
     private static final double PRIORITY_PENALTY = 0.001 * UNIT;
     private static final double CROP_PENALTY = 0.01 * UNIT;
@@ -64,8 +74,23 @@ final class GreenhouseSearch {
     private static final int MAX_RING = 16;
     /** Components before the tiers in the value and key vectors: the excess over fixed goals' site limits. */
     private static final int LEAD = 1;
-    /** Components after the tiers: ambiguous sites, priority points, crops. */
-    private static final int TRAIL = 3;
+    /** Components after the tiers: ambiguous sites, total cost, priority points, crops. */
+    private static final int TRAIL = 4;
+    /** Exact re-typing, see {@link #retype}: node budgets per promising restart and for the final best plan. */
+    private static final long RETYPE_ROUND_NODES = 40_000;
+    private static final long RETYPE_FINAL_NODES = 400_000;
+    /** Node budget for typing a freshly laid lattice, see {@link #seedLattice}. */
+    private static final long SEED_NODES = 150_000;
+    /**
+     * What one search node is assumed to cost when the final re-typing must fit the time that is left. Measured
+     * at 2-4 microseconds on one-goal plans and up to ten times that with six goals, so this is a guide only:
+     * the search also looks at the clock and the cancel flag every {@link #RETYPE_CHECK_NODES} nodes.
+     */
+    private static final long RETYPE_NANOS_PER_NODE = 4_000;
+    /** The exact search checks for cancellation and its deadline after this many nodes (a power of two). */
+    private static final int RETYPE_CHECK_NODES = 512;
+    /** The best plan reaches the preview consumer at most this often (the last one always arrives). */
+    static final long PREVIEW_INTERVAL_NANOS = 250_000_000L;
     /*
      * Early stopping, see stagnant(). Derived from 60 s runs without early stop (seeds 1-20 of: max Dustgrain,
      * max Cindershade, 3x Cindershade + max Dustgrain, max Snoozling, Zombud 2 + max Glasscorn; held out on seeds
@@ -80,9 +105,11 @@ final class GreenhouseSearch {
      * 0.4%, 0.1% and 12% for the hard ones (53% for Zombud 2 + Glasscorn). With 20 consecutive fresh rounds on
      * the best plan required, 140 runs had no plan miss against their 60 s result; easy cases stopped at
      * 3.0 s (Cindershade, Snoozling, Noctilume) to 8 s median (Dustgrain, 87% per round), hard ones never stopped
-     * early. Only the crop count (the last tie-breaker) can still differ, by one, and does in 30-45% of the
-     * stopped Dustgrain and Cindershade runs, so it does not count as progress. The 3 s minimum runtime and the idle clock (max of 3 s and
-     * once the time of the last improvement) were never the binding condition in these runs and stay as slack.
+     * early. Only the last tie-breakers (the crop count, and a price or priority points when those are set) can
+     * still differ, by one crop in 30-45% of the stopped Dustgrain and Cindershade runs, so they do not count as
+     * progress: the plan is the excess, the goal tiers and the ambiguity, which keeps the rule working when
+     * costs are on. The 3 s minimum runtime and the idle clock (max of 3 s and once the time of the last
+     * improvement) were never the binding condition in these runs and stay as slack.
      */
     /** Never stop before this much search time. */
     static final long MIN_RUNTIME_NANOS = 3_000_000_000L;
@@ -136,9 +163,11 @@ final class GreenhouseSearch {
     /**
      * How a run ends. {@code clock} reads nanoseconds and {@code deadlineNanos} is on the same scale;
      * with {@code stopOnStagnation} the run may also end between rounds when it has stopped improving.
+     * {@code onBest} (may be null) receives the labels of the best plan whenever it improves, at most once per
+     * {@link #PREVIEW_INTERVAL_NANOS}, and once more at the end if the last improvement was still pending.
      */
     record Limits(long deadlineNanos, long maxIterations, BooleanSupplier cancelled, LongSupplier clock,
-                  boolean stopOnStagnation, Observer observer) { }
+                  boolean stopOnStagnation, Observer observer, Consumer<byte[]> onBest) { }
 
     private final int crops;
     private final int stride;
@@ -147,6 +176,14 @@ final class GreenhouseSearch {
     private final int[] recipeClass;
     private final int[] recipeWeight;
     private final int[] cropPriority;
+    private final long[] cropCost;
+    private final double costWeight;
+    /** Cost or priority points are in play, so re-typing a plan can beat the annealing's assignment. */
+    private final boolean typesMatter;
+    /** Crop indices from cheapest to dearest (then by priority): the order the exact search tries them. */
+    private final int[] typeOrder;
+    private final byte[] roundLabel = new byte[CELLS];
+    private long retypeReserve;
     private final Aim[] goals;
     private final int tiers;
     private final boolean[] open;
@@ -165,6 +202,8 @@ final class GreenhouseSearch {
     private final int[][] classRecipes;
     private final int[][] classGoals;
     private final int[][] classSites;
+    /** Per footprint class: the site whose top-left footprint cell is this cell, or -1. */
+    private final int[][] siteAtAnchor;
 
     private final byte[] label = new byte[CELLS];
     private final int[] count;
@@ -181,6 +220,7 @@ final class GreenhouseSearch {
     private int ambiguous;
     private int cropCells;
     private int priorityPoints;
+    private long costUnits;
 
     private final int[] mark;
     private int markStamp;
@@ -213,15 +253,37 @@ final class GreenhouseSearch {
     private boolean stagnated;
     private long idleNanos;
     private final long[] roundKey;
-    /** A strict improvement of the plan (everything but the crop count) happened in the current round. */
+    /** A strict improvement of the plan (excess, goal tiers, ambiguity) happened in the current round. */
     private boolean planImproved;
     /** Consecutive fresh rounds that ended on the best plan; reset whenever the best plan improves. */
     private int consistentRestarts;
+    /** The best plan changed since it was last handed to the preview consumer. */
+    private boolean pendingDelivery;
+    private long lastDelivery;
+    private byte[] delivered;
 
-    /** {@code priorities} holds one 0..100 penalty per crop index; it only breaks ties between equal layouts. */
-    GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities, long seed) {
+    /**
+     * {@code priorities} holds one 0..100 penalty per crop index and {@code costUnits} the fixed-point cost of one
+     * planted cell per crop index (the caller picks the scale; totals must fit a long). Both only break ties
+     * between layouts with equal goal counts and ambiguity.
+     */
+    GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities,
+                     long[] costUnits, long seed) {
         this.crops = cropCount;
         this.cropPriority = Arrays.copyOf(priorities, Math.max(1, cropCount));
+        this.cropCost = Arrays.copyOf(costUnits, Math.max(1, cropCount));
+        long dearest = 0;
+        for (long unit : cropCost) dearest = Math.max(dearest, unit);
+        this.costWeight = dearest == 0 ? 0 : COST_SPAN * UNIT / dearest;
+        boolean anyPriority = false;
+        for (int priority : cropPriority) anyPriority |= priority > 0;
+        this.typesMatter = dearest > 0 || anyPriority;
+        Integer[] byPrice = new Integer[Math.max(1, cropCount)];
+        for (int k = 0; k < byPrice.length; k++) byPrice[k] = k;
+        Arrays.sort(byPrice, (x, y) -> cropCost[x] != cropCost[y] ? Long.compare(cropCost[x], cropCost[y])
+            : Integer.compare(cropPriority[x], cropPriority[y]));
+        this.typeOrder = new int[byPrice.length];
+        for (int k = 0; k < byPrice.length; k++) typeOrder[k] = byPrice[k];
         this.stride = Math.max(1, cropCount);
         this.recipes = recipes.clone();
         this.goals = goals.clone();
@@ -264,6 +326,8 @@ final class GreenhouseSearch {
         List<Integer> classes = new ArrayList<>();
         Arrays.fill(singleSite, -1);
         classSites = new int[classTotal][];
+        siteAtAnchor = new int[classTotal][CELLS];
+        for (int[] row : siteAtAnchor) Arrays.fill(row, -1);
         for (int c = 0; c < classTotal; c++) {
             int width = classSizes.get(c)[0];
             int height = classSizes.get(c)[1];
@@ -294,6 +358,7 @@ final class GreenhouseSearch {
                     rings.add(around.stream().mapToInt(Integer::intValue).toArray());
                     classes.add(c);
                     ids.add(id);
+                    siteAtAnchor[c][foot[0]] = id;
                     if (width == 1 && height == 1) singleSite[foot[0]] = id;
                 }
             }
@@ -360,10 +425,12 @@ final class GreenhouseSearch {
         ambiguous = 0;
         cropCells = 0;
         priorityPoints = 0;
+        costUnits = 0;
         for (int p = 0; p < CELLS; p++) {
             if (label[p] == EMPTY) continue;
             cropCells++;
             priorityPoints += cropPriority[label[p]];
+            costUnits += cropCost[label[p]];
         }
         for (int s = 0; s < siteCount; s++) {
             int stones = 0;
@@ -507,15 +574,16 @@ final class GreenhouseSearch {
         }
         for (int t = 0; t < tiers; t++) if (!capped[t]) out[LEAD + t] += guidance * shapeTier[t];
         if (!hard) out[LEAD + tiers - 1] -= excess() * EXCESS_SOFT;
-        // Last, as tie-breakers: fewer sites another mutation can take, fewer priority points, fewer crops.
+        // Last, as tie-breakers: fewer sites another mutation can take, lower cost, fewer priority points, fewer crops.
         out[LEAD + tiers] = -ambiguous * AMBIGUITY_PENALTY;
-        out[LEAD + tiers + 1] = -priorityPoints * PRIORITY_PENALTY;
-        out[LEAD + tiers + 2] = -cropCells * CROP_PENALTY;
+        out[LEAD + tiers + 1] = -costUnits * costWeight;
+        out[LEAD + tiers + 2] = -priorityPoints * PRIORITY_PENALTY;
+        out[LEAD + tiers + 3] = -cropCells * CROP_PENALTY;
     }
 
     /**
      * Exact lexicographic key, larger is better: fewer excess sites, then the tier sums, then fewer ambiguous
-     * sites, fewer priority points and fewer crops.
+     * sites, lower total cost, fewer priority points and fewer crops.
      */
     private void fillKey(long[] out) {
         Arrays.fill(out, 0, LEAD + tiers, 0);
@@ -524,8 +592,9 @@ final class GreenhouseSearch {
             out[LEAD + goals[g].tier()] += Math.min(total[g], goals[g].cap());
         }
         out[LEAD + tiers] = -ambiguous;
-        out[LEAD + tiers + 1] = -priorityPoints;
-        out[LEAD + tiers + 2] = -cropCells;
+        out[LEAD + tiers + 1] = -costUnits;
+        out[LEAD + tiers + 2] = -priorityPoints;
+        out[LEAD + tiers + 3] = -cropCells;
     }
 
     private static boolean better(long[] candidate, long[] incumbent) {
@@ -542,9 +611,13 @@ final class GreenhouseSearch {
 
     private void noteBest() {
         fillKey(key);
-        if (better(key, roundKey)) System.arraycopy(key, 0, roundKey, 0, key.length);
+        if (better(key, roundKey)) {
+            System.arraycopy(key, 0, roundKey, 0, key.length);
+            System.arraycopy(label, 0, roundLabel, 0, CELLS);
+        }
         if (better(key, bestKey)) {
-            // Saving a crop alone is not progress worth waiting for: only the plan resets the idle clock.
+            // Saving a crop, a price or a priority point is not progress worth waiting for: only the plan
+            // (excess, goal tiers, ambiguity) resets the idle clock.
             boolean plan = !samePlan(key, bestKey);
             System.arraycopy(key, 0, bestKey, 0, key.length);
             System.arraycopy(label, 0, bestLabel, 0, CELLS);
@@ -552,15 +625,19 @@ final class GreenhouseSearch {
                 lastImprovement = now - searchStart;
                 planImproved = true;
             }
+            pendingDelivery = true;
             if (run != null && run.observer() != null) {
                 run.observer().improved(now - searchStart, bestKey.clone());
             }
         }
     }
 
-    /** Whether two keys agree on everything but the last component, the crop count. */
+    /**
+     * Whether two keys agree on the plan: the excess, the goal tiers and the ambiguity, which are the entries
+     * before the cost, the priority points and the crop count (see {@link #fillKey}).
+     */
     private static boolean samePlan(long[] a, long[] b) {
-        for (int i = 0; i < a.length - 1; i++) if (a[i] != b[i]) return false;
+        for (int i = 0; i < a.length - (TRAIL - 1); i++) if (a[i] != b[i]) return false;
         return true;
     }
 
@@ -584,8 +661,14 @@ final class GreenhouseSearch {
             label[p] = to;
             if (from == EMPTY) cropCells++;
             if (to == EMPTY) cropCells--;
-            if (from != EMPTY) priorityPoints -= cropPriority[from];
-            if (to != EMPTY) priorityPoints += cropPriority[to];
+            if (from != EMPTY) {
+                priorityPoints -= cropPriority[from];
+                costUnits -= cropCost[from];
+            }
+            if (to != EMPTY) {
+                priorityPoints += cropPriority[to];
+                costUnits += cropCost[to];
+            }
             for (int s : footSites[p]) {
                 filled[s] += (to != EMPTY ? 1 : 0) - (from != EMPTY ? 1 : 0);
                 touch(s);
@@ -669,7 +752,11 @@ final class GreenhouseSearch {
         Recipe recipe = recipes[r];
         int[] sites = classSites[recipeClass[r]];
         if (sites.length == 0) return false;
-        int s = sites[random.nextInt(sites.length)];
+        return stampSite(sites[random.nextInt(sites.length)], recipe);
+    }
+
+    /** Queues the changes that make site {@code s} meet {@code recipe}; false when its ring is too small. */
+    private boolean stampSite(int s, Recipe recipe) {
         for (int p : footprint[s]) if (label[p] != EMPTY) change(p, EMPTY);
         int[] around = ring[s];
         if (recipe.emptyRing()) {
@@ -718,6 +805,57 @@ final class GreenhouseSearch {
             change(p, (byte) chosen);
         }
         return lacking == 0 && changeCount > 0;
+    }
+
+    /** Writes the queued changes straight into the labels, for building a start layout. */
+    private void commit() {
+        for (int i = 0; i < changeCount; i++) label[changeCell[i]] = changeNew[i];
+        changeCount = 0;
+    }
+
+    /**
+     * Lays out the tightest lattice of sites for one goal whose recipe fills its whole ring: anchors one footprint
+     * plus one ring cell apart, at a random phase, stamped row by row (up to a fixed goal's site limit).
+     * Such a lattice shares every ring cell it can, which annealing from an empty plot finds only by luck, and
+     * leaves just the crop types to settle. Returns false when no goal qualifies.
+     */
+    private boolean seedLattice() {
+        int[] eligible = new int[goals.length];
+        int eligibleCount = 0;
+        for (int g = 0; g < goals.length; g++) {
+            Recipe recipe = recipes[goals[g].recipe()];
+            int ringSize = (recipe.width() + 2) * (recipe.height() + 2) - recipe.width() * recipe.height();
+            if (!recipe.emptyRing() && recipeTotal[goals[g].recipe()] == ringSize) eligible[eligibleCount++] = g;
+        }
+        if (eligibleCount == 0) return false;
+        int g = eligible[random.nextInt(eligibleCount)];
+        Recipe recipe = recipes[goals[g].recipe()];
+        int cls = recipeClass[goals[g].recipe()];
+        int width = recipe.width();
+        int height = recipe.height();
+        int ringSize = (width + 2) * (height + 2) - width * height;
+        int firstRow = 1 + random.nextInt(height + 1);
+        int firstColumn = 1 + random.nextInt(width + 1);
+        int[] served = new int[siteCount];
+        long[] masks = new long[siteCount];
+        int placed = 0;
+        Arrays.fill(label, EMPTY);
+        for (int row = firstRow; row + height < SIZE && placed < goalLimit[g]; row += height + 1) {
+            for (int column = firstColumn; column + width < SIZE && placed < goalLimit[g]; column += width + 1) {
+                int s = siteAtAnchor[cls][row * SIZE + column];
+                if (s < 0 || ring[s].length != ringSize) continue;
+                for (int p : ring[s]) label[p] = 0;
+                served[placed] = s;
+                masks[placed++] = 1L << goals[g].recipe();
+            }
+        }
+        if (placed == 0) return false;
+        // Settle the crop types exactly, so the lattice starts out with every one of its sites working.
+        byte[] typed = retype(label.clone(), SEED_NODES, run.deadlineNanos() - retypeReserve, served, masks,
+            placed, false);
+        if (typed == null) return false;
+        System.arraycopy(typed, 0, label, 0, CELLS);
+        return true;
     }
 
     private int pickGoal() {
@@ -779,6 +917,9 @@ final class GreenhouseSearch {
         lastImprovement = 0;
         stagnated = false;
         consistentRestarts = 0;
+        pendingDelivery = false;
+        delivered = null;
+        retypeReserve = typesMatter ? Math.min((limits.deadlineNanos() - searchStart) / 16, 1_000_000_000L) : 0;
         if (goals.length == 0 || cellList.length == 0 || crops == 0) return bestLabel.clone();
         int round = 0;
         while (!stop()) {
@@ -791,29 +932,40 @@ final class GreenhouseSearch {
             long length = Math.min(ROUND_ITERATIONS, limits.maxIterations() - iterations);
             if (round > 0) {
                 double perIteration = elapsed / (double) Math.max(1, iterations);
-                long fits = (long) ((limits.deadlineNanos() - now) / perIteration * 0.85);
+                long fits = (long) ((limits.deadlineNanos() - retypeReserve - now) / perIteration * 0.85);
                 length = Math.min(length, fits);
                 if (length < 2_000) break;
             }
             Arrays.fill(roundKey, Long.MIN_VALUE);
             planImproved = false;
-            // Rounds cycle: fresh start, reheat the best, fresh start, compact the best.
-            if (round % 2 == 0) {
+            // Rounds cycle: fresh start, reheat the best, fresh start, compact the best, fresh start, a lattice
+            // start (a reheat when no goal has a full ring), fresh start, compact the best.
+            boolean fresh = round % 2 == 0;
+            boolean seeded = false;
+            if (fresh) {
                 Arrays.fill(label, EMPTY);
                 recompute();
                 anneal(length, HOT, COLD, GUIDANCE);
             } else {
-                System.arraycopy(bestLabel, 0, label, 0, CELLS);
+                if (round % 8 == 5) seeded = seedLattice();
+                if (!seeded) System.arraycopy(bestLabel, 0, label, 0, CELLS);
                 recompute();
                 boolean compact = round % 4 == 3;
-                anneal(length, compact ? COMPACT_HOT : REHOT, compact ? COMPACT_COLD : RECOLD,
-                    compact ? 0 : REGUIDANCE);
+                if (seeded) noteBest();
+                anneal(length, seeded ? SEED_HOT : compact ? COMPACT_HOT : REHOT,
+                    seeded ? SEED_COLD : compact ? COMPACT_COLD : RECOLD, compact || seeded ? 0 : REGUIDANCE);
             }
-            boolean fresh = round % 2 == 0;
+            if ((fresh || seeded) && worthRetyping()) {
+                retypeAndAdopt(roundLabel.clone(), RETYPE_ROUND_NODES, limits.deadlineNanos() - retypeReserve);
+            }
             if (planImproved) consistentRestarts = fresh && samePlan(roundKey, bestKey) ? 1 : 0;
             else if (fresh) consistentRestarts = samePlan(roundKey, bestKey) ? consistentRestarts + 1 : 0;
             if (limits.observer() != null) limits.observer().roundEnded(now - searchStart, fresh, roundKey.clone());
             round++;
+        }
+        if (typesMatter && crops > 0 && goals.length > 0 && !cancelled()) {
+            long affordable = Math.max(0, (limits.deadlineNanos() - now) / RETYPE_NANOS_PER_NODE);
+            retypeAndAdopt(bestLabel.clone(), Math.min(RETYPE_FINAL_NODES, affordable), limits.deadlineNanos());
         }
         System.arraycopy(bestLabel, 0, label, 0, CELLS);
         recompute();
@@ -821,7 +973,18 @@ final class GreenhouseSearch {
         System.arraycopy(bestLabel, 0, label, 0, CELLS);
         recompute();
         prune();
+        // The last improvement may have come after the latest throttled delivery, or from the prune.
+        if (run.onBest() != null && (pendingDelivery || !Arrays.equals(bestLabel, delivered))
+            && !Arrays.equals(bestLabel, emptyLabels())) {
+            deliver();
+        }
         return bestLabel.clone();
+    }
+
+    private static byte[] emptyLabels() {
+        byte[] none = new byte[CELLS];
+        Arrays.fill(none, EMPTY);
+        return none;
     }
 
     /**
@@ -846,8 +1009,47 @@ final class GreenhouseSearch {
 
     private boolean stop() {
         now = run.clock().getAsLong();
-        return iterations >= run.maxIterations() || now >= run.deadlineNanos()
-            || run.cancelled().getAsBoolean() || Thread.currentThread().isInterrupted();
+        if (pendingDelivery && (delivered == null || now - lastDelivery >= PREVIEW_INTERVAL_NANOS)) deliver();
+        return iterations >= run.maxIterations() || now >= run.deadlineNanos() - retypeReserve || cancelled();
+    }
+
+    private boolean cancelled() {
+        return run.cancelled().getAsBoolean() || Thread.currentThread().isInterrupted();
+    }
+
+    /** Whether the exact search must give up: cancelled, or past {@code deadline}. Reads the clock. */
+    private boolean retypeMustStop(long deadline) {
+        if (run == null) return false;
+        now = run.clock().getAsLong();
+        return now >= deadline || cancelled();
+    }
+
+    /** Whether the latest restart reached the best plan's goals and a cost close enough to be worth re-typing. */
+    private boolean worthRetyping() {
+        if (!typesMatter || roundKey[0] == Long.MIN_VALUE) return false;
+        int costIndex = LEAD + tiers + 1;
+        for (int i = 0; i < costIndex; i++) if (roundKey[i] != bestKey[i]) return false;
+        long roundCost = -roundKey[costIndex];
+        long bestCost = -bestKey[costIndex];
+        return roundCost <= bestCost + bestCost / 4;
+    }
+
+    /** Re-types {@code layout} exactly and keeps the result when it beats the best plan. */
+    private void retypeAndAdopt(byte[] layout, long nodeLimit, long deadline) {
+        byte[] retyped = retype(layout, nodeLimit, deadline);
+        if (retyped == null) return;
+        System.arraycopy(retyped, 0, label, 0, CELLS);
+        recompute();
+        noteBest();
+    }
+
+    /** Hands the best plan to the preview consumer, if there is one. */
+    private void deliver() {
+        pendingDelivery = false;
+        if (run.onBest() == null) return;
+        lastDelivery = now;
+        delivered = bestLabel.clone();
+        run.onBest().accept(delivered.clone());
     }
 
     private void anneal(long length, double hot, double cold, double guidance) {
@@ -885,6 +1087,220 @@ final class GreenhouseSearch {
             }
         }
         snapshotBest();
+    }
+
+    // ----- exact re-typing -----
+
+    /**
+     * Keeps every site that serves a goal exactly as satisfied as it is, but searches (depth first, cheapest
+     * crop first, with a bound from the incidences each crop still owes) for the assignment of crop types to
+     * the cells around those sites that has the lowest cost, then the fewest priority points. The set of
+     * planted cells never changes. Returns the better labels, or null when none was found within
+     * {@code nodeLimit} search nodes. Annealing finds good footprints and counts; this finds how few expensive
+     * crops those footprints really need, which single-cell moves reach only by luck because every site's count
+     * is an exact balance.
+     */
+    byte[] retype(byte[] start, long nodeLimit, long deadline) {
+        if (nodeLimit <= 0) return null;
+        System.arraycopy(start, 0, label, 0, CELLS);
+        recompute();
+        long goalMask = 0;
+        for (Aim goal : goals) goalMask |= 1L << goal.recipe();
+        int[] served = new int[siteCount];
+        long[] masks = new long[siteCount];
+        int servedCount = 0;
+        for (int s = 0; s < siteCount; s++) {
+            if ((effective[s] & goalMask) == 0) continue;
+            served[servedCount] = s;
+            masks[servedCount++] = effective[s] & goalMask;
+        }
+        return retype(start, nodeLimit, deadline, served, masks, servedCount, true);
+    }
+
+    /**
+     * The search itself, for {@code served} sites that must meet the recipes in {@code masks}. The labels in
+     * {@code start} give the planted cells (the engine's {@link #label} is overwritten with them).
+     * With {@code mustImprove} only an assignment that beats the current cost and priority points counts;
+     * otherwise the first assignment that works does, and better ones replace it. The search ends at
+     * {@code nodeLimit} nodes, at {@code deadline}, or when cancelled, and then returns the best assignment
+     * found so far (always a complete, valid one) or null.
+     */
+    private byte[] retype(byte[] start, long nodeLimit, long deadline, int[] served, long[] masks, int servedCount,
+                          boolean mustImprove) {
+        if (nodeLimit <= 0 || servedCount == 0) return null;
+        System.arraycopy(start, 0, label, 0, CELLS);
+        int[] protectedIndex = new int[siteCount];
+        Arrays.fill(protectedIndex, -1);
+        for (int i = 0; i < servedCount; i++) protectedIndex[served[i]] = i;
+        int[][] need = new int[servedCount][stride];
+        for (int i = 0; i < servedCount; i++) {
+            for (int r = 0; r < recipes.length; r++) {
+                if ((masks[i] >> r & 1L) == 0) continue;
+                Recipe recipe = recipes[r];
+                if (recipe.emptyRing()) return null;
+                for (int j = 0; j < recipe.crops().length; j++) {
+                    need[i][recipe.crops()[j]] = Math.max(need[i][recipe.crops()[j]], recipe.counts()[j]);
+                }
+            }
+        }
+        boolean[] free = new boolean[CELLS];
+        int[] cells = new int[CELLS];
+        int cellCount = 0;
+        for (int p = 0; p < CELLS; p++) {
+            if (label[p] == EMPTY) continue;
+            for (int s : ringSites[p]) {
+                if (protectedIndex[s] >= 0) {
+                    free[p] = true;
+                    cells[cellCount++] = p;
+                    break;
+                }
+            }
+        }
+        if (cellCount == 0) return null;
+        int[][] have = new int[servedCount][stride];
+        int[] left = new int[servedCount];
+        for (int i = 0; i < servedCount; i++) {
+            for (int p : ring[served[i]]) {
+                if (label[p] == EMPTY) continue;
+                if (free[p]) left[i]++; else have[i][label[p]]++;
+            }
+        }
+        int[][] feeds = new int[cellCount][];
+        for (int c = 0; c < cellCount; c++) {
+            int n = 0;
+            int[] tmp = new int[ringSites[cells[c]].length];
+            for (int s : ringSites[cells[c]]) if (protectedIndex[s] >= 0) tmp[n++] = protectedIndex[s];
+            feeds[c] = Arrays.copyOf(tmp, n);
+        }
+        Retyper search = new Retyper(cells, cellCount, feeds, need, have, left, nodeLimit, deadline);
+        if (mustImprove) {
+            // Only the free cells are re-typed, so only their share of the cost and points can be beaten.
+            long freeCost = 0;
+            int freePriority = 0;
+            for (int c = 0; c < cellCount; c++) {
+                freeCost += cropCost[label[cells[c]]];
+                freePriority += cropPriority[label[cells[c]]];
+            }
+            search.bestCost = freeCost;
+            search.bestPriority = freePriority;
+        } else {
+            search.bestCost = Long.MAX_VALUE / 2;
+            search.bestPriority = Integer.MAX_VALUE;
+        }
+        search.dfs(0, 0, 0);
+        if (!search.found) return null;
+        byte[] result = start.clone();
+        for (int c = 0; c < cellCount; c++) result[cells[c]] = (byte) search.bestType[c];
+        return result;
+    }
+
+    /** The depth-first search behind {@link #retype}; all state is local to one call. */
+    private final class Retyper {
+        final int[] cells;
+        final int cellCount;
+        final int[][] feeds;
+        final int[][] need;
+        final int[][] have;
+        final int[] left;
+        final int[] type;
+        final long nodeLimit;
+        final long deadline;
+        boolean stopped;
+        long nodes;
+        long bestCost;
+        int bestPriority;
+        final int[] bestType;
+        boolean found;
+        final int[] owed;
+        final int[] bucket = new int[MAX_RING + 2];
+
+        Retyper(int[] cells, int cellCount, int[][] feeds, int[][] need, int[][] have, int[] left, long nodeLimit,
+                long deadline) {
+            this.cells = cells;
+            this.cellCount = cellCount;
+            this.feeds = feeds;
+            this.need = need;
+            this.have = have;
+            this.left = left;
+            this.nodeLimit = nodeLimit;
+            this.deadline = deadline;
+            this.type = new int[cellCount];
+            this.bestType = new int[cellCount];
+            this.owed = new int[stride];
+        }
+
+        void dfs(int index, long cost, int priority) {
+            if (stopped || nodes++ >= nodeLimit) return;
+            if ((nodes & (RETYPE_CHECK_NODES - 1)) == 0 && retypeMustStop(deadline)) {
+                stopped = true;
+                return;
+            }
+            if (index == cellCount) {
+                if (cost < bestCost || (cost == bestCost && priority < bestPriority)) {
+                    bestCost = cost;
+                    bestPriority = priority;
+                    System.arraycopy(type, 0, bestType, 0, cellCount);
+                    found = true;
+                }
+                return;
+            }
+            for (int t : typeOrder) {
+                long nextCost = cost + cropCost[t];
+                int nextPriority = priority + cropPriority[t];
+                if (nextCost > bestCost || (nextCost == bestCost && nextPriority >= bestPriority)) continue;
+                boolean feasible = true;
+                for (int site : feeds[index]) {
+                    have[site][t]++;
+                    left[site]--;
+                }
+                for (int site : feeds[index]) {
+                    for (int k = 0; k < stride && feasible; k++) {
+                        if (need[site][k] > 0 && have[site][k] + left[site] < need[site][k]) feasible = false;
+                    }
+                    if (!feasible) break;
+                }
+                if (feasible) {
+                    long bound = nextCost + remainingCost(index + 1);
+                    if (bound < bestCost || (bound == bestCost && nextPriority < bestPriority)) {
+                        type[index] = t;
+                        dfs(index + 1, nextCost, nextPriority);
+                    }
+                }
+                for (int site : feeds[index]) {
+                    have[site][t]--;
+                    left[site]++;
+                }
+                if (stopped || nodes >= nodeLimit) return;
+            }
+        }
+
+        /** Fewest cells that could still cover what each priced crop is owed, at the dearest price they ask. */
+        long remainingCost(int from) {
+            long total = 0;
+            for (int k = 0; k < stride; k++) {
+                if (cropCost[k] == 0) continue;
+                int owedTotal = 0;
+                for (int site = 0; site < need.length; site++) owedTotal += Math.max(0, need[site][k] - have[site][k]);
+                if (owedTotal == 0) continue;
+                Arrays.fill(bucket, 0);
+                for (int c = from; c < cellCount; c++) {
+                    int feed = 0;
+                    for (int site : feeds[c]) if (need[site][k] > have[site][k]) feed++;
+                    bucket[Math.min(feed, bucket.length - 1)]++;
+                }
+                int covered = 0;
+                int used = 0;
+                for (int feed = bucket.length - 1; feed > 0 && covered < owedTotal; feed--) {
+                    for (int n = bucket[feed]; n > 0 && covered < owedTotal; n--) {
+                        covered += feed;
+                        used++;
+                    }
+                }
+                if (covered < owedTotal) return Long.MAX_VALUE / 4;
+                total += cropCost[k] * used;
+            }
+            return total;
+        }
     }
 
     // ----- read-back -----

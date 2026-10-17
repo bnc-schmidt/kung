@@ -6,6 +6,7 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
+import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.feature.garden.GreenhouseSession.Tone;
 import com.github.beng420.kung.feature.garden.GreenhouseSolver.SolveRequest;
 import com.github.beng420.kung.feature.garden.GreenhouseSolver.SolveResult;
@@ -15,9 +16,11 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -25,6 +28,7 @@ import org.junit.rules.TemporaryFolder;
 public final class GreenhouseSessionTest {
     private static final long MILLI = 1_000_000L;
     private static SolveResult solved;
+    private static SolveResult solvedCosts;
     @Rule public TemporaryFolder temporary = new TemporaryFolder();
 
     /** A real, small solve, made once: the session only needs a result to apply. */
@@ -33,6 +37,16 @@ public final class GreenhouseSessionTest {
             solved = GreenhouseSolver.solve(SolveRequest.of(GreenhouseSolver.Goal.fixed("Dustgrain", 6)), 1_000, 1);
         }
         return solved;
+    }
+
+    /** The same solve with the Bazaar-estimate costs a real run would pass, so the result carries a total cost. */
+    private static synchronized SolveResult solvedWithCosts() {
+        if (solvedCosts == null) {
+            Map<String, Double> costs = GreenhouseCosts.costs(CostMode.BAZAAR, null);
+            solvedCosts = GreenhouseSolver.solve(
+                SolveRequest.of(GreenhouseSolver.Goal.fixed("Dustgrain", 6)).withCosts(costs), 1_000, 1);
+        }
+        return solvedCosts;
     }
 
     /** A session whose worker is a future the test completes, whose client thread is the caller and whose clock it moves. */
@@ -46,17 +60,26 @@ public final class GreenhouseSessionTest {
         Throwable startFailure;
         boolean startNothing;
         BooleanSupplier cancelled;
+        Consumer<SolveResult> onBest;
+        boolean stopEarly;
         SolveRequest request;
         long budget;
         int starts;
 
         Fixture(Path file) {
-            session = new GreenhouseSession(file, this, this::start, clock::get);
+            this(file, null);
+        }
+
+        Fixture(Path file, GreenhousePrices prices) {
+            session = new GreenhouseSession(file, this, this::start, clock::get, prices);
         }
 
         private CompletableFuture<SolveResult> start(SolveRequest request, long budgetMillis, long seed,
-                                                     BooleanSupplier cancelled) {
+                                                     BooleanSupplier cancelled, Consumer<SolveResult> onBest,
+                                                     boolean stopEarly) {
             starts++;
+            this.onBest = onBest;
+            this.stopEarly = stopEarly;
             if (startFailure instanceof RuntimeException failure) throw failure;
             if (startFailure instanceof Error failure) throw failure;
             if (startNothing) return null;
@@ -185,6 +208,199 @@ public final class GreenhouseSessionTest {
         assertEquals(solved().grid(), fixture.session.plan().grid());
         assertTrue(fixture.session.status(), fixture.session.status().startsWith("Stopped after "));
         assertTrue(fixture.toasts.get(0), fixture.toasts.get(0).startsWith("Stopped: "));
+    }
+
+    private GreenhousePrices prices(Map<String, Double> buyPrices) {
+        return GreenhousePricesTest.fixed(temporary.getRoot().toPath().resolve("prices").resolve("p.json"), buyPrices);
+    }
+
+    @Test
+    public void theRequestCarriesTheCostsOfTheChosenMode() {
+        GreenhousePrices prices = prices(Map.of("SEEDS", 20.0));
+        Fixture bazaar = new Fixture(file(), prices).solving();
+
+        Map<String, Double> bazaarCosts = bazaar.request.costs();
+        assertEquals(GreenhouseCosts.costs(CostMode.BAZAAR, prices), bazaarCosts);
+        assertEquals(GreenhouseCrops.NAMES.size(), bazaarCosts.size());
+        assertEquals(0.0, bazaarCosts.get("Dead Plants"), 0.0);
+        assertTrue(bazaarCosts.get("Cindershade") > 0);
+
+        Fixture ironman = new Fixture(temporary.getRoot().toPath().resolve("iron.json"), prices);
+        ironman.session.state().setCostMode(CostMode.IRONMAN);
+        ironman.solving();
+
+        assertEquals(GreenhouseCosts.costs(CostMode.IRONMAN, prices), ironman.request.costs());
+        assertTrue(!ironman.request.costs().equals(bazaarCosts));
+        // The goals and the mask are what they were: only the costs differ.
+        assertEquals(bazaar.request.goals(), ironman.request.goals());
+    }
+
+    @Test
+    public void withoutAPriceSourceBazaarCostsAreEstimatesAndTheSwitchDoesNotRerunAnything() {
+        Fixture fixture = new Fixture(file()).solving();
+
+        assertEquals(GreenhouseCosts.costs(CostMode.BAZAAR, null), fixture.request.costs());
+        fixture.session.state().setCostMode(CostMode.IRONMAN);
+
+        assertEquals(1, fixture.starts);
+        assertTrue(fixture.session.running());
+    }
+
+    @Test
+    public void theStopEarlyFlagReachesTheSolver() {
+        Fixture off = new Fixture(file()).solving();
+        assertFalse(off.stopEarly);
+
+        Fixture on = new Fixture(temporary.getRoot().toPath().resolve("early.json"));
+        on.session.state().setStopEarly(true);
+        on.solving();
+        assertTrue(on.stopEarly);
+    }
+
+    @Test
+    public void aLivePreviewShowsTheBestSoFarIsNeverSavedAndIsReplacedByTheFinalResult() {
+        Fixture fixture = new Fixture(file()).solving();
+        SolveResult best = solvedWithCosts();
+
+        fixture.onBest.accept(best);
+
+        assertTrue(fixture.session.running());
+        assertEquals(best.grid(), fixture.session.plan().grid());
+        assertNotNull(fixture.session.summary());
+        assertTrue(fixture.session.status(), fixture.session.status().startsWith("Searching... best so far: Dustgrain "));
+        assertTrue(fixture.session.status(), fixture.session.status().contains(", cost "));
+        assertTrue(fixture.session.summary().costLine(), fixture.session.summary().costLine().startsWith("Cost: "));
+        // Nothing of it reached the file: a restart sees the layout the run started from.
+        fixture.session.persist();
+        Fixture reopened = new Fixture(file());
+        assertEquals(0, reopened.session.plan().grid().filled());
+        assertNull(reopened.session.summary());
+
+        fixture.worker.complete(best);
+
+        assertFalse(fixture.session.running());
+        assertTrue(fixture.session.status(), fixture.session.status().startsWith("Solved in "));
+        assertEquals(best.grid(), new Fixture(file()).session.plan().grid());
+        assertEquals(1, fixture.toasts.size());
+    }
+
+    @Test
+    public void aLivePreviewNeverWipesAMessageThePlayersOwnClicksPutOnTheStatusLine() {
+        Fixture fixture = new Fixture(file()).solving();
+        fixture.onBest.accept(solvedWithCosts());
+        assertTrue(fixture.session.status(), fixture.session.status().startsWith("Searching... best so far"));
+
+        fixture.session.say("Stop early on: the search may end before the time limit", Tone.MUTED);
+        fixture.onBest.accept(solvedWithCosts());
+        fixture.onBest.accept(solvedWithCosts());
+
+        assertEquals("Stop early on: the search may end before the time limit", fixture.session.status());
+        // The snapshots themselves are still shown.
+        assertEquals(solvedWithCosts().grid(), fixture.session.plan().grid());
+        assertTrue(fixture.session.running());
+    }
+
+    @Test
+    public void aPreviewAfterTheSolvingTextStillUpdatesItEveryTime() {
+        Fixture fixture = new Fixture(file()).solving();
+
+        assertEquals("Solving...", fixture.session.status());
+        fixture.onBest.accept(solvedWithCosts());
+        String first = fixture.session.status();
+        fixture.onBest.accept(solvedWithCosts());
+
+        assertTrue(first, first.startsWith("Searching... best so far: Dustgrain "));
+        assertEquals(first, fixture.session.status());
+    }
+
+    @Test
+    public void aPreviewOfAnAbandonedFinishedOrReplacedRunIsIgnoredAndTheStartingGridComesBack() {
+        Fixture fixture = new Fixture(file());
+        GreenhouseGrid before = new GreenhouseGrid();
+        before.set(1, 1, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        assertNull(fixture.session.loadLayout(GreenhouseCode.encode(before)));
+        fixture.solving();
+        Consumer<SolveResult> first = fixture.onBest;
+        first.accept(solvedWithCosts());
+        assertEquals(solvedWithCosts().grid(), fixture.session.plan().grid());
+
+        fixture.session.shutdown();
+
+        // Abandoned: the grid that was shown before the run is back, and a late snapshot changes nothing.
+        assertEquals(before, fixture.session.plan().grid());
+        assertNull(fixture.session.summary());
+        first.accept(solvedWithCosts());
+        assertEquals(before, fixture.session.plan().grid());
+
+        // A new run: the old run's callback must not touch it.
+        fixture.session.solve();
+        first.accept(solvedWithCosts());
+        assertEquals(before, fixture.session.plan().grid());
+        fixture.onBest.accept(solvedWithCosts());
+        assertEquals(solvedWithCosts().grid(), fixture.session.plan().grid());
+
+        // After the final result, a straggler is dropped.
+        fixture.worker.complete(solved());
+        GreenhouseGrid finalGrid = fixture.session.plan().grid();
+        fixture.onBest.accept(solvedWithCosts());
+        assertEquals(finalGrid, fixture.session.plan().grid());
+        assertEquals(solved().grid(), finalGrid);
+    }
+
+    @Test
+    public void aFailedRunAfterPreviewsRestoresTheGridItStartedFrom() {
+        Fixture fixture = new Fixture(file()).solving();
+        fixture.onBest.accept(solvedWithCosts());
+        assertTrue(fixture.session.plan().grid().filled() > 0);
+
+        fixture.worker.completeExceptionally(new IllegalStateException("boom"));
+
+        assertEquals("Solver failed: boom", fixture.session.status());
+        assertEquals(0, fixture.session.plan().grid().filled());
+        assertNull(fixture.session.summary());
+    }
+
+    @Test
+    public void snapshotsArrivingWhileStoppingKeepTheStoppingStatusAndAreStillApplied() {
+        Fixture fixture = new Fixture(file()).solving();
+        fixture.advance(1_000);
+        fixture.session.stop();
+
+        fixture.onBest.accept(solvedWithCosts());
+
+        assertEquals("Stopping...", fixture.session.status());
+        assertEquals(solvedWithCosts().grid(), fixture.session.plan().grid());
+        fixture.worker.complete(solvedWithCosts());
+        assertTrue(fixture.session.status(), fixture.session.status().startsWith("Stopped after "));
+    }
+
+    @Test
+    public void theFinalSummaryCarriesTheCostLineOfTheModeTheRunStartedWith() {
+        Fixture fixture = new Fixture(file()).solving();
+        // Switching the mode during the run changes the next solve only.
+        fixture.session.state().setCostMode(CostMode.IRONMAN);
+
+        fixture.worker.complete(solvedWithCosts());
+
+        String line = fixture.session.summary().costLine();
+        assertTrue(line, line.startsWith("Cost: ") && line.contains("coins"));
+        assertTrue(line, line.contains("(incl. estimated prices)"));
+        assertEquals(line, new Fixture(file()).session.summary().costLine());
+    }
+
+    @Test
+    public void thePriceLineFollowsTheSourceAndTheMode() {
+        Fixture none = new Fixture(file());
+        assertEquals("Bazaar: no price source, using estimates", none.session.priceLine());
+        none.session.state().setCostMode(CostMode.IRONMAN);
+        assertEquals("Ironman: by rarity", none.session.priceLine());
+
+        Fixture fresh = new Fixture(temporary.getRoot().toPath().resolve("fresh.json"), prices(Map.of("SEEDS", 2.0)));
+        assertEquals("Bazaar prices: fresh just now", fresh.session.priceLine());
+        assertEquals(fresh.session.quotes(), fresh.session.quotes());
+        fresh.session.state().setCostMode(CostMode.IRONMAN);
+        assertEquals("Ironman: by rarity", fresh.session.priceLine());
+        assertEquals(GreenhouseCosts.quotes(CostMode.IRONMAN, null), fresh.session.quotes());
     }
 
     @Test
