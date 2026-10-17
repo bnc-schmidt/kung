@@ -13,19 +13,27 @@ import net.minecraft.world.phys.AABB;
  * hologram floor. Model placements say WHAT to draw where; drawing them is {@link GreenhouseModels}.
  */
 final class GreenhouseHologramShapes {
-    /** One translucent box with its outline. */
+    /**
+     * One box with its fill and outline (ARGB; alpha 0 means none). The colours of what {@link Placement} carries are
+     * only defaults: the hologram colours itself from the player's settings (see {@link GreenhouseOverlay}).
+     */
     record Shape(double minX, double minY, double minZ, double maxX, double maxY, double maxZ, int fill, int outline,
-                 float width) { }
+                 float width) {
+        /** The same box in other colours. */
+        Shape recolored(int newFill, int newOutline, float newWidth) {
+            return new Shape(minX, minY, minZ, maxX, maxY, maxZ, newFill, newOutline, newWidth);
+        }
+    }
 
     /**
      * A model to draw: a crop's head or block, or a mutation's head over its footprint. {@code x}/{@code z} are
      * the centre, {@code y} the base, {@code scale} multiplies the 0.5-block head cube. {@code cube} is the
      * coloured box drawn when no model can be (null for a mutation: its slab already marks the spot).
-     * {@code slab} is the gold marker of a mutation's empty spot (null for a crop). {@code wrong} and
-     * {@code unverified} are what replaces the model when the planted thing is wrong or not recognised.
+     * {@code slab} is the thin marker of a mutation's empty spot (null for a crop). {@code area} is the volume of the
+     * whole cell or footprint, which is outlined or filled in the colour of its state.
      */
     record Placement(String crop, boolean mutation, double x, double y, double z, double scale, Look look,
-                     Shape cube, Shape slab, Shape wrong, Shape unverified) { }
+                     Shape cube, Shape slab, Shape area) { }
 
     /**
      * One filled grid cell's whole-block volume, for ray tests: the cell at (row, column) of the grid as read,
@@ -97,9 +105,6 @@ final class GreenhouseHologramShapes {
     private static final int FILL_ALPHA = 0x4D; // ~30%
     private static final int OUTLINE_ALPHA = 0xE6; // ~90%
     private static final int TARGET_FILL_ALPHA = 0x2E; // ~18%
-    private static final int RED = 0xFF2020;
-    private static final int ORANGE = 0xFFA020;
-    private static final int WRONG_FILL_ALPHA = 0x59; // ~35%
     private static final double ALERT_INSET = 0.04;
     private static final double ALERT_HEIGHT = 0.9;
     private static final double CUBE_INSET = 0.12;
@@ -123,8 +128,7 @@ final class GreenhouseHologramShapes {
                 if (cell.flag() == GreenhouseGrid.TARGET) continue;
                 placements.add(new Placement(cell.name(), false, at.dx() + 0.5, LIFT, at.dz() + 0.5, CROP_HEAD_SCALE,
                     GreenhouseCropLook.of(cell.name()), cube(at, rgb(cell.name())), null,
-                    alert(at.dx(), at.dz(), at.dx() + 1, at.dz() + 1, RED, WRONG_FILL_ALPHA, 3.0F),
-                    alert(at.dx(), at.dz(), at.dx() + 1, at.dz() + 1, ORANGE, 0, 3.0F)));
+                    area(at.dx(), at.dz(), at.dx() + 1, at.dz() + 1)));
             }
         }
         // One slab per mutation, as wide as its 1x1/2x2/3x3 footprint, so the empty soil it grows on is obvious,
@@ -142,7 +146,7 @@ final class GreenhouseHologramShapes {
             placements.add(new Placement(block.mutation(), true, (slab.minX() + slab.maxX()) / 2, LIFT + SLAB_HEIGHT,
                 (slab.minZ() + slab.maxZ()) / 2, Math.max(block.width(), block.height()) * MUTATION_HEAD_SCALE_PER_CELL,
                 GreenhouseCropLook.of(block.mutation()), null, slab,
-                alert(minX, minZ, maxX, maxZ, RED, WRONG_FILL_ALPHA, 3.0F), alert(minX, minZ, maxX, maxZ, ORANGE, 0, 3.0F)));
+                area(minX, minZ, maxX, maxZ)));
         }
         // Cell (0, 0) is the grid's top-left, whatever it holds: a heavy white frame and a post on its outer corner.
         shapes.add(flat(orientation, 0, 0, 1, 1, 0.02, 0.05, WHITE, 0x33, 4.0F));
@@ -156,10 +160,10 @@ final class GreenhouseHologramShapes {
         return Mth.hsvToArgb(hue, 0.6F, 1.0F, 0) & 0xFFFFFF;
     }
 
-    /** A box over a footprint (corner-relative edges): translucent fill and a bright outline. */
-    private static Shape alert(double minX, double minZ, double maxX, double maxZ, int rgb, int fillAlpha, float width) {
+    /** The volume over a cell or footprint (corner-relative edges); coloured by whoever draws it. */
+    static Shape area(double minX, double minZ, double maxX, double maxZ) {
         return new Shape(minX + ALERT_INSET, LIFT, minZ + ALERT_INSET, maxX - ALERT_INSET, LIFT + ALERT_HEIGHT,
-            maxZ - ALERT_INSET, rgb | fillAlpha << 24, rgb | 0xFF000000, width);
+            maxZ - ALERT_INSET, 0, 0, 2.0F);
     }
 
     /** The coloured stand-in for a cell whose model cannot be drawn. */

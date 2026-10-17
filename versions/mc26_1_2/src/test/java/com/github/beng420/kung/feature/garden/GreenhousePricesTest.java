@@ -344,8 +344,8 @@ public final class GreenhousePricesTest {
 
         assertTrue(products.containsAll(Set.of("INK_SACK:3", "MELON", "PUMPKIN", "SEEDS", "NETHER_STALK",
             "DOUBLE_PLANT", "CARROT_ITEM", "THORNSHADE", "DUSTGRAIN")));
-        // Dead Plants, Fire, Jerryseed and Rose Dragon Egg have no item id, so 61 of the 65 crops remain.
-        assertEquals(61, products.size());
+        // Fire, Jerryseed and Rose Dragon Egg have no item id, so 62 of the 65 crops remain (Dead Plants is DEAD_PLANT).
+        assertEquals(62, products.size());
     }
 
     @Test

@@ -9,6 +9,7 @@ import com.github.beng420.kung.config.category.DungeonConfig.DragonPart;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioSplit;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioUnit;
 import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
+import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionMode;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionSource;
 import com.github.beng420.kung.config.category.SplitsConfig.TimeFormat;
@@ -27,9 +28,11 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
+import net.minecraft.client.gui.screens.Screen;
 
 /** Shared settings and callbacks; persistence remains owned by KungConfig. */
 public final class KungSettings {
@@ -231,7 +234,13 @@ public final class KungSettings {
                     "Kernels sync from the scoreboard or Grand Bakery.",
                     "Avg Kernels/h is saved per profile and stays visible after pauses or restarts.",
                     "Every 5 farming minutes: 80% previous rate + 20% measured rate.",
-                    "Without a saved rate, the first estimate takes 5 farming minutes.")
+                    "Without a saved rate, the first estimate takes 5 farming minutes."),
+                // Settings only, no master toggle: the hologram is user-triggered (/kung greenhouse), so there is
+                // nothing to switch on first and the "toggles default off" rule has nothing to apply to.
+                new FeatureEntry("Greenhouse Hologram", () -> false, (Runnable) null, greenhouseHologramSettings(config))
+                    .withTooltip("Look and toggle key of the Greenhouse hologram (/kung greenhouse).",
+                        "Blue: still to place. Red: wrong crop. Pink: a crop where the layout has nothing.",
+                        "Orange: right block, wrong state (dirt instead of farmland).")
             )),
             new CategoryEntry("Hunting", List.of(
                 new FeatureEntry("Safari Uniques", config.safari::enabled,
@@ -459,6 +468,46 @@ public final class KungSettings {
                 )
             ))
         );
+    }
+
+    private static List<SettingEntry> greenhouseHologramSettings(KungConfig config) {
+        var hologram = config.greenhouse;
+        return List.of(
+            SettingEntry.slider("Opacity (%)", hologram::hologramOpacityPercent, hologram::setHologramOpacityPercent,
+                    Math.round(GreenhouseConfig.MIN_OPACITY * 100F), Math.round(GreenhouseConfig.MAX_OPACITY * 100F), 1)
+                .withTooltip("How solid the hologram is. 100% is fully opaque."),
+            SettingEntry.color("To Place Color", hologram::colorToPlace,
+                    () -> editColor("To Place Color", hologram.colorToPlace(), hologram::setColorToPlace))
+                .withTooltip("Tint and outline of what the layout wants but is not placed yet."),
+            SettingEntry.color("Wrong Crop Color", hologram::colorWrong,
+                    () -> editColor("Wrong Crop Color", hologram.colorWrong(), hologram::setColorWrong))
+                .withTooltip("A different crop stands where the layout wants another one."),
+            SettingEntry.color("Extra Crop Color", hologram::colorExtra,
+                    () -> editColor("Extra Crop Color", hologram.colorExtra(), hologram::setColorExtra))
+                .withTooltip("A crop stands where the layout has nothing."),
+            SettingEntry.color("Wrong State Color", hologram::colorWrongState,
+                    () -> editColor("Wrong State Color", hologram.colorWrongState(), hologram::setColorWrongState))
+                .withTooltip("The right block in the wrong state, such as dirt where farmland belongs."),
+            SettingEntry.toggle("Hide When Complete", hologram::hideWhenComplete, hologram::setHideWhenComplete)
+                .withTooltip("Hides the whole hologram and prints a short chat note",
+                    "once every crop is placed correctly."),
+            SettingEntry.keybind("Toggle Key",
+                    () -> LoadoutsAutoCloseFeature.keybindDisplay(hologram.toggleKeybind()),
+                    hologram::toggleKeybind, hologram::setToggleKeybind)
+                .withTooltip("Shows or hides the hologram while you play. Default: K.",
+                    "Click, then press a key or mouse button; Esc or Backspace unbinds it.")
+        );
+    }
+
+    private static void editColor(String title, int current, IntConsumer save) {
+        Minecraft client = Minecraft.getInstance();
+        Screen parent = McCompat.screen(client);
+        // The optional native menu delegates the color to the same popup the Kung menu uses.
+        if (!(parent instanceof KungConfigScreen)) {
+            parent = KungConfigScreen.fromParent(parent, "Greenhouse Hologram");
+            McCompat.setScreen(client, parent);
+        }
+        McCompat.setScreen(client, new HitboxEditorScreen(parent, title, current, save));
     }
 
     /** Fonts are built while the game runs, so the list and the switch both take effect at once. */

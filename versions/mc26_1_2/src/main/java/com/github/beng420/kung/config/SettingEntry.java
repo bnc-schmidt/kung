@@ -155,6 +155,12 @@ public record SettingEntry(
         return create(label, SettingKind.COLOR_REMOVE, null, edit, color, null, 0, 0, 0, () -> "Edit", remove, null, null);
     }
 
+    /** A color swatch labelled with its #RRGGBB; alpha is ignored. A click runs {@code edit}, which opens the color popup. */
+    public static SettingEntry color(String label, IntSupplier color, Runnable edit) {
+        return create(label, SettingKind.COLOR, null, edit, color, null, 0, 0, 0,
+            () -> String.format(Locale.ROOT, "#%06X", color.getAsInt() & 0xFFFFFF), null, null, null);
+    }
+
     public SettingEntry withChildren(List<SettingEntry> children) {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, List.copyOf(children), tooltip,
@@ -199,6 +205,15 @@ public record SettingEntry(
                 UiShapes.rounded(graphics, x + 1, y + 3, width - 19, height - 6, 2, intSupplier.getAsInt());
                 drawRemoveButton(graphics, font, theme, x, y, width, height);
             }
+            case COLOR -> {
+                int rgb = intSupplier.getAsInt() & 0xFFFFFF;
+                UiShapes.rounded(graphics, x, y + 2, width, height - 4, 2, theme.text());
+                UiShapes.rounded(graphics, x + 1, y + 3, width - 2, height - 6, 2, 0xFF000000 | rgb);
+                // Light swatches get dark text so the hex stays readable on any color.
+                boolean light = ((rgb >> 16 & 255) * 299 + (rgb >> 8 & 255) * 587 + (rgb & 255) * 114) / 1000 > 140;
+                String hex = choiceSupplier.get();
+                graphics.text(font, hex, x + width / 2 - font.width(hex) / 2, y + 4, light ? 0xFF000000 : 0xFFFFFFFF, false);
+            }
             case LABEL -> graphics.text(font, label(), x + width - font.width(label()), y + 4, theme.muted(), true);
             case TEXT -> {
                 graphics.fill(x + 1, y + 3, x + width - 1, y + height - 3, theme.accentDark());
@@ -217,7 +232,7 @@ public record SettingEntry(
 
     public void click(int mouseX, int x, int width) {
         switch (kind) {
-            case TOGGLE, BUTTON -> toggle.run();
+            case TOGGLE, BUTTON, COLOR -> toggle.run();
             case COLOR_REMOVE -> {
                 if (mouseX >= x + width - 16) cycleChoice.run();
                 else if (mouseX >= x) toggle.run();

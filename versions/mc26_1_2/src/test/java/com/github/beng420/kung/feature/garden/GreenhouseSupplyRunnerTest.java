@@ -729,17 +729,44 @@ public final class GreenhouseSupplyRunnerTest {
     }
 
     @Test
-    public void farmlandHasNoItemAndLeavesARunningPullAlone() {
+    public void aFarmlandSpotFetchesDirtAndHintsWhenNoSackHoldsIt() {
         host.required.put("Carrot", 3);
-        host.put(2, "FARMLAND_DECOY", 1);
+        host.soilNeeded.put(GreenhouseSoils.Soil.FARMLAND, 4);
         runner.onPick("Carrot", INGREDIENT);
 
         runner.onPickSoil(GreenhouseSoils.Soil.FARMLAND);
 
         assertEquals(List.of("gfs CARROT_ITEM 3"), host.commands);
-        assertTrue(runner.pendingPull());
+        assertTrue("a hint leaves the running pull alone", runner.pendingPull());
         assertTrue(host.selects.isEmpty());
-        assertEquals("WARNING: Farmland: till dirt with a hoe", host.chats.get(1));
+        assertEquals("WARNING: Fetch Dirt manually (not in any Sack): 4 more needed", host.chats.get(1));
+    }
+
+    @Test
+    public void aFarmlandSpotSwitchesToCarriedDirt() {
+        host.soilNeeded.put(GreenhouseSoils.Soil.FARMLAND, 4);
+        host.put(5, "DIRT", 2);
+
+        runner.onPickSoil(GreenhouseSoils.Soil.FARMLAND);
+
+        assertTrue(host.commands.isEmpty());
+        assertEquals(List.of(5), host.selects);
+        assertEquals("WARNING: Fetch Dirt manually (not in any Sack): 2 more needed", host.chats.get(0));
+    }
+
+    @Test
+    public void deadPlantsAreNowPulledLikeAnyCrop() {
+        host.required.put("Dead Plants", 3);
+        runner.onPick("Dead Plants", INGREDIENT);
+        assertEquals(List.of("gfs DEAD_PLANT 3"), host.commands);
+
+        runner.onChat("Moved 3 Dead Plant from your Sacks to your inventory.");
+        host.put(7, "DEAD_PLANT", 3);
+        runner.tick();
+
+        assertFalse(runner.pendingPull());
+        assertEquals(List.of(7), host.selects);
+        assertEquals("INFO: Pulled 3 Dead Plants", host.chats.get(1));
     }
 
     @Test

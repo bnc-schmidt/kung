@@ -32,7 +32,7 @@ public final class KungOneConfigTreeTest {
         assertEquals(expected, tree.map.size());
         assertEquals(6, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
         long keybinds = tree.map.values().stream().filter(node -> node.getMetadata("visualizer") == Visualizer.KeybindVisualizer.class).count();
-        assertEquals(13, keybinds);
+        assertEquals(14, keybinds);
         assertEquals(Property.Display.DISABLED, property(tree, "Crypt Messages", "Enabled").getDisplay());
         assertEquals(false, property(tree, "Colored F7/M7 Pillars", "Enabled").get());
         assertArrayEquals(java.util.Arrays.stream(com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial.choices())
@@ -186,6 +186,22 @@ public final class KungOneConfigTreeTest {
         assertEquals(Visualizer.ButtonVisualizer.class, button.getMetadata("visualizer"));
         ((Runnable) button.getMetadata("runnable")).run();
         assertEquals(1, actions.get());
+    }
+
+    @Test
+    public void colorRowsBecomeButtonsThatShowTheirHexAndOpenTheSharedPopup() {
+        AtomicInteger color = new AtomicInteger(0xFF4D8DFF);
+        AtomicInteger edits = new AtomicInteger();
+        var row = SettingEntry.color("To Place Color", color::get, edits::incrementAndGet);
+        var bridge = create(feature("Greenhouse Hologram", new AtomicBoolean(), () -> { }, List.of(row)), new AtomicBoolean(true));
+        Property<?> button = property(bridge.tree(), "Greenhouse Hologram", "To Place Color");
+        assertEquals(Visualizer.ButtonVisualizer.class, button.getMetadata("visualizer"));
+        assertEquals("#4D8DFF", button.getMetadata("text"));
+        ((Runnable) button.getMetadata("runnable")).run();
+        assertEquals(1, edits.get());
+        color.set(0xFF112233);
+        bridge.refresh();
+        assertEquals("#112233", button.getMetadata("text"));
     }
 
     private static int countControls(List<SettingEntry> settings) {

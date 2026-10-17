@@ -6,6 +6,7 @@ import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.feature.garden.GreenhouseSupply.Action;
 import com.github.beng420.kung.feature.garden.GreenhouseSupply.Plan;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import org.junit.After;
@@ -227,17 +228,72 @@ public final class GreenhouseSupplyTest {
     }
 
     @Test
-    public void soulSandAndDirtAreNotInAnySackAndFarmlandHasNoItem() {
+    public void soulSandAndDirtAreNotInAnySackAndFarmlandIsFetchedAsDirt() {
         Plan soul = GreenhouseSupply.planSoil(GreenhouseSoils.Soil.SOUL_SAND, 5, Map.of("SOUL_SAND", 1));
         assertEquals(Action.NOT_SACKABLE, soul.action());
         assertEquals(4, soul.missing());
         assertEquals("Fetch Soul Sand manually (not in any Sack): 4 more needed", soul.message());
         assertEquals(Action.NOT_SACKABLE, GreenhouseSupply.planSoil(GreenhouseSoils.Soil.DIRT, 2, Map.of()).action());
 
-        Plan farmland = GreenhouseSupply.planSoil(GreenhouseSoils.Soil.FARMLAND, 9, Map.of());
+        Plan farmland = GreenhouseSupply.planSoil(GreenhouseSoils.Soil.FARMLAND, 9, Map.of("DIRT", 4));
         assertEquals(Action.NOT_SACKABLE, farmland.action());
-        assertEquals("Farmland: till dirt with a hoe", farmland.message());
+        assertEquals("Dirt", farmland.crop());
+        assertEquals(5, farmland.missing());
+        assertEquals("Fetch Dirt manually (not in any Sack): 5 more needed", farmland.message());
+        assertEquals(Action.SWITCH, GreenhouseSupply.planSoil(GreenhouseSoils.Soil.FARMLAND, 4, Map.of("DIRT", 4)).action());
         assertEquals("Unknown soil None", GreenhouseSupply.planSoil(GreenhouseSoils.Soil.NONE, 1, Map.of()).message());
+    }
+
+    @Test
+    public void farmlandAndDirtSpotsBothNeedDirt() {
+        List<GreenhouseSoils.Soil> markers = List.of(GreenhouseSoils.Soil.FARMLAND, GreenhouseSoils.Soil.DIRT,
+            GreenhouseSoils.Soil.FARMLAND, GreenhouseSoils.Soil.SOUL_SAND, GreenhouseSoils.Soil.SAND);
+
+        assertEquals(3, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.FARMLAND, markers));
+        assertEquals(3, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.DIRT, markers));
+        assertEquals(1, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.SOUL_SAND, markers));
+        assertEquals(1, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.SAND, markers));
+        assertEquals(0, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.MYCELIUM, markers));
+        assertEquals(0, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.DIRT, List.of()));
+    }
+
+    @Test
+    public void aWrongStateSpotNeedsDirtOnlyWhereDirtBelongs() {
+        var soil = GreenhouseSoils.Soil.FARMLAND;
+        var wrongState = GreenhouseSoilCheck.GhostKind.WRONG_STATE;
+        List<GreenhouseHologram.SoilGhost> ghosts = List.of(
+            // Three farmland spots hold dirt: they only need tilling.
+            new GreenhouseHologram.SoilGhost(0, 0, soil, 73, wrongState),
+            new GreenhouseHologram.SoilGhost(0, 1, soil, 73, wrongState),
+            new GreenhouseHologram.SoilGhost(0, 2, soil, 73, wrongState),
+            // Two are missing: a Dirt item each.
+            new GreenhouseHologram.SoilGhost(1, 0, soil, 73),
+            new GreenhouseHologram.SoilGhost(1, 1, soil, 73),
+            // A dirt spot with farmland standing there needs a Dirt item to place.
+            new GreenhouseHologram.SoilGhost(2, 0, GreenhouseSoils.Soil.DIRT, 73, wrongState),
+            // A wrong block is replaced, so it needs the item too.
+            new GreenhouseHologram.SoilGhost(2, 1, soil, 73, GreenhouseSoilCheck.GhostKind.WRONG_BLOCK));
+
+        List<GreenhouseSoils.Soil> toFetch = GreenhouseSupply.soilsToFetch(ghosts);
+
+        assertEquals(List.of(soil, soil, GreenhouseSoils.Soil.DIRT, soil), toFetch);
+        assertEquals("2 missing + 1 dirt spot + 1 wrong block, not the 3 tillable spots", 4,
+            GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.DIRT, toFetch));
+        assertEquals(4, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.FARMLAND, toFetch));
+        assertEquals(0, GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.DIRT, GreenhouseSupply.soilsToFetch(List.of())));
+
+        List<GreenhouseHologram.SoilGhost> onlyTillable = ghosts.subList(0, 3);
+        assertEquals("nothing to fetch for spots that only need tilling", 0,
+            GreenhouseSupply.soilNeeded(GreenhouseSoils.Soil.DIRT, GreenhouseSupply.soilsToFetch(onlyTillable)));
+    }
+
+    @Test
+    public void deadPlantsArePulledFromTheMutationsSack() {
+        Plan plan = GreenhouseSupply.plan("Dead Plants", INGREDIENT, 6, 1, Map.of("DEAD_PLANT", 2));
+
+        assertEquals(Action.PULL, plan.action());
+        assertEquals("gfs DEAD_PLANT 3", plan.command());
+        assertEquals("Pulling 3 Dead Plants from Sacks (6 needed, 1 placed correctly, 2 in inventory)", plan.message());
     }
 
     @Test

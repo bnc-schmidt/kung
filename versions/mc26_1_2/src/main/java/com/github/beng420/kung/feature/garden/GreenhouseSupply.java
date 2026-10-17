@@ -8,8 +8,8 @@ import java.util.regex.Pattern;
 
 /**
  * What picking a hologram cell should do about the item to plant: switch to it, pull the missing amount from the
- * Sacks with {@code /gfs}, or nothing. Plain Java with no game classes (only {@link #useScanner} names the hologram,
- * and only when called); {@link GreenhouseSupplyRunner} carries a plan out.
+ * Sacks with {@code /gfs}, or nothing. Plain Java with no game classes (only {@link #useScanner} and
+ * {@link #soilsToFetch} name the hologram, and only when called); {@link GreenhouseSupplyRunner} carries a plan out.
  *
  * <p>Amounts are plants ({@code required}, {@code planted}, {@code inInventory}, {@code missing}) except
  * {@link Plan#amount()}, which counts items: a Pumpkin yields 4 Pumpkin Seeds stems, so 6 missing stems pull 2.
@@ -138,13 +138,14 @@ final class GreenhouseSupply {
     /**
      * What picking a soil ghost should do: {@code needed} is the number of ghosts in the latest scan that need this
      * soil. Soil blocks are single items (1 per block, nothing is placed already: a placed one is no ghost), so
-     * the flow is the crops' without the planted count. Farmland has no item: it says how to get it.
+     * the flow is the crops' without the planted count. Farmland is fetched as Dirt ({@link GreenhouseItems#soil}),
+     * so a Farmland pick and a Dirt pick plan the same item; {@code needed} comes from {@link #soilNeeded}.
      */
     static Plan planSoil(GreenhouseSoils.Soil soil, int needed, Map<String, Integer> inventory) {
-        String name = soil.displayName();
         Optional<GreenhouseItems.Item> found = GreenhouseItems.soil(soil);
-        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, unknown("soil", name));
+        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, soil.displayName(), null, unknown("soil", soil.displayName()));
         GreenhouseItems.Item item = found.get();
+        String name = item.crop();
         if (item.id() == null) {
             return new Plan(Action.NOT_SACKABLE, name, item, needed, 0, 0, needed, 0, false,
                 name + ": " + (item.note() == null ? "no item to hold" : item.note()));
@@ -154,6 +155,31 @@ final class GreenhouseSupply {
         String counts = needed + " needed, " + held + " in inventory";
         return finish(item, name, needed, 0, held, missing, counts,
             "Nothing to fetch: your inventory already holds enough " + name + " (" + counts + ")");
+    }
+
+    /**
+     * How many soil markers (ghosts, and any other kind of soil marker that names the soil its spot should have)
+     * need the block that {@code requested} is fetched as: Farmland and Dirt spots both need Dirt.
+     */
+    static int soilNeeded(GreenhouseSoils.Soil requested, Iterable<GreenhouseSoils.Soil> expected) {
+        GreenhouseSoils.Soil wanted = GreenhouseItems.itemSoil(requested);
+        int count = 0;
+        for (GreenhouseSoils.Soil soil : expected) {
+            if (GreenhouseItems.itemSoil(soil) == wanted) count++;
+        }
+        return count;
+    }
+
+    /**
+     * The soils of the ghosts that need an item, for {@link #soilNeeded}. A WRONG_STATE ghost needs one only where
+     * dirt belongs (farmland stands there: Dirt has to be placed); where farmland belongs the dirt already stands
+     * there and only needs tilling.
+     */
+    static List<GreenhouseSoils.Soil> soilsToFetch(List<GreenhouseHologram.SoilGhost> ghosts) {
+        return ghosts.stream()
+            .filter(ghost -> ghost.kind() != GreenhouseSoilCheck.GhostKind.WRONG_STATE
+                || ghost.soil() == GreenhouseSoils.Soil.DIRT)
+            .map(GreenhouseHologram.SoilGhost::soil).toList();
     }
 
     /** The shared tail of a plan: switch only, fetch manually, or pull {@code missing} (in plants) from the Sacks. */

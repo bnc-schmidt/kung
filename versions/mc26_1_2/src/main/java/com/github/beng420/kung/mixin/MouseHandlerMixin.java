@@ -1,6 +1,7 @@
 package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.feature.garden.GreenhouseHologramSettings;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
@@ -26,6 +27,12 @@ public abstract class MouseHandlerMixin {
             && McCompat.screen(Minecraft.getInstance()) instanceof AbstractContainerScreen<?> screen
             && LoadoutsAutoCloseFeature.handleLoadoutMouseHotkey(screen, info.button())) {
             callbackInfo.cancel();
+            return;
+        }
+        // The Greenhouse hologram's toggle key may be a mouse button; it only observes, the click still goes on.
+        Minecraft client = Minecraft.getInstance();
+        if (action == GLFW.GLFW_PRESS && client.player != null && McCompat.screen(client) == null) {
+            GreenhouseHologramSettings.onMousePress(info.button());
         }
     }
 }

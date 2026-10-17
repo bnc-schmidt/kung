@@ -33,8 +33,25 @@ final class GreenhouseSoilCheck {
     private static final Set<String> TRUSTED_BASE = Set.of(
         "Nether Wart", "Wheat Seeds", "Carrot", "Potato", "Melon Seeds", "Pumpkin Seeds");
 
-    /** A cell (raw offsets) whose real block is not the expected soil. */
-    record Ghost(int dx, int dz, Soil soil) { }
+    /**
+     * How a cell's real block differs from the soil it should have: nothing is there ({@code MISSING}, drawn as a
+     * block still to place), some other block is ({@code WRONG_BLOCK}, red), or it is farmland where dirt belongs or
+     * dirt where farmland belongs ({@code WRONG_STATE}, orange: till it or replace it).
+     */
+    enum GhostKind { MISSING, WRONG_BLOCK, WRONG_STATE }
+
+    /** A cell (raw offsets) whose real block is not the expected soil; {@code soil} is the soil that belongs there. */
+    record Ghost(int dx, int dz, Soil soil, GhostKind kind) {
+        /** A missing soil block. */
+        Ghost(int dx, int dz, Soil soil) {
+            this(dx, dz, soil, GhostKind.MISSING);
+        }
+    }
+
+    private static final Set<String> AIR = Set.of("minecraft:air", "minecraft:cave_air", "minecraft:void_air");
+    /** The blocks that count as dirt for the farmland/dirt pair: tilling turns them into farmland. */
+    private static final Set<String> DIRT_FAMILY = Set.of(
+        "minecraft:dirt", "minecraft:coarse_dirt", "minecraft:rooted_dirt", "minecraft:grass_block");
 
     private GreenhouseSoilCheck() { }
 
@@ -51,13 +68,24 @@ final class GreenhouseSoilCheck {
             case SOUL_SAND -> blockId.equals("minecraft:soul_sand") || blockId.equals("minecraft:soul_soil");
             case MYCELIUM -> blockId.equals("minecraft:mycelium");
             case END_STONE -> blockId.equals("minecraft:end_stone");
-            case DIRT -> blockId.equals("minecraft:dirt") || blockId.equals("minecraft:coarse_dirt")
-                || blockId.equals("minecraft:rooted_dirt") || blockId.equals("minecraft:grass_block")
-                || blockId.equals("minecraft:farmland");
+            // Farmland where dirt belongs is the other wrong state, not a match.
+            case DIRT -> DIRT_FAMILY.contains(blockId);
             case NONE -> true;
             // A soil added to GreenhouseSoils later: accept at least its own block.
             default -> blockId.equals(expected.blockId());
         };
+    }
+
+    /**
+     * What is wrong with the real block under the expected soil, or null when it is fine. Air is a missing block;
+     * the farmland/dirt pair either way round is a wrong state; any other block is the wrong block.
+     */
+    static GhostKind classify(Soil expected, String blockId) {
+        if (blockId == null || accepts(expected, blockId)) return null;
+        if (AIR.contains(blockId)) return GhostKind.MISSING;
+        boolean farmlandForDirt = expected == Soil.DIRT && blockId.equals("minecraft:farmland");
+        boolean dirtForFarmland = expected == Soil.FARMLAND && DIRT_FAMILY.contains(blockId);
+        return farmlandForDirt || dirtForFarmland ? GhostKind.WRONG_STATE : GhostKind.WRONG_BLOCK;
     }
 
     static boolean trusted(String crop) {
@@ -81,9 +109,10 @@ final class GreenhouseSoilCheck {
     }
 
     /**
-     * The cells whose real block does not suit what is planned there. {@code blockIds} holds the real block id per
-     * cell at the soil layer, index {@code dx * 10 + dz}; a null entry was not read and is skipped. A footprint
-     * puts its soil under every cell it covers; a crop with an untrusted soil gets no ghost.
+     * The cells whose real block does not suit what is planned there, each with how it differs.
+     * {@code blockIds} holds the real block id per cell at the soil layer, index {@code dx * 10 + dz}; a null entry
+     * was not read and is skipped. A footprint puts its soil under every cell it covers; a crop with an untrusted
+     * soil gets no ghost, and cells the layout has no entry for are never looked at (soil there is ignored).
      */
     static List<Ghost> ghosts(List<Footprint> expected, String[] blockIds) {
         List<Ghost> out = new ArrayList<>();
@@ -98,8 +127,8 @@ final class GreenhouseSoilCheck {
             for (int dx = firstDx; dx < firstDx + width; dx++) {
                 for (int dz = firstDz; dz < firstDz + depth; dz++) {
                     if (dx < 0 || dx >= GreenhouseGrid.SIZE || dz < 0 || dz >= GreenhouseGrid.SIZE) continue;
-                    String real = blockIds[dx * GreenhouseGrid.SIZE + dz];
-                    if (real != null && !accepts(soil, real)) out.add(new Ghost(dx, dz, soil));
+                    GhostKind kind = classify(soil, blockIds[dx * GreenhouseGrid.SIZE + dz]);
+                    if (kind != null) out.add(new Ghost(dx, dz, soil, kind));
                 }
             }
         }

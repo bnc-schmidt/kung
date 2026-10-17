@@ -68,7 +68,7 @@ public final class GreenhouseItemsTest {
             assertFalse(crop, item(crop).sackable());
             assertTrue(crop, item(crop).id() != null);
         }
-        for (String crop : new String[] {"Fire", "Rose Dragon Egg", "Jerryseed", "Dead Plants"}) {
+        for (String crop : new String[] {"Fire", "Rose Dragon Egg", "Jerryseed"}) {
             assertFalse(crop, item(crop).sackable());
             assertNull(crop, item(crop).id());
         }
@@ -95,14 +95,14 @@ public final class GreenhouseItemsTest {
 
     @Test
     public void everySoilBlockHasARowWithTheIdsOfTheNeuRepository() {
-        assertEquals(6, GreenhouseItems.soils().size());
+        assertEquals(5, GreenhouseItems.soils().size());
         for (GreenhouseSoils.Soil soil : GreenhouseSoils.Soil.values()) {
             if (soil == GreenhouseSoils.Soil.NONE) {
                 assertTrue(GreenhouseItems.soil(soil).isEmpty());
                 continue;
             }
             GreenhouseItems.Item item = GreenhouseItems.soil(soil).orElseThrow();
-            assertEquals(soil.displayName(), item.crop());
+            assertEquals(GreenhouseItems.itemSoil(soil).displayName(), item.crop());
             assertEquals(1, item.plantsPerItem());
             if (item.id() != null) assertEquals(soil.displayName(), item.id(), GreenhouseSupply.normalizeId(item.id()));
             if (item.sackable()) assertEquals(soil.displayName(), item.id(), item.gfs());
@@ -115,7 +115,10 @@ public final class GreenhouseItemsTest {
         assertFalse(GreenhouseItems.soil(GreenhouseSoils.Soil.SOUL_SAND).orElseThrow().sackable());
         assertEquals("DIRT", GreenhouseItems.soil(GreenhouseSoils.Soil.DIRT).orElseThrow().id());
         assertFalse(GreenhouseItems.soil(GreenhouseSoils.Soil.DIRT).orElseThrow().sackable());
-        assertNull(GreenhouseItems.soil(GreenhouseSoils.Soil.FARMLAND).orElseThrow().id());
+        // Farmland is no item: the greenhouse tills placed Dirt, so a Farmland spot is fetched as Dirt.
+        assertEquals(GreenhouseSoils.Soil.DIRT, GreenhouseItems.itemSoil(GreenhouseSoils.Soil.FARMLAND));
+        assertEquals(GreenhouseItems.soil(GreenhouseSoils.Soil.DIRT), GreenhouseItems.soil(GreenhouseSoils.Soil.FARMLAND));
+        assertEquals(GreenhouseSoils.Soil.SAND, GreenhouseItems.itemSoil(GreenhouseSoils.Soil.SAND));
     }
 
     @Test
@@ -168,6 +171,19 @@ public final class GreenhouseItemsTest {
         assertTrue(broken.items().isEmpty());
         assertTrue(broken.soils().isEmpty());
         assertTrue(broken.error(), broken.error().contains("crops: ") && broken.error().contains("soils: "));
+    }
+
+    @Test
+    public void deadPlantsAreTheDeadPlantItemOfTheMutationsSack() {
+        // NEU: DEAD_PLANT.json "Dead Plant" (minecraft:deadbush) is in constants/sacks.json under Mutations.
+        GreenhouseItems.Item dead = item("Dead Plants");
+
+        assertEquals("DEAD_PLANT", dead.id());
+        assertEquals("DEAD_PLANT", dead.gfs());
+        assertEquals(1, dead.plantsPerItem());
+        assertTrue(dead.answersTo("Dead Plant"));
+        assertTrue(dead.answersTo("Dead Plants"));
+        assertFalse(dead.answersTo("Dead Bush"));
     }
 
     @Test

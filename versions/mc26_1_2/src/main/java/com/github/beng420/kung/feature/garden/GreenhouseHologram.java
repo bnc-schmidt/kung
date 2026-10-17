@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.message.KungMessages;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -30,12 +31,15 @@ public final class GreenhouseHologram {
     private static GreenhouseOrientation orientation = GreenhouseOrientation.IDENTITY;
     private static GreenhouseHologramShapes.Layout shown = GreenhouseHologramShapes.Layout.EMPTY;
     private static int version;
+    /** The player's own show/hide (the toggle key): independent of showing a layout and of completion. */
+    private static boolean visible = true;
 
     private GreenhouseHologram() { }
 
     /** Registers the world renderer once at client start; the hologram stays off until something shows one. */
     public static void initialize() {
         GreenhouseWorldRenderer.initialize();
+        GreenhouseHologramSettings.setToggleHandler(GreenhouseHologram::toggleVisible);
         // Leaving or joining a server (also a profile change): the scan of the last session is not this one's.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> onConnectionChange());
         ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> onConnectionChange());
@@ -56,6 +60,7 @@ public final class GreenhouseHologram {
     /** Test seam: the greenhouse lookup needs a running client. */
     static ShowResult show(GreenhouseGrid layout, boolean insideGreenhouse) {
         grid = copyOf(layout);
+        visible = true;
         rebuild();
         GreenhouseScanner.reset();
         return new ShowResult(insideGreenhouse ? INSIDE : ARMED, insideGreenhouse);
@@ -112,6 +117,66 @@ public final class GreenhouseHologram {
 
     public static boolean isShowing() { return grid != null; }
 
+    /** Whether the player has not hidden the hologram with the toggle key (true whenever nothing is shown). */
+    static boolean userVisible() { return visible; }
+
+    /**
+     * Whether completion hides the hologram now: the layout is complete (all its ingredient cells stood right and no
+     * unplanned crop stood in the last two scans), the setting wants it hidden then and the player has not shown it
+     * anyway with the toggle key ({@link GreenhouseScanner#forced()}). The scan goes on meanwhile, and the hologram
+     * is back when a crop is missing again.
+     */
+    static boolean hiddenByCompletion() {
+        return completionHides() && !GreenhouseScanner.forced();
+    }
+
+    /** Complete and the setting asks for hiding then, whatever the player's override. */
+    private static boolean completionHides() {
+        return GreenhouseScanner.complete() && GreenhouseHologramSettings.hideWhenComplete();
+    }
+
+    /** Whether anything is drawn and claimed: shown, not toggled off and not complete (when that hides it). */
+    static boolean isDrawn() { return isShowing() && visible && !hiddenByCompletion(); }
+
+    /**
+     * The toggle key's action, client thread: flips the hologram as {@link #toggle()} says and returns the chat
+     * message for it. Empty, and nothing changes, while no hologram is shown (the key then has no meaning).
+     */
+    static Optional<String> toggleMessage() {
+        return isShowing() ? Optional.of(toggle()) : Optional.empty();
+    }
+
+    /** The toggle key's handler: {@link #toggleMessage()} in chat, nothing at all while no hologram is shown. */
+    static void toggleVisible() {
+        toggleMessage().ifPresent(
+            message -> KungMessages.send(Minecraft.getInstance(), KungMessages.Type.INFO, "", message));
+    }
+
+    /**
+     * The toggle key's state machine, with {@code drawn} = {@link #isDrawn()} while a layout is shown:
+     * <ul>
+     * <li>drawn: the key hides it ({@code visible = false}, any override ends);</li>
+     * <li>not drawn, whatever the reason (key, completion or both): the key shows it ({@code visible = true}) and,
+     * when completion would still hide it, overrides that ({@link GreenhouseScanner#forced()}), so "shown" is only
+     * said for a hologram that really is drawn.</li>
+     * </ul>
+     * The override ends with the completion (the layout becomes incomplete), with {@link #show} / {@link #hide()}
+     * and with a corner change, all through {@link GreenhouseScanner#reset()} or the completion's own update.
+     * Returns the chat message for the new state.
+     */
+    static String toggle() {
+        boolean completionHides = completionHides();
+        if (visible && !hiddenByCompletion()) {
+            visible = false;
+            GreenhouseScanner.setForced(false);
+            return completionHides ? "Greenhouse hologram hidden: layout is complete (press K to show anyway)"
+                : "Greenhouse hologram hidden";
+        }
+        visible = true;
+        GreenhouseScanner.setForced(completionHides);
+        return "Greenhouse hologram shown";
+    }
+
     /**
      * How many of this crop the last plot scan found planted in the grid area (armor stands wearing its head, or
      * its block); the two mushrooms count by their own names. 0 before a scan, while no hologram is shown or the
@@ -130,14 +195,21 @@ public final class GreenhouseHologram {
      * pick-block supply subtracts from what the layout needs.
      */
     public static int correctlyPlaced(String crop) {
-        return correctlyPlaced(crop, cellBoxes());
+        // Whether the hologram is hidden does not change what is planted.
+        return correctlyPlaced(crop, allCellBoxes());
     }
 
     /**
-     * A soil block the last plot scan found missing or wrong, drawn as a translucent block: its raw offset from the
-     * greenhouse corner, the soil that belongs there and the y of the soil layer.
+     * A soil block the last plot scan found missing or wrong: its raw offset from the greenhouse corner, the soil that
+     * belongs there (also when the wrong block or wrong state stands there), the y of the soil layer and how it
+     * differs ({@code MISSING}: drawn as a translucent block, {@code WRONG_BLOCK}: red, {@code WRONG_STATE}: orange).
      */
-    record SoilGhost(int dx, int dz, GreenhouseSoils.Soil soil, int y) {
+    record SoilGhost(int dx, int dz, GreenhouseSoils.Soil soil, int y, GreenhouseSoilCheck.GhostKind kind) {
+        /** A missing soil block. */
+        SoilGhost(int dx, int dz, GreenhouseSoils.Soil soil, int y) {
+            this(dx, dz, soil, y, GreenhouseSoilCheck.GhostKind.MISSING);
+        }
+
         /** The ghost block's volume in world coordinates for a greenhouse whose grid corner is this block. */
         AABB bounds(BlockPos corner) {
             return new AABB(corner.getX() + dx, y, corner.getZ() + dz, corner.getX() + dx + 1, y + 1,
@@ -146,14 +218,15 @@ public final class GreenhouseHologram {
     }
 
     /**
-     * The soil ghosts of the latest scan, for ray tests such as picking the soil to fetch. Empty while no hologram
-     * is shown, before a scan and when no soil layer was found.
+     * The soil ghosts of the latest scan (missing, wrong block and wrong state), for ray tests such as picking the soil
+     * to fetch. Empty while nothing is drawn (no hologram, toggled off or complete), before a scan and when no soil
+     * layer was found.
      */
     static List<SoilGhost> soilGhosts() {
         int layer = GreenhouseScanner.soilLayer();
-        if (!isShowing() || layer < 0) return List.of();
+        if (!isDrawn() || layer < 0) return List.of();
         return GreenhouseScanner.ghosts().stream()
-            .map(ghost -> new SoilGhost(ghost.dx(), ghost.dz(), ghost.soil(), layer)).toList();
+            .map(ghost -> new SoilGhost(ghost.dx(), ghost.dz(), ghost.soil(), layer, ghost.kind())).toList();
     }
 
     /** Test seam for {@link #correctlyPlaced(String)}. */
@@ -187,8 +260,9 @@ public final class GreenhouseHologram {
 
     /** For the debug dump: whether something is shown, how it is turned and how many boxes it is. */
     static String stateSummary() {
-        return "showing=" + isShowing() + " orientation=" + orientation.describe() + " boxes=" + shown.shapes().size()
-            + " models=" + shown.placements().size();
+        return "showing=" + isShowing() + " userVisible=" + visible + " complete=" + GreenhouseScanner.complete()
+            + " forced=" + GreenhouseScanner.forced() + " orientation=" + orientation.describe()
+            + " boxes=" + shown.shapes().size() + " models=" + shown.placements().size();
     }
 
     /** Boxes relative to the greenhouse corner; empty while hidden. */
@@ -202,9 +276,15 @@ public final class GreenhouseHologram {
      * the crop the player looks at. Corner-relative (y 0..1 above the hologram floor): add the greenhouse corner,
      * or use {@link GreenhouseHologramShapes.CellBox#bounds}. Follows the orientation; empty while hidden. A cell
      * whose plant is already right (per the last plot scan) has {@code visible() == false}: nothing is drawn there.
-     * Not a per-frame call: it builds the list.
+     * Empty while nothing is drawn (toggled off with the key, or complete and hidden for it), so a pick-block ray
+     * claims nothing then. Not a per-frame call: it builds the list.
      */
     static List<GreenhouseHologramShapes.CellBox> cellBoxes() {
+        return isDrawn() ? allCellBoxes() : List.of();
+    }
+
+    /** The cells of the shown layout with their scan state, whether or not the hologram is currently drawn. */
+    private static List<GreenhouseHologramShapes.CellBox> allCellBoxes() {
         return GreenhouseHologramShapes.visibleCells(shown, GreenhouseScanner.states(version));
     }
 

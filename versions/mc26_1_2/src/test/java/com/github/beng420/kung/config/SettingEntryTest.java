@@ -46,6 +46,21 @@ public final class SettingEntryTest {
     }
 
     @Test
+    public void colorRowShowsRgbHexIgnoresAlphaAndOpensItsEditorOnClick() {
+        AtomicInteger color = new AtomicInteger(0x804D8DFF);
+        AtomicInteger edits = new AtomicInteger();
+        SettingEntry row = SettingEntry.color("To Place Color", color::get, edits::incrementAndGet);
+        assertEquals(SettingKind.COLOR, row.kind());
+        assertEquals("#4D8DFF", row.choiceSupplier().get());
+        color.set(0xFF0A0B0C);
+        assertEquals("#0A0B0C", row.choiceSupplier().get());
+        assertFalse(row.expandable());
+        row.click(0, 0, 50);
+        assertEquals(1, edits.get());
+        assertEquals("Opening the editor does not change the color", 0xFF0A0B0C, color.get());
+    }
+
+    @Test
     public void generatesTypedSettingsAndAppliesValidatedValues() {
         AtomicBoolean enabled = new AtomicBoolean();
         SettingEntry toggle = SettingEntry.toggle("Enabled", enabled::get, () -> enabled.set(!enabled.get()));

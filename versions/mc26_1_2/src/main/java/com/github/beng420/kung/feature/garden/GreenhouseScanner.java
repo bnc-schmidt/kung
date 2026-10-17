@@ -57,6 +57,7 @@ final class GreenhouseScanner {
     private static long scannedAt;
     private static boolean warned;
     private static boolean failed;
+    private static final GreenhouseCompletion COMPLETION = new GreenhouseCompletion();
 
     private GreenhouseScanner() { }
 
@@ -71,6 +72,7 @@ final class GreenhouseScanner {
         scannedVersion = -1;
         warned = false;
         failed = false;
+        COMPLETION.reset();
         version++;
     }
 
@@ -87,8 +89,30 @@ final class GreenhouseScanner {
         version++;
     }
 
+    /** Test seam: the completion state a run of scans would have settled on. */
+    static void setCompleteForTest(boolean complete) {
+        COMPLETION.setForTest(complete);
+        version++;
+    }
+
+    /**
+     * Whether every ingredient cell of the layout stood right in the last two completed scans (see
+     * {@link GreenhouseCompletion}); false before a scan and after a reset.
+     */
+    static boolean complete() { return COMPLETION.complete(); }
+
+    /** Whether the player showed the complete layout with the toggle key; ends with the completion or a reset. */
+    static boolean forced() { return COMPLETION.forced(); }
+
+    static void setForced(boolean value) { COMPLETION.setForced(value); }
+
     /** Changes whenever what is drawn from the scan changes, so the renderer rebuilds only then. */
     static int version() { return version; }
+
+    /** Crops seen where the layout has no entry (shown ones); empty before a scan or for another layout. */
+    static List<GreenhouseScanLogic.Extra> extras(int hologramVersion) {
+        return snapshot != null && snapshot.layoutVersion() == hologramVersion ? snapshot.extras() : List.of();
+    }
 
     /** What to draw per placement of the hologram version, or null when no scan matches it (then: all empty). */
     static List<State> states(int hologramVersion) {
@@ -110,9 +134,17 @@ final class GreenhouseScanner {
         if (snapshot == null) return "no scan yet; soil: " + soilNote;
         long wrong = snapshot.shown().stream().filter(state -> state == State.WRONG).count();
         long unverified = snapshot.shown().stream().filter(state -> state == State.UNVERIFIED).count();
+        long correct = snapshot.shown().stream().filter(state -> state == State.CORRECT).count();
+        long toPlace = snapshot.shown().stream().filter(state -> state == State.EMPTY).count();
+        StringBuilder soil = new StringBuilder();
+        for (GreenhouseSoilCheck.GhostKind kind : GreenhouseSoilCheck.GhostKind.values()) {
+            soil.append(' ').append(kind.name().toLowerCase(java.util.Locale.ROOT)).append('=')
+                .append(ghosts.stream().filter(ghost -> ghost.kind() == kind).count());
+        }
         return "planted=" + snapshot.planted() + " unrecognised=" + snapshot.unknown() + "/" + snapshot.total()
-            + " wrong=" + wrong + " unverified=" + unverified + " soilLayer=" + soilLayer + " soilGhosts=" + ghosts.size()
-            + " (" + soilNote + ")";
+            + " toPlace=" + toPlace + " correct=" + correct + " wrong=" + wrong + " unverified=" + unverified
+            + " extra=" + snapshot.extras().size() + " complete=" + COMPLETION.complete()
+            + " soilLayer=" + soilLayer + " soil:" + soil + " (" + soilNote + ")";
     }
 
     /**
@@ -130,16 +162,7 @@ final class GreenhouseScanner {
     static void tick(Minecraft client, BlockPos corner, int hologramVersion, long nowNanos) {
         Level level = client.level;
         if (level == null || failed) return;
-        if (!corner.equals(scannedCorner)) {
-            // Another greenhouse: the old one's results must not outlive it, even while its chunks are unloaded.
-            snapshot = null;
-            ghosts = List.of();
-            soilLayer = -1;
-            soilBlocks = null;
-            scannedCorner = corner;
-            scannedVersion = -1;
-            version++;
-        }
+        if (!corner.equals(scannedCorner)) switchCorner(corner);
         if (scannedVersion == hologramVersion && nowNanos - scannedAt < INTERVAL_NANOS) return;
         scannedAt = nowNanos;
         if (!level.hasChunksAt(corner.getX() - 1, corner.getZ() - 1, corner.getX() + GreenhouseGrid.SIZE + 1,
@@ -160,6 +183,18 @@ final class GreenhouseScanner {
         }
     }
 
+    /** Another greenhouse: the old one's results must not outlive it, even while its chunks are unloaded. */
+    static void switchCorner(BlockPos corner) {
+        snapshot = null;
+        ghosts = List.of();
+        soilLayer = -1;
+        soilBlocks = null;
+        scannedCorner = corner;
+        scannedVersion = -1;
+        COMPLETION.reset();
+        version++;
+    }
+
     private static void scan(Minecraft client, Level level, BlockPos corner, int hologramVersion) {
         List<Placement> placements = GreenhouseHologram.placements();
         List<Footprint> expected = GreenhouseScanLogic.footprints(placements);
@@ -171,10 +206,18 @@ final class GreenhouseScanner {
         List<Ghost> nextGhosts = soilBlocks == null ? List.of() : GreenhouseSoilCheck.ghosts(expected, soilBlocks);
 
         boolean changed = snapshot == null || snapshot.layoutVersion() != next.layoutVersion()
-            || !snapshot.shown().equals(next.shown()) || !ghosts.equals(nextGhosts) || layerBefore != soilLayer;
+            || !snapshot.shown().equals(next.shown()) || !snapshot.extras().equals(next.extras())
+            || !ghosts.equals(nextGhosts) || layerBefore != soilLayer;
         snapshot = next;
         ghosts = nextGhosts;
         if (changed) version++;
+        // Every ingredient right and no unplanned crop in two scans in a row: the hologram has done its job
+        // (setting permitting).
+        boolean allCorrect = GreenhouseCompletion.allIngredientsCorrect(placements, next.raw(), next.rawExtras());
+        if (COMPLETION.update(allCorrect, GreenhouseHologramSettings.hideWhenComplete())) {
+            KungMessages.send(client, KungMessages.Type.SUCCESS, "Greenhouse",
+                "Greenhouse layout complete: all crops are placed correctly.");
+        }
         if (next.unrecognisedShare() && !warned) {
             warned = true;
             KungMessages.send(client, KungMessages.Type.WARNING, "Greenhouse",

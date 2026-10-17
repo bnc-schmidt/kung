@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.garden.GreenhouseScanLogic.Found;
 import com.github.beng420.kung.feature.garden.GreenhouseScanLogic.Snapshot;
 import com.github.beng420.kung.feature.garden.GreenhouseScanLogic.State;
 import java.util.List;
+import net.minecraft.core.BlockPos;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -80,6 +81,67 @@ public final class GreenhouseScannerTest {
         GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Potato", 7.5, 3.5)), version));
         // A first wrong sighting is not shown yet; its cell still shows the model.
         assertTrue(GreenhouseHologram.cellBoxes().getFirst().visible());
+    }
+
+    @Test
+    public void extrasAreHandedOutOnlyForTheLayoutTheyWereScannedFor() {
+        GreenhouseHologram.show(carrotAt(2, 3), true);
+        int version = GreenhouseHologram.version();
+        var footprints = GreenhouseScanLogic.footprints(GreenhouseHologram.placements());
+        List<Found> seen = List.of(new Found("Cactus", 5.5, 5.5));
+        GreenhouseScanner.setSnapshotForTest(GreenhouseScanLogic.evaluate(footprints, seen,
+            GreenhouseScanLogic.evaluate(footprints, seen, null, version), version));
+
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 5, "Cactus")), GreenhouseScanner.extras(version));
+        assertTrue(GreenhouseScanner.extras(version + 1).isEmpty());
+        GreenhouseScanner.reset();
+        assertTrue(GreenhouseScanner.extras(version).isEmpty());
+    }
+
+    @Test
+    public void completionStartsFalseAndResetClearsIt() {
+        assertFalse(GreenhouseScanner.complete());
+
+        GreenhouseScanner.setCompleteForTest(true);
+        assertTrue(GreenhouseScanner.complete());
+
+        GreenhouseScanner.reset();
+        assertFalse(GreenhouseScanner.complete());
+    }
+
+    @Test
+    public void switchingTheCornerForgetsTheScanTheSoilAndTheCompletion() {
+        GreenhouseHologram.show(carrotAt(2, 3), true);
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)),
+            GreenhouseHologram.version()));
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
+        GreenhouseScanner.setCompleteForTest(true);
+        GreenhouseScanner.setForced(true);
+        int before = GreenhouseScanner.version();
+
+        GreenhouseScanner.switchCorner(new BlockPos(10, 70, 20));
+
+        assertFalse("the other greenhouse is not complete yet", GreenhouseScanner.complete());
+        assertFalse(GreenhouseScanner.forced());
+        assertEquals(0, GreenhouseScanner.plantedCount("Carrot"));
+        assertTrue(GreenhouseScanner.ghosts().isEmpty());
+        assertEquals(-1, GreenhouseScanner.soilLayer());
+        assertTrue("the renderer rebuilds", GreenhouseScanner.version() != before);
+    }
+
+    @Test
+    public void theSummaryNamesTheNewStates() {
+        GreenhouseHologram.show(carrotAt(2, 3), true);
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)),
+            GreenhouseHologram.version()));
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
+
+        String summary = GreenhouseScanner.summary();
+
+        for (String part : new String[] {"toPlace=0", "correct=1", "wrong=0", "unverified=0", "extra=0",
+            "complete=false", "missing=1", "wrong_block=0", "wrong_state=0"}) {
+            assertTrue(part + " in " + summary, summary.contains(part));
+        }
     }
 
     @Test

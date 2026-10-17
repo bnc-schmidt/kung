@@ -45,6 +45,7 @@ public final class GreenhousePickHook {
 
     /** The game behind {@link #tryPick(Game, Consumer)}, so the conditions are unit-tested with a fake. */
     interface Game {
+        /** Whether the hologram is drawn (shown, not toggled off, not hidden by completion): nothing else is picked. */
         boolean hologramShowing();
 
         /** A menu or any other screen has the mouse, so the click is not a world click. */
@@ -158,8 +159,9 @@ public final class GreenhousePickHook {
     }
 
     /** The running client: the player's eye and view, vanilla's hit, the hologram and the greenhouse corner. */
-    private record LiveGame(Minecraft client) implements Game {
-        @Override public boolean hologramShowing() { return GreenhouseHologram.isShowing(); }
+    record LiveGame(Minecraft client) implements Game {
+        // Drawn, not just shown: hidden by the key or by completion, it claims no click and costs no scan.
+        @Override public boolean hologramShowing() { return GreenhouseHologram.isDrawn(); }
 
         @Override public boolean screenOpen() { return McCompat.screen(client) != null; }
 

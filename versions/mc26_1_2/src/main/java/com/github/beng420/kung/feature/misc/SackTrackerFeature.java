@@ -27,10 +27,12 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenEvents;
+import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.KeyEvent;
@@ -56,8 +58,12 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private static final Pattern CHANGE = Pattern.compile("^([+-][\\d,]+) (.+) \\((.+)\\)$");
     private static final int SYNC_TICKS = 10;
     private static final int LINE_HEIGHT = 11;
+    private static final long MAX_GOAL = 999_999_999L;
+    private static final int KEY_BACKSPACE = 259;
+    private static final int MOD_CONTROL = 2;
     private static final UiTheme THEME = UiTheme.settings();
     private static final Component RESET = Component.literal("[Reset Display]").withColor(0xFF5555);
+    private static final String GOAL_HINT = "Type a number to set a target amount (Backspace deletes, Ctrl+Backspace clears)";
     private int ticksUntilSync;
 
     private SackTrackerFeature() { super(config -> config.misc); }
@@ -76,6 +82,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
             ScreenEvents.afterExtract(screen).register(this::renderOverScreen);
             ScreenMouseEvents.allowMouseClick(screen).register((current, event) -> !click(current, event));
+            // Runs before the screen's own keyPressed, so a digit over a row never swaps the slot below with the hotbar.
+            ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) -> !typeGoal(current, event));
         });
     }
 
@@ -213,9 +221,43 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         draw(graphics, config(), lines(config().sackTrackerItems(), true));
         int line = lineAt(mouseX, mouseY);
         if (line >= 1 && line <= config().sackTrackerItems().size()) {
-            UiTooltip.draw(graphics, Minecraft.getInstance().font, List.of("Click to remove from tracker"),
-                mouseX + 8, mouseY, screen.width, screen.height, THEME);
+            List<String> tooltip = typesGoals(screen)
+                ? List.of("Click to remove from tracker", GOAL_HINT) : List.of("Click to remove from tracker");
+            UiTooltip.draw(graphics, Minecraft.getInstance().font, tooltip, mouseX + 8, mouseY, screen.width, screen.height, THEME);
         }
+    }
+
+    /**
+     * Goal typing: inventories and containers only (chat and Kung's own screens keep their keys), and not
+     * while a text field such as an anvil's name box has focus.
+     */
+    private boolean typesGoals(Screen screen) {
+        return overScreen(screen) && screen instanceof AbstractContainerScreen<?> && !(screen.getFocused() instanceof EditBox);
+    }
+
+    /** True when the key edited the goal of the hovered tracker row; the screen must then not see it. */
+    private boolean typeGoal(Screen screen, KeyEvent event) {
+        if (!typesGoals(screen)) return false;
+        var client = Minecraft.getInstance();
+        int line = lineAt(client.mouseHandler.getScaledXPos(client.getWindow()), client.mouseHandler.getScaledYPos(client.getWindow()));
+        List<SackItem> items = config().sackTrackerItems();
+        if (line < 1 || line > items.size()) return false;
+        SackItem item = items.get(line - 1);
+        Long goal = nextGoal(item.goal(), event.key(), (event.modifiers() & MOD_CONTROL) != 0);
+        if (goal == null) return false;
+        config().setSackTrackerGoal(item, goal);
+        return true;
+    }
+
+    /**
+     * The goal after a key press: a digit (top row or numpad) appends, 1 then 5 is 15, up to nine digits;
+     * Backspace drops the last digit, Ctrl+Backspace clears the goal (0 = none). Null for every other key.
+     */
+    static Long nextGoal(long goal, int key, boolean control) {
+        int digit = key >= 48 && key <= 57 ? key - 48 : key >= 320 && key <= 329 ? key - 320 : -1;
+        if (digit >= 0) return goal > (MAX_GOAL - digit) / 10 ? goal : goal * 10 + digit;
+        if (key == KEY_BACKSPACE) return control ? 0L : goal / 10;
+        return null;
     }
 
     /** Which drawn line the cursor is on: 1..items is an item, one past them is Reset Display, -1 is none. */

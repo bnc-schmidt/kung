@@ -44,7 +44,7 @@ final class GreenhouseSupplyHost implements GreenhouseSupplyRunner.Host {
     }
 
     @Override public int soilNeeded(GreenhouseSoils.Soil soil) {
-        return (int) GreenhouseHologram.soilGhosts().stream().filter(ghost -> ghost.soil() == soil).count();
+        return GreenhouseSupply.soilNeeded(soil, GreenhouseSupply.soilsToFetch(GreenhouseHologram.soilGhosts()));
     }
 
     @Override public Map<String, Integer> inventory() {

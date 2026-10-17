@@ -32,7 +32,7 @@ public final class KungSettingsTest {
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 11 : 12, 2, 1, 1, modrinth ? 13 : 14, 3),
+        assertEquals(List.of(modrinth ? 11 : 12, 3, 1, 1, modrinth ? 13 : 14, 3),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -45,6 +45,57 @@ public final class KungSettingsTest {
         assertEquals(12, feature(categories, "Loadouts Auto Close").settings().stream()
             .filter(setting -> setting.kind() == SettingKind.KEYBIND).count());
         assertFalse(feature(categories, "Crypt Messages").clickable());
+    }
+
+    @Test
+    public void greenhouseHologramGroupHasNoMasterToggleAndWritesThroughToTheConfig() {
+        Path file = temporary.getRoot().toPath().resolve("greenhouse.json");
+        KungConfig config = new KungConfig(file);
+        FeatureEntry group = feature(KungSettings.categories(config, () -> { }), "Greenhouse Hologram");
+        assertEquals("settings only: the hologram is user-triggered, not switched on", null, group.toggle());
+        assertFalse(group.clickable());
+        assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color", "Extra Crop Color",
+            "Wrong State Color", "Hide When Complete", "Toggle Key"),
+            group.settings().stream().map(SettingEntry::label).toList());
+
+        SettingEntry opacity = setting(group, "Opacity (%)");
+        assertEquals(SettingKind.SLIDER, opacity.kind());
+        assertEquals(5, opacity.min());
+        assertEquals(100, opacity.max());
+        assertEquals(30, opacity.intSupplier().getAsInt());
+        assertEquals("30%", opacity.sliderValue());
+        opacity.intConsumer().accept(65);
+        assertEquals(0.65F, config.greenhouse.hologramOpacity(), 0.0001F);
+        opacity.intConsumer().accept(500);
+        assertEquals(1F, config.greenhouse.hologramOpacity(), 0F);
+
+        SettingEntry toPlace = setting(group, "To Place Color");
+        assertEquals(SettingKind.COLOR, toPlace.kind());
+        assertEquals("#4D8DFF", toPlace.choiceSupplier().get());
+        assertEquals("#FF3B3B", setting(group, "Wrong Crop Color").choiceSupplier().get());
+        assertEquals("#FF55D8", setting(group, "Extra Crop Color").choiceSupplier().get());
+        assertEquals("#FFA126", setting(group, "Wrong State Color").choiceSupplier().get());
+
+        SettingEntry hide = setting(group, "Hide When Complete");
+        assertTrue(hide.booleanSupplier().getAsBoolean());
+        hide.toggle().run();
+        assertFalse(config.greenhouse.hideWhenComplete());
+
+        SettingEntry key = setting(group, "Toggle Key");
+        assertEquals(SettingKind.KEYBIND, key.kind());
+        assertEquals("K", key.textValue());
+        assertEquals("key:75:0", key.rawKeybindSupplier().get());
+        key.setText("key:66:48");
+        assertEquals(66, config.greenhouse.toggleKey());
+        assertEquals("B", key.textValue());
+        key.setText("");
+        assertEquals("None", key.textValue());
+
+        KungConfig restored = new KungConfig(file);
+        restored.load();
+        assertEquals(1F, restored.greenhouse.hologramOpacity(), 0F);
+        assertFalse(restored.greenhouse.hideWhenComplete());
+        assertEquals("", restored.greenhouse.toggleKeybind());
     }
 
     @Test

@@ -10,5 +10,6 @@ public enum SettingKind {
     LABEL,
     BUTTON,
     COLOR_REMOVE,
+    COLOR,
     GROUP
 }

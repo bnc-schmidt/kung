@@ -35,6 +35,7 @@ final class GreenhouseWorldRenderer {
     private static int builtVersion = -1;
     private static int builtEpoch = -1;
     private static int builtScan = -1;
+    private static int builtPalette;
     private static BlockPos builtCorner;
     private static Frame built = Frame.EMPTY;
 
@@ -68,6 +69,7 @@ final class GreenhouseWorldRenderer {
             Vec3 camera = context.levelState().cameraRenderState.pos;
             McCompat.draw(context, RenderTypes.lines(), (pose, lines) -> {
                 for (Box box : boxes) {
+                    if (box.outline() >>> 24 == 0) continue;
                     LineBoxes.box(lines, pose, box.bounds(), camera.x, camera.y, camera.z, box.outline(), box.width());
                 }
             });
@@ -78,6 +80,7 @@ final class GreenhouseWorldRenderer {
             Vec3 camera = context.levelState().cameraRenderState.pos;
             McCompat.draw(context, RenderTypes.debugQuads(), (pose, fill) -> {
                 for (Box box : boxes) {
+                    if (box.fill() >>> 24 == 0) continue;
                     AABB relative = box.bounds().move(-camera.x, -camera.y, -camera.z);
                     for (int[] face : FACES) {
                         for (int corner : face) {
@@ -93,7 +96,8 @@ final class GreenhouseWorldRenderer {
     }
 
     private static Frame visibleFrame(Vec3 camera) {
-        if (!GreenhouseHologram.isShowing()) return Frame.EMPTY;
+        // Toggled off with the key: nothing is drawn and the scan rests too.
+        if (!GreenhouseHologram.isShowing() || !GreenhouseHologram.userVisible()) return Frame.EMPTY;
         Optional<BlockPos> found = GreenhouseLocator.current(Minecraft.getInstance(), false);
         if (found.isEmpty()) return Frame.EMPTY;
         BlockPos corner = found.get();
@@ -104,38 +108,51 @@ final class GreenhouseWorldRenderer {
         // Compares the layout with what is planted when due (once a second, and at once after a change); it
         // bumps its version only when what is drawn changes.
         GreenhouseScanner.tick(Minecraft.getInstance(), corner, GreenhouseHologram.version(), System.nanoTime());
+        // Complete (and the setting says so): nothing is drawn, but the scan above keeps watching for a missing crop.
+        if (GreenhouseHologram.hiddenByCompletion()) return Frame.EMPTY;
+        int palette = GreenhousePalette.fingerprint();
         if (builtVersion != GreenhouseHologram.version() || !corner.equals(builtCorner)
-            || builtEpoch != GreenhouseModels.epoch() || builtScan != GreenhouseScanner.version()) {
+            || builtEpoch != GreenhouseModels.epoch() || builtScan != GreenhouseScanner.version()
+            || builtPalette != palette) {
             builtVersion = GreenhouseHologram.version();
             builtCorner = corner;
             builtEpoch = GreenhouseModels.epoch();
             builtScan = GreenhouseScanner.version();
+            builtPalette = palette;
             built = buildFrame(corner);
         }
         return built;
     }
 
     private static Frame buildFrame(BlockPos corner) {
+        GreenhousePalette palette = GreenhousePalette.live();
+        int version = GreenhouseHologram.version();
+        var states = GreenhouseScanner.states(version);
+        var ghosts = GreenhouseScanner.ghosts();
+        int soilLayer = GreenhouseScanner.soilLayer();
         GreenhouseModels.Prepared prepared;
         try {
-            prepared = GreenhouseModels.prepare(GreenhouseHologram.placements(),
-                GreenhouseScanner.states(GreenhouseHologram.version()), GreenhouseScanner.ghosts(),
-                GreenhouseScanner.soilLayer(), corner);
+            prepared = GreenhouseModels.prepare(GreenhouseHologram.placements(), states, ghosts, soilLayer, corner, palette);
         } catch (RuntimeException failure) {
             // Registry or profile trouble: draw the coloured cubes for every cell rather than nothing.
             KungMod.LOGGER.warn("Greenhouse hologram: models could not be prepared", failure);
-            prepared = new GreenhouseModels.Prepared(GreenhouseModels.Models.EMPTY, cubesOf(GreenhouseHologram.placements(), corner));
+            prepared = new GreenhouseModels.Prepared(GreenhouseModels.Models.EMPTY,
+                cubesOf(GreenhouseHologram.placements(), corner, palette));
         }
+        // The (0, 0) marker, then the outlines, slabs, wrong and unplanned boxes, then the stand-in cubes.
         List<Box> boxes = new ArrayList<>(worldBoxes(GreenhouseHologram.shapes(), corner));
-        boxes.addAll(prepared.boxes());
+        boxes.addAll(worldBoxes(GreenhouseOverlay.boxes(GreenhouseHologram.layout(), states,
+            GreenhouseScanner.extras(version), ghosts, soilLayer, palette), corner));
+        boxes.addAll(prepared.cubes());
         return new Frame(List.copyOf(boxes), prepared.models());
     }
 
-    private static List<Box> cubesOf(List<GreenhouseHologramShapes.Placement> placements, BlockPos corner) {
+    private static List<Box> cubesOf(List<GreenhouseHologramShapes.Placement> placements, BlockPos corner,
+                                     GreenhousePalette palette) {
         List<Box> cubes = new ArrayList<>();
         for (GreenhouseHologramShapes.Placement placement : placements) {
-            if (placement.cube() != null) cubes.add(worldBox(placement.cube(), corner));
-            if (placement.slab() != null) cubes.add(worldBox(placement.slab(), corner));
+            var cube = GreenhouseOverlay.cube(placement, palette);
+            if (cube != null) cubes.add(worldBox(cube, corner));
         }
         return cubes;
     }

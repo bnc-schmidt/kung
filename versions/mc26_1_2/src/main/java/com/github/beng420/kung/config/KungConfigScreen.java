@@ -614,6 +614,7 @@ public final class KungConfigScreen extends Screen {
                 setting.choices().stream().mapToInt(menuFont::width).max().orElse(0)) + 10, 24, 96);
             case BUTTON -> Math.clamp(menuFont.width(setting.choiceSupplier().get()) + 10, 16, 64);
             case KEYBIND -> Math.clamp(Math.max(menuFont.width(setting.textValue()), menuFont.width("Press...")) + 10, 24, 72);
+            case COLOR -> Math.clamp(menuFont.width("#FFFFFF") + 10, 24, 72);
             default -> SETTING_CONTROL_WIDTH;
         };
     }

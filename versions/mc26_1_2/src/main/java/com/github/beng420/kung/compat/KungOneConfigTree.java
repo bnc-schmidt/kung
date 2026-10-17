@@ -89,7 +89,7 @@ final class KungOneConfigTree {
                 case TEXT -> property(key, label, description, setting.textSupplier(),
                     value -> setting.setText(value == null ? "" : value), String.class, Visualizer.TextVisualizer.class);
                 case KEYBIND -> keybind(key, label, description, setting);
-                case BUTTON, COLOR_REMOVE -> button(key, label, description, setting.choiceSupplier().get(), setting.toggle());
+                case BUTTON, COLOR_REMOVE, COLOR -> button(key, label, description, setting.choiceSupplier().get(), setting.toggle());
                 case LABEL -> property(key, "Information", description, setting.labelSupplier(),
                     value -> { }, String.class, null);
                 case GROUP -> null;
@@ -97,6 +97,10 @@ final class KungOneConfigTree {
             if (property != null) {
                 if (setting.kind() == SettingKind.CHOICE) {
                     property.addMetadata("options", setting.choices().toArray(String[]::new));
+                }
+                // The button shows the color's #RRGGBB, which changes when the popup saves.
+                if (setting.kind() == SettingKind.COLOR) {
+                    refreshers.add(() -> property.addMetadata("text", setting.choiceSupplier().get()));
                 }
                 property.addDisplayCondition(() -> !visible.getAsBoolean() ? Property.Display.HIDDEN
                     : available.getAsBoolean() ? Property.Display.SHOWN : Property.Display.DISABLED);

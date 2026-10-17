@@ -337,6 +337,52 @@ public final class GreenhousePickHookTest {
     }
 
     @Test
+    public void aHologramHiddenByTheKeyOrByCompletionClaimsNoClickAndCostsNoScan() {
+        com.github.beng420.kung.config.category.GreenhouseConfig config =
+            new com.github.beng420.kung.config.category.GreenhouseConfig();
+        GreenhouseHologramSettings.useConfig(() -> config);
+        try {
+            GreenhouseGrid layout = new GreenhouseGrid();
+            layout.set(0, 0, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+            GreenhousePickHook.LiveGame live = new GreenhousePickHook.LiveGame(null);
+            assertFalse("nothing shown", live.hologramShowing());
+
+            GreenhouseHologram.show(layout, true);
+            assertTrue("shown and drawn", live.hologramShowing());
+            assertClick(live, true);
+
+            GreenhouseHologram.toggle();
+            assertFalse("toggled off with the key: shown but not drawn", GreenhouseHologram.isDrawn());
+            assertFalse(live.hologramShowing());
+            assertClick(live, false);
+
+            GreenhouseHologram.toggle();
+            GreenhouseScanner.setCompleteForTest(true);
+            assertFalse("complete and hidden by it", live.hologramShowing());
+            assertClick(live, false);
+
+            GreenhouseHologram.toggle();
+            assertTrue("the key shows it anyway", live.hologramShowing());
+            assertClick(live, true);
+        } finally {
+            GreenhouseHologram.hide();
+            GreenhouseHologramSettings.useConfig(null);
+        }
+    }
+
+    /** One middle click on a fake game whose hologram state is the live one: taken and scanned, or neither. */
+    private static void assertClick(GreenhousePickHook.LiveGame live, boolean drawn) {
+        FakeGame game = new FakeGame();
+        game.showing = live.hologramShowing();
+        List<Hit> picked = new ArrayList<>();
+
+        assertEquals(drawn, GreenhousePickHook.tryPick(game, picked::add));
+
+        assertEquals(drawn ? 1 : 0, game.refreshes);
+        assertEquals(drawn ? 1 : 0, picked.size());
+    }
+
+    @Test
     public void thePlotIsScannedFreshBeforeTheHologramIsRead() {
         FakeGame game = new FakeGame();
         List<Hit> picked = new ArrayList<>();

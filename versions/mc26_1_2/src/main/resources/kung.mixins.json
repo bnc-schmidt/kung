@@ -11,6 +11,7 @@
     "EntityRendererMixin",
     "FontAccessor",
     "ItemInHandLayerMixin",
+    "KeyboardHandlerMixin",
     "LocalPlayerMixin",
     "MinecraftPickBlockMixin",
     "MouseHandlerMixin",

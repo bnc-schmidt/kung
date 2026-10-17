@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.category.DebugConfig;
 import com.github.beng420.kung.config.category.DungeonChatFilterConfig;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.FeastConfig;
+import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.SlayerConfig;
@@ -44,6 +45,7 @@ public final class KungConfig {
     public FeastConfig feast = new FeastConfig();
     public VisitorAlarmConfig visitorAlarm = new VisitorAlarmConfig();
     public HitboxesConfig hitboxes = new HitboxesConfig();
+    public GreenhouseConfig greenhouse = new GreenhouseConfig();
 
     private transient Path explicitConfigFile;
     private transient boolean loading;
@@ -87,6 +89,7 @@ public final class KungConfig {
                     feast = loaded.feast;
                     visitorAlarm = loaded.visitorAlarm;
                     hitboxes = loaded.hitboxes;
+                    greenhouse = loaded.greenhouse;
                     loadedSuccessfully = true;
                 }
             }
@@ -105,6 +108,7 @@ public final class KungConfig {
 
     static KungConfig read(Reader reader) {
         JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+        GreenhouseConfig.sanitize(json);
         KungConfig loaded = GSON.fromJson(json, KungConfig.class);
         loaded.loading = true;
         loaded.ensureCategories();
@@ -150,6 +154,7 @@ public final class KungConfig {
         if (feast == null) feast = new FeastConfig();
         if (visitorAlarm == null) visitorAlarm = new VisitorAlarmConfig();
         if (hitboxes == null) hitboxes = new HitboxesConfig();
+        if (greenhouse == null) greenhouse = new GreenhouseConfig();
     }
 
     private void bindCategories() {
@@ -164,6 +169,7 @@ public final class KungConfig {
         feast.onChange(this::save);
         visitorAlarm.onChange(this::save);
         hitboxes.onChange(this::save);
+        greenhouse.onChange(this::save);
     }
 
     private void normalize() {
@@ -190,6 +196,7 @@ public final class KungConfig {
         misc.setCustomWitherShieldExpirePitchHundredths(misc.customWitherShieldExpirePitchHundredths());
         misc.normalize();
         hitboxes.normalize();
+        greenhouse.normalize();
     }
 
     private static JsonObject object(JsonObject parent, String name) {

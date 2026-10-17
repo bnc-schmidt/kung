@@ -30,7 +30,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.Identifier;
-import net.minecraft.util.ARGB;
 import net.minecraft.util.LightCoordsUtil;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.ResolvableProfile;
@@ -60,23 +59,20 @@ final class GreenhouseModels {
     /** A soil block the real floor lacks: {@code x}/{@code y}/{@code z} is the world corner of its cell. */
     record GhostDraw(BlockPos pos, BlockState state, double x, double y, double z) { }
 
-    record Models(List<HeadDraw> heads, List<BlockDraw> blocks, List<GhostDraw> ghosts) {
-        static final Models EMPTY = new Models(List.of(), List.of(), List.of());
+    /**
+     * What to submit. {@code tint} multiplies every head and block (blue-shifted, at the opacity of the settings),
+     * {@code ghostTint} the soil blocks that are missing.
+     */
+    record Models(List<HeadDraw> heads, List<BlockDraw> blocks, List<GhostDraw> ghosts, int tint, int ghostTint) {
+        static final Models EMPTY = new Models(List.of(), List.of(), List.of(), 0, 0);
 
         boolean isEmpty() { return heads.isEmpty() && blocks.isEmpty() && ghosts.isEmpty(); }
     }
 
-    /**
-     * {@code boxes}: what is drawn as lines and fills: the gold slabs of empty mutation spots, the coloured cubes
-     * of cells no model could be found for, and the red or orange boxes over wrong and unrecognised plants.
-     */
-    record Prepared(Models models, List<GreenhouseWorldRenderer.Box> boxes) { }
+    /** {@code cubes}: the coloured stand-ins for cells no model could be found for. */
+    record Prepared(Models models, List<GreenhouseWorldRenderer.Box> cubes) { }
 
-    /** Final alpha of every model. The block shader discards below about 0.1 (26.2), so this stays well above. */
-    static final int ALPHA = 140; // ~55%
-    private static final int TINT = ARGB.color(ALPHA, 255, 255, 255);
-    /** Soil ghosts are a little fainter than the crops and a hair larger than the block they cover. */
-    private static final int GHOST_TINT = ARGB.color(115, 255, 255, 255); // ~45%
+    /** Soil ghosts are a hair larger than the block they cover. */
     private static final float GHOST_SCALE = 1.004F;
     private static final long SKIN_REFRESH_NANOS = 500_000_000L;
     private static final long SEED = 42L;
@@ -103,33 +99,25 @@ final class GreenhouseModels {
     }
 
     /**
-     * Resolves what to draw once. {@code states} is per placement (null or short: empty): a correct plant shows
-     * nothing, a wrong or unrecognised one its red or orange box instead of the model, an empty spot its model
-     * (head, block, cube) and for a mutation its gold slab. Soil ghosts sit at {@code soilY}. Client thread.
+     * Resolves what to draw once. {@code states} is per placement (null or short: still to place): only a spot still
+     * to place gets its model (head, block or cube); a correct, wrong or unrecognised one gets none (the boxes
+     * {@link GreenhouseOverlay} builds say what is there). Of the soil ghosts only the missing blocks are drawn as
+     * blocks, at {@code soilY}. Client thread.
      */
     static Prepared prepare(List<Placement> placements, List<State> states, List<Ghost> soilGhosts, int soilY,
-                            BlockPos corner) {
+                            BlockPos corner, GreenhousePalette palette) {
         List<HeadDraw> heads = new ArrayList<>();
         List<BlockDraw> blocks = new ArrayList<>();
         List<GhostDraw> ghosts = new ArrayList<>();
-        List<GreenhouseWorldRenderer.Box> boxes = new ArrayList<>();
+        List<GreenhouseWorldRenderer.Box> cubes = new ArrayList<>();
         for (int index = 0; index < placements.size(); index++) {
             Placement placement = placements.get(index);
             State planted = states == null || index >= states.size() ? State.EMPTY : states.get(index);
-            if (planted == State.CORRECT) continue;
-            if (planted == State.WRONG) {
-                boxes.add(GreenhouseWorldRenderer.worldBox(placement.wrong(), corner));
-                continue;
-            }
-            if (planted == State.UNVERIFIED) {
-                boxes.add(GreenhouseWorldRenderer.worldBox(placement.unverified(), corner));
-                continue;
-            }
-            if (placement.slab() != null) boxes.add(GreenhouseWorldRenderer.worldBox(placement.slab(), corner));
-            addModel(placement, corner, heads, blocks, boxes);
+            if (planted == State.EMPTY) addModel(placement, corner, palette, heads, blocks, cubes);
         }
         if (soilY >= 0 && !ghostBroken) {
             for (Ghost ghost : soilGhosts) {
+                if (ghost.kind() != GreenhouseSoilCheck.GhostKind.MISSING) continue;
                 BlockState state = state(new BlockSpec(ghost.soil().blockId(), Map.of()));
                 if (state == null) continue;
                 int x = corner.getX() + ghost.dx();
@@ -137,12 +125,13 @@ final class GreenhouseModels {
                 ghosts.add(new GhostDraw(new BlockPos(x, soilY, z), state, x, soilY, z));
             }
         }
-        return new Prepared(new Models(List.copyOf(heads), List.copyOf(blocks), List.copyOf(ghosts)), List.copyOf(boxes));
+        return new Prepared(new Models(List.copyOf(heads), List.copyOf(blocks), List.copyOf(ghosts),
+            palette.modelTint(), palette.modelTint()), List.copyOf(cubes));
     }
 
     /** The first rung of the placement's ladder that works; the cube is the last. */
-    private static void addModel(Placement placement, BlockPos corner, List<HeadDraw> heads, List<BlockDraw> blocks,
-                                 List<GreenhouseWorldRenderer.Box> boxes) {
+    private static void addModel(Placement placement, BlockPos corner, GreenhousePalette palette, List<HeadDraw> heads,
+                                 List<BlockDraw> blocks, List<GreenhouseWorldRenderer.Box> cubes) {
         double worldX = corner.getX() + placement.x();
         double worldY = GreenhouseLocator.HOLOGRAM_Y + placement.y();
         double worldZ = corner.getZ() + placement.z();
@@ -163,7 +152,8 @@ final class GreenhouseModels {
                 return;
             }
             if (rung == Rung.CUBE) {
-                if (placement.cube() != null) boxes.add(GreenhouseWorldRenderer.worldBox(placement.cube(), corner));
+                var cube = GreenhouseOverlay.cube(placement, palette);
+                if (cube != null) cubes.add(GreenhouseWorldRenderer.worldBox(cube, corner));
                 return;
             }
         }
@@ -199,11 +189,11 @@ final class GreenhouseModels {
 
     /** Called from COLLECT_SUBMITS with this frame's prepared models; the camera is the extraction camera. */
     static void submit(LevelRenderContext context, Models models, Vec3 camera) {
-        if (!headBroken && !models.heads().isEmpty()) submitHeads(context, models.heads(), camera);
+        if (!headBroken && !models.heads().isEmpty()) submitHeads(context, models.heads(), camera, models.tint());
         if (!models.blocks().isEmpty() || !models.ghosts().isEmpty()) submitBlocks(context, models, camera);
     }
 
-    private static void submitHeads(LevelRenderContext context, List<HeadDraw> heads, Vec3 camera) {
+    private static void submitHeads(LevelRenderContext context, List<HeadDraw> heads, Vec3 camera, int tint) {
         try {
             SkullModelBase model = skullModel();
             SubmitNodeCollector collector = context.submitNodeCollector();
@@ -221,7 +211,7 @@ final class GreenhouseModels {
                     pose.scale(scale, scale, scale);
                     pose.mulPose(floorHead);
                     collector.submitModel(model, HEAD_STATE, pose, skinType(head, now), LightCoordsUtil.FULL_BRIGHT,
-                        OverlayTexture.NO_OVERLAY, TINT, null, 0, null);
+                        OverlayTexture.NO_OVERLAY, tint, null, 0, null);
                 } finally {
                     pose.popPose();
                 }
@@ -264,7 +254,7 @@ final class GreenhouseModels {
                 // putBlockBakedQuad adds the block's offset to the quad; putBakedQuad would drop it.
                 BlockQuadOutput output = (x, y, z, quad, instance) -> {
                     instance.setLightCoords(LightCoordsUtil.FULL_BRIGHT);
-                    instance.multiplyColor(TINT);
+                    instance.multiplyColor(models.tint());
                     buffer.putBlockBakedQuad(x, y, z, quad, instance);
                 };
                 for (BlockDraw block : models.blocks()) {
@@ -279,7 +269,7 @@ final class GreenhouseModels {
         }
         if (!ghostBroken && !models.ghosts().isEmpty()) {
             try {
-                drawGhosts(buffer, models.ghosts(), camera, client, modelSet);
+                drawGhosts(buffer, models.ghosts(), camera, client, modelSet, models.ghostTint());
             } catch (RuntimeException failure) {
                 disable("ghost", failure);
                 ghostBroken = true;
@@ -289,11 +279,11 @@ final class GreenhouseModels {
 
     /** Each soil block slightly enlarged around its centre, so it covers the real block's faces without flicker. */
     private static void drawGhosts(VertexConsumer buffer, List<GhostDraw> ghosts, Vec3 camera, Minecraft client,
-                                   BlockStateModelSet modelSet) {
+                                   BlockStateModelSet modelSet, int tint) {
         PoseStack stack = new PoseStack();
         BlockQuadOutput output = (x, y, z, quad, instance) -> {
             instance.setLightCoords(LightCoordsUtil.FULL_BRIGHT);
-            instance.multiplyColor(GHOST_TINT);
+            instance.multiplyColor(tint);
             buffer.putBakedQuad(stack.last(), quad, instance);
         };
         for (GhostDraw ghost : ghosts) {

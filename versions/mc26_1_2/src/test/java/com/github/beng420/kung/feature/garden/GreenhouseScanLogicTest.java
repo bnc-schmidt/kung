@@ -333,6 +333,83 @@ public final class GreenhouseScanLogicTest {
     }
 
     @Test
+    public void aRecognisedCropWhereTheLayoutHasNothingIsAnExtraOnceTwoScansSawIt() {
+        List<Footprint> expected = List.of(cell("Carrot", 0, 0));
+        List<Found> found = List.of(at("Carrot", 0.5, 0.5), at("Cactus", 5.5, 6.5));
+
+        Snapshot first = scan(expected, found, null);
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), first.rawExtras());
+        assertTrue("one scan is not enough", first.extras().isEmpty());
+
+        Snapshot second = scan(expected, found, first);
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), second.extras());
+
+        // Gone: gone at once.
+        assertTrue(scan(expected, List.of(at("Carrot", 0.5, 0.5)), second).extras().isEmpty());
+    }
+
+    @Test
+    public void anExtraDoesNotTurnItsNeighbourOrTheSupplyNeedWrong() {
+        List<Footprint> expected = List.of(cell("Carrot", 0, 0), cell("Potato", 1, 0));
+        List<Found> found = List.of(at("Cactus", 2.5, 0.5));
+
+        Snapshot snapshot = scan(expected, found, null);
+
+        assertEquals(State.EMPTY, snapshot.raw().get(0).state());
+        assertEquals(State.EMPTY, snapshot.raw().get(1).state());
+        assertEquals("it is still planted somewhere", 1, (int) snapshot.planted().get("Cactus"));
+    }
+
+    @Test
+    public void unrecognisedThingsOrOnesInsideTheLayoutAreNeverExtras() {
+        List<Footprint> expected = List.of(cell("Carrot", 0, 0), spot("Noctilume", 4, 4, 2));
+        List<Found> found = List.of(
+            at(null, 7.5, 7.5),                      // unknown thing where the layout has nothing: ignored
+            at("Cactus", 0.5, 0.5),                  // wrong crop on a layout cell: a wrong crop, no extra
+            at("Wheat Seeds", 5.0, 5.0),             // inside the 2x2 spot
+            at("Potato", 6.1, 4.5),                  // 0.1 outside the spot: within the slack, counts for it
+            at("Cactus", 12.0, 3.5),                 // outside the 10x10 cells altogether
+            at("Cactus", -0.3, 3.5));                // a hair outside the grid, beside no footprint
+
+        Snapshot snapshot = scan(expected, found, null);
+
+        assertTrue(snapshot.rawExtras().toString(), snapshot.rawExtras().isEmpty());
+        assertEquals(State.WRONG, snapshot.raw().get(0).state());
+        assertEquals(State.WRONG, snapshot.raw().get(1).state());
+    }
+
+    @Test
+    public void farmlandIsNotAThingThePlantScanSees() {
+        // Soil is read separately; a snapshot with only soil-less cells has nothing extra at all.
+        Snapshot snapshot = scan(List.of(cell("Carrot", 0, 0)), List.of(), null);
+
+        assertTrue(snapshot.rawExtras().isEmpty());
+        assertTrue(snapshot.extras().isEmpty());
+    }
+
+    @Test
+    public void extrasAreListedOncePerCellAndCropAndKeepTheirOwnNames() {
+        List<Footprint> expected = List.of(cell("Carrot", 0, 0));
+        List<Found> found = List.of(at("Cactus", 5.4, 5.4), at("Cactus", 5.6, 5.6), at("Sunflower", 5.5, 5.5),
+            at("Potato", 6.5, 5.5));
+
+        Snapshot snapshot = scan(expected, found, null);
+
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 5, "Cactus"), new GreenhouseScanLogic.Extra(5, 5, "Sunflower"),
+            new GreenhouseScanLogic.Extra(6, 5, "Potato")), snapshot.rawExtras());
+    }
+
+    @Test
+    public void aSnapshotBuiltTheOldWayHasNoExtras() {
+        Snapshot old = new Snapshot(1, List.of(), List.of(), List.of(), java.util.Map.of(), 0, 0, false);
+
+        assertTrue(old.extras().isEmpty());
+        assertTrue(old.rawExtras().isEmpty());
+        assertTrue("a first sighting still needs a second",
+            scan(List.of(), List.of(at("Cactus", 5.5, 5.5)), old).extras().isEmpty());
+    }
+
+    @Test
     public void aPlantBoyAndItsNeighboursDoNotMixUp() {
         // The 2x2 crop's stand at the corner, plus a Carrot in the cell to its east.
         List<Footprint> expected = List.of(cell("PlantBoy Advance", 0, 0), cell("PlantBoy Advance", 1, 0),

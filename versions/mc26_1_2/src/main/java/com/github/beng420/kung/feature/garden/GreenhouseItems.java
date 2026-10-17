@@ -83,12 +83,20 @@ final class GreenhouseItems {
     /** Every bundled crop in file order; empty when the resource is unusable. */
     static List<Item> all() { return List.copyOf(Holder.LOADED.items().values()); }
 
-    /** The soil blocks the planner knows (Farmland has no item), in file order. */
+    /** The soil blocks that are items (Farmland is fetched as Dirt, see {@link #soil}), in file order. */
     static List<Item> soils() { return List.copyOf(Holder.LOADED.soils().values()); }
 
-    /** The item that is this soil block; empty for {@code NONE}. Its {@code crop()} is the soil's display name. */
+    /**
+     * The item that is this soil block; empty for {@code NONE}. Its {@code crop()} is the item's display name.
+     * Farmland is no item: the greenhouse tills placed Dirt by itself, so a Farmland spot is fetched as Dirt.
+     */
     static Optional<Item> soil(GreenhouseSoils.Soil soil) {
-        return Optional.ofNullable(Holder.LOADED.soils().get(soil.displayName()));
+        return Optional.ofNullable(Holder.LOADED.soils().get(itemSoil(soil).displayName()));
+    }
+
+    /** The soil whose item stands in for this one: Dirt for Farmland, else the soil itself. */
+    static GreenhouseSoils.Soil itemSoil(GreenhouseSoils.Soil soil) {
+        return soil == GreenhouseSoils.Soil.FARMLAND ? GreenhouseSoils.Soil.DIRT : soil;
     }
 
     /** Empty string when the bundle loaded, else why it did not. */

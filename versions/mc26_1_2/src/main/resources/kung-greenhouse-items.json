@@ -56,7 +56,7 @@
   "Potato": {"id": "POTATO_ITEM", "gfs": "POTATO_ITEM"},
   "Nether Wart": {"id": "NETHER_STALK", "gfs": "NETHER_STALK"},
   "Sugar Cane": {"id": "SUGAR_CANE", "gfs": "SUGAR_CANE"},
-  "Dead Plants": {"note": "probably a placed block, not a held item"},
+  "Dead Plants": {"id": "DEAD_PLANT", "gfs": "DEAD_PLANT", "names": ["Dead Plant"]},
   "Fire": {"note": "a block, no item"},
   "Helianthus": {"id": "HELIANTHUS", "gfs": "HELIANTHUS"},
   "Fermento": {"id": "FERMENTO", "gfs": "FERMENTO"},
@@ -69,7 +69,6 @@
   "Condensed Helianthus": {"id": "CONDENSED_HELIANTHUS", "note": "not in any Sack"}
  },
  "soils": {
-  "Farmland": {"note": "till dirt with a hoe"},
   "Sand": {"id": "SAND", "gfs": "SAND"},
   "Soul Sand": {"id": "SOUL_SAND", "note": "not in any Sack"},
   "Mycelium": {"id": "MYCEL", "gfs": "MYCEL"},
