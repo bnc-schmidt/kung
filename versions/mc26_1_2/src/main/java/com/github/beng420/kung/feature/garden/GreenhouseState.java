@@ -34,6 +34,11 @@ final class GreenhouseState {
     /** The longest a solve may run; the solver may stop sooner. A saved value is kept as it is. */
     static final int DEFAULT_SECONDS = 30;
     private static final int FILE_VERSION = 1;
+    /**
+     * How the saved mask and layout are drawn: files without the field (or with 1) were drawn under the old compass
+     * (east on top, see {@link GreenhouseOrientation}) and are turned a quarter clockwise on load; 2 is north-up.
+     */
+    static final int ORIENTATION_VERSION = 2;
     private static final int MAX_BYTES = 65_536;
     /** Caps on what a stored summary may hold, so a hand-edited file cannot make the screen build huge lists. */
     private static final int MAX_GOAL_LINES = 64;
@@ -58,11 +63,12 @@ final class GreenhouseState {
     /**
      * {@code layout} is the shown grid as the site's entry list and {@code summary} the last solve's lines; both are
      * absent in files written before the planner kept its result. {@code costMode} (BAZAAR or IRONMAN) and
-     * {@code stopEarly} are absent in files written before costs existed and then take their defaults.
+     * {@code stopEarly} are absent in files written before costs existed and then take their defaults. A missing
+     * {@code orientationVersion} reads as 0 and means 1, see {@link #ORIENTATION_VERSION}.
      */
     private record Saved(int version, String unlocked, List<SavedTarget> targets, int seconds,
                          Map<String, Integer> priorities, boolean prioritiesOpen, JsonElement layout,
-                         SavedSummary summary, String costMode, boolean stopEarly) { }
+                         SavedSummary summary, String costMode, boolean stopEarly, int orientationVersion) { }
 
     private final boolean[] unlocked = new boolean[CELLS];
     private final List<Target> targets = new ArrayList<>();
@@ -281,7 +287,7 @@ final class GreenhouseState {
         }
         return JSON.toJson(new Saved(FILE_VERSION, mask.toString(), saved, seconds, new TreeMap<>(priorities),
             prioritiesOpen, layout == null ? null : GreenhouseLayoutCodec.entries(layout), savedSummary(),
-            costMode.name(), stopEarly));
+            costMode.name(), stopEarly, ORIENTATION_VERSION));
     }
 
     /**
@@ -314,6 +320,7 @@ final class GreenhouseState {
         state.stopEarly = saved.stopEarly();
         state.costMode = storedCostMode(saved.costMode());
         state.layout = storedLayout(saved.layout());
+        if (saved.orientationVersion() < ORIENTATION_VERSION) state.turnClockwise();
         // A result without its layout would describe a grid nobody can see.
         state.summary = state.layout == null ? null : storedSummary(saved.summary());
         if (saved.priorities() != null) {
@@ -324,6 +331,22 @@ final class GreenhouseState {
             });
         }
         return state;
+    }
+
+    /**
+     * One quarter turn clockwise of the mask and the layout ({@code new[r][c] = old[9 - c][r]}): keeps what an old
+     * file drew in the same place of the plot now that the compass reads north-up.
+     */
+    private void turnClockwise() {
+        int size = GreenhouseGrid.SIZE;
+        boolean[] turned = new boolean[CELLS];
+        for (int row = 0; row < size; row++) {
+            for (int column = 0; column < size; column++) {
+                turned[row * size + column] = unlocked[(size - 1 - column) * size + row];
+            }
+        }
+        System.arraycopy(turned, 0, unlocked, 0, CELLS);
+        if (layout != null) layout = layout.rotatedRight();
     }
 
     private SavedSummary savedSummary() {

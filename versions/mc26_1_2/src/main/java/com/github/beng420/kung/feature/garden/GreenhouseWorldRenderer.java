@@ -19,8 +19,8 @@ import net.minecraft.world.phys.Vec3;
  * in COLLECT_SUBMITS) plus outlines and a faint fill for the slabs, the origin marker and any cell whose model
  * is unavailable. Extraction only picks the prebuilt data, or nothing while no hologram is shown, the player is
  * not in their greenhouse or the camera is far away; the data is rebuilt when the hologram, the greenhouse corner
- * or the set of working model rungs changes, never per frame. No user setting: the hologram is off until
- * {@code /kung greenhouse blueprint} shows one.
+ * or the set of working model rungs changes, never per frame. The hologram is off until
+ * {@code /kung greenhouse blueprint} shows one (and again after a finished layout turns it off).
  */
 final class GreenhouseWorldRenderer {
     private static final RenderStateDataKey<List<Box>> BOXES = RenderStateDataKey.create(() -> "kung:greenhouse-hologram");
@@ -36,6 +36,7 @@ final class GreenhouseWorldRenderer {
     private static int builtEpoch = -1;
     private static int builtScan = -1;
     private static int builtPalette;
+    private static boolean builtHideOverWrongSoil;
     private static BlockPos builtCorner;
     private static Frame built = Frame.EMPTY;
 
@@ -108,50 +109,57 @@ final class GreenhouseWorldRenderer {
         // Compares the layout with what is planted when due (once a second, and at once after a change); it
         // bumps its version only when what is drawn changes.
         GreenhouseScanner.tick(Minecraft.getInstance(), corner, GreenhouseHologram.version(), System.nanoTime());
-        // Complete (and the setting says so): nothing is drawn, but the scan above keeps watching for a missing crop.
-        if (GreenhouseHologram.hiddenByCompletion()) return Frame.EMPTY;
+        // A finished layout deactivates the hologram inside that scan: nothing is left to draw.
+        if (!GreenhouseHologram.isShowing()) return Frame.EMPTY;
         int palette = GreenhousePalette.fingerprint();
+        boolean hideOverWrongSoil = GreenhouseHologramSettings.hideModelsOverWrongSoil();
         if (builtVersion != GreenhouseHologram.version() || !corner.equals(builtCorner)
             || builtEpoch != GreenhouseModels.epoch() || builtScan != GreenhouseScanner.version()
-            || builtPalette != palette) {
+            || builtPalette != palette || builtHideOverWrongSoil != hideOverWrongSoil) {
             builtVersion = GreenhouseHologram.version();
             builtCorner = corner;
             builtEpoch = GreenhouseModels.epoch();
             builtScan = GreenhouseScanner.version();
             builtPalette = palette;
-            built = buildFrame(corner);
+            builtHideOverWrongSoil = hideOverWrongSoil;
+            built = buildFrame(corner, hideOverWrongSoil);
         }
         return built;
     }
 
-    private static Frame buildFrame(BlockPos corner) {
+    private static Frame buildFrame(BlockPos corner, boolean hideOverWrongSoil) {
         GreenhousePalette palette = GreenhousePalette.live();
         int version = GreenhouseHologram.version();
         var states = GreenhouseScanner.states(version);
         var ghosts = GreenhouseScanner.ghosts();
         int soilLayer = GreenhouseScanner.soilLayer();
+        var placements = GreenhouseHologram.placements();
+        // Ghosts only exist (and are only drawn) with a known soil layer; a spot over one of them is not drawn.
+        boolean[] blocked = hideOverWrongSoil && soilLayer >= 0
+            ? GreenhouseSoilCheck.blocked(GreenhouseScanLogic.footprints(placements), ghosts) : null;
         GreenhouseModels.Prepared prepared;
         try {
-            prepared = GreenhouseModels.prepare(GreenhouseHologram.placements(), states, ghosts, soilLayer, corner, palette);
+            prepared = GreenhouseModels.prepare(placements, states, ghosts, soilLayer, blocked, corner, palette);
         } catch (RuntimeException failure) {
             // Registry or profile trouble: draw the coloured cubes for every cell rather than nothing.
             KungMod.LOGGER.warn("Greenhouse hologram: models could not be prepared", failure);
             prepared = new GreenhouseModels.Prepared(GreenhouseModels.Models.EMPTY,
-                cubesOf(GreenhouseHologram.placements(), corner, palette));
+                cubesOf(placements, blocked, corner, palette));
         }
         // The (0, 0) marker, then the outlines, slabs, wrong and unplanned boxes, then the stand-in cubes.
         List<Box> boxes = new ArrayList<>(worldBoxes(GreenhouseHologram.shapes(), corner));
         boxes.addAll(worldBoxes(GreenhouseOverlay.boxes(GreenhouseHologram.layout(), states,
-            GreenhouseScanner.extras(version), ghosts, soilLayer, palette), corner));
+            GreenhouseScanner.extras(version), ghosts, soilLayer, blocked, palette), corner));
         boxes.addAll(prepared.cubes());
         return new Frame(List.copyOf(boxes), prepared.models());
     }
 
-    private static List<Box> cubesOf(List<GreenhouseHologramShapes.Placement> placements, BlockPos corner,
-                                     GreenhousePalette palette) {
+    private static List<Box> cubesOf(List<GreenhouseHologramShapes.Placement> placements, boolean[] blocked,
+                                     BlockPos corner, GreenhousePalette palette) {
         List<Box> cubes = new ArrayList<>();
-        for (GreenhouseHologramShapes.Placement placement : placements) {
-            var cube = GreenhouseOverlay.cube(placement, palette);
+        for (int i = 0; i < placements.size(); i++) {
+            if (blocked != null && i < blocked.length && blocked[i]) continue;
+            var cube = GreenhouseOverlay.cube(placements.get(i), palette);
             if (cube != null) cubes.add(worldBox(cube, corner));
         }
         return cubes;

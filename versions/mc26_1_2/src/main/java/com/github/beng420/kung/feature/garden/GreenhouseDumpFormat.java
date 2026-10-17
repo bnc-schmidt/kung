@@ -22,7 +22,7 @@ final class GreenhouseDumpFormat {
     /**
      * A position relative to the grid corner. {@code dx}/{@code dz} are whole blocks (floor of the offset, so a
      * position west or north of the corner is negative); {@code row}/{@code column} apply the RAW default mapping
-     * ({@code dx = 9 - row, dz = column}, no session orientation) and are only meaningful when {@code inGrid}.
+     * ({@code dx = column, dz = row}, no session orientation) and are only meaningful when {@code inGrid}.
      */
     record CellRef(int dx, int dz, boolean inGrid, int row, int column) { }
 
@@ -35,7 +35,7 @@ final class GreenhouseDumpFormat {
         int dx = (int) Math.floor(x - cornerX);
         int dz = (int) Math.floor(z - cornerZ);
         boolean inGrid = dx >= 0 && dx < GreenhouseGrid.SIZE && dz >= 0 && dz < GreenhouseGrid.SIZE;
-        return new CellRef(dx, dz, inGrid, GreenhouseGrid.SIZE - 1 - dx, dz);
+        return new CellRef(dx, dz, inGrid, dz, dx);
     }
 
     /** The 10x10 area plus one block around it (corner - 1 .. corner + 11) and y 70..82, ends included. */
@@ -103,7 +103,7 @@ final class GreenhouseDumpFormat {
             "4. Soil: farmland/dirt/soul sand ids and properties at y 71..74 per cell, including moisture/age.",
             "5. Pets and pests: 'other entities in the grid area' and the per-type counts for the whole plot.",
             "6. Orientation: compare 'player facing' with where you stand in the grid; cell dx/dz are RAW world"
-                + " offsets, row/col use dx = 9 - row, dz = col with no rotation or mirror.");
+                + " offsets, row/col use dx = col, dz = row with no rotation or mirror.");
     }
 
     /** Collects lines up to {@link #MAX_CHARS}; the checklist is appended after, in the reserved space. */

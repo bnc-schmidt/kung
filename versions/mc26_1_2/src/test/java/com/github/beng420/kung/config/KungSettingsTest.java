@@ -55,7 +55,8 @@ public final class KungSettingsTest {
         assertEquals("settings only: the hologram is user-triggered, not switched on", null, group.toggle());
         assertFalse(group.clickable());
         assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color", "Extra Crop Color",
-            "Wrong State Color", "Hide When Complete", "Toggle Key"),
+            "Wrong State Color", "Deactivate When Complete", "Hide Models Over Wrong Soil", "Crosshair Label",
+            "Toggle Key"),
             group.settings().stream().map(SettingEntry::label).toList());
 
         SettingEntry opacity = setting(group, "Opacity (%)");
@@ -76,10 +77,23 @@ public final class KungSettingsTest {
         assertEquals("#FF55D8", setting(group, "Extra Crop Color").choiceSupplier().get());
         assertEquals("#FFA126", setting(group, "Wrong State Color").choiceSupplier().get());
 
-        SettingEntry hide = setting(group, "Hide When Complete");
+        SettingEntry hide = setting(group, "Deactivate When Complete");
         assertTrue(hide.booleanSupplier().getAsBoolean());
+        assertTrue("the tooltip says it is off for good until shown again",
+            String.join(" ", hide.tooltip()).contains("until you show it again"));
         hide.toggle().run();
         assertFalse(config.greenhouse.hideWhenComplete());
+
+        SettingEntry soil = setting(group, "Hide Models Over Wrong Soil");
+        assertEquals(SettingKind.TOGGLE, soil.kind());
+        assertTrue("on by default", soil.booleanSupplier().getAsBoolean());
+        soil.toggle().run();
+        assertFalse(config.greenhouse.hideModelsOverWrongSoil());
+
+        SettingEntry label = setting(group, "Crosshair Label");
+        assertTrue("on by default", label.booleanSupplier().getAsBoolean());
+        label.toggle().run();
+        assertFalse(config.greenhouse.showCrosshairLabel());
 
         SettingEntry key = setting(group, "Toggle Key");
         assertEquals(SettingKind.KEYBIND, key.kind());
@@ -95,6 +109,8 @@ public final class KungSettingsTest {
         restored.load();
         assertEquals(1F, restored.greenhouse.hologramOpacity(), 0F);
         assertFalse(restored.greenhouse.hideWhenComplete());
+        assertFalse(restored.greenhouse.hideModelsOverWrongSoil());
+        assertFalse(restored.greenhouse.showCrosshairLabel());
         assertEquals("", restored.greenhouse.toggleKeybind());
     }
 

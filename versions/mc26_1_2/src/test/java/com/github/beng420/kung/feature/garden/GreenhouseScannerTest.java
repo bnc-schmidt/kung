@@ -41,7 +41,7 @@ public final class GreenhouseScannerTest {
         int before = GreenhouseScanner.version();
 
         GreenhouseScanner.setSnapshotForTest(snapshotOf(
-            List.of(new Found("Carrot", 7.5, 3.5), new Found("Carrot", 1.5, 1.5), new Found("Cactus", 9.5, 9.5)),
+            List.of(new Found("Carrot", 3.5, 2.5), new Found("Carrot", 1.5, 1.5), new Found("Cactus", 9.5, 9.5)),
             GreenhouseHologram.version()));
 
         assertEquals(2, GreenhouseScanner.plantedCount("Carrot"));
@@ -59,7 +59,7 @@ public final class GreenhouseScannerTest {
     public void statesAreOnlyHandedOutForTheLayoutTheyWereScannedFor() {
         GreenhouseHologram.show(carrotAt(2, 3), true);
         int version = GreenhouseHologram.version();
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)), version));
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 3.5, 2.5)), version));
 
         assertEquals(List.of(State.CORRECT), GreenhouseScanner.states(version));
         assertNull("another layout: no states, everything shows its model", GreenhouseScanner.states(version + 1));
@@ -71,14 +71,14 @@ public final class GreenhouseScannerTest {
         int version = GreenhouseHologram.version();
         assertTrue("before any scan", GreenhouseHologram.cellBoxes().getFirst().visible());
 
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)), version));
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 3.5, 2.5)), version));
         assertFalse("planted right: the pick hook can look through it",
             GreenhouseHologram.cellBoxes().getFirst().visible());
 
         GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(), version));
         assertTrue("empty again: the model is back", GreenhouseHologram.cellBoxes().getFirst().visible());
 
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Potato", 7.5, 3.5)), version));
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Potato", 3.5, 2.5)), version));
         // A first wrong sighting is not shown yet; its cell still shows the model.
         assertTrue(GreenhouseHologram.cellBoxes().getFirst().visible());
     }
@@ -112,17 +112,15 @@ public final class GreenhouseScannerTest {
     @Test
     public void switchingTheCornerForgetsTheScanTheSoilAndTheCompletion() {
         GreenhouseHologram.show(carrotAt(2, 3), true);
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)),
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 3.5, 2.5)),
             GreenhouseHologram.version()));
         GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
         GreenhouseScanner.setCompleteForTest(true);
-        GreenhouseScanner.setForced(true);
         int before = GreenhouseScanner.version();
 
         GreenhouseScanner.switchCorner(new BlockPos(10, 70, 20));
 
         assertFalse("the other greenhouse is not complete yet", GreenhouseScanner.complete());
-        assertFalse(GreenhouseScanner.forced());
         assertEquals(0, GreenhouseScanner.plantedCount("Carrot"));
         assertTrue(GreenhouseScanner.ghosts().isEmpty());
         assertEquals(-1, GreenhouseScanner.soilLayer());
@@ -132,7 +130,7 @@ public final class GreenhouseScannerTest {
     @Test
     public void theSummaryNamesTheNewStates() {
         GreenhouseHologram.show(carrotAt(2, 3), true);
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)),
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 3.5, 2.5)),
             GreenhouseHologram.version()));
         GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
 
@@ -147,7 +145,7 @@ public final class GreenhouseScannerTest {
     @Test
     public void aSnapshotForAnotherLayoutNeverHidesCells() {
         GreenhouseHologram.show(carrotAt(2, 3), true);
-        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 7.5, 3.5)),
+        GreenhouseScanner.setSnapshotForTest(snapshotOf(List.of(new Found("Carrot", 3.5, 2.5)),
             GreenhouseHologram.version() + 5));
 
         assertTrue(GreenhouseHologram.cellBoxes().getFirst().visible());

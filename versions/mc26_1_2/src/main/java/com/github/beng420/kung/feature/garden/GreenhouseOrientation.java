@@ -3,11 +3,13 @@ package com.github.beng420.kung.feature.garden;
 /**
  * How a grid's (row, column) lands on the world, as an offset from the greenhouse corner (+X east, +Z south).
  *
- * <p>UNVERIFIED in game: the default, {@code dx = 9 - row, dz = column}, is the one Skyblocker uses for Sky
- * Mutations layouts and is believed (not confirmed) to put the planner's top-left cell at the greenhouse's
- * north-east end. The player calibrates with {@code /kung greenhouse blueprint rotate|mirror}, so everything
- * here stays one small, exact transform: grid-space mirror first, then the default mapping, then clockwise
- * quarter turns (seen from above) of the 10x10 square.
+ * <p>The default is north-up: {@code dx = column, dz = row}, so the planner's top edge faces north, its right edge
+ * east, its bottom edge south and its left edge west, and cell (0, 0) is the greenhouse's north-west corner.
+ * (Until orientation version 2 the default was {@code dx = 9 - row, dz = column}, which showed east on top;
+ * {@link GreenhouseState} turns old saved data to keep its meaning.) Whether this matches a layout copied from
+ * Sky Mutations is UNVERIFIED in game; the player calibrates with {@code /kung greenhouse blueprint rotate|mirror},
+ * so everything here stays one small, exact transform: grid-space mirror first, then the default mapping, then
+ * clockwise quarter turns (seen from above) of the 10x10 square.
  */
 record GreenhouseOrientation(int rotation, boolean mirror) {
     static final GreenhouseOrientation IDENTITY = new GreenhouseOrientation(0, false);
@@ -32,9 +34,8 @@ record GreenhouseOrientation(int rotation, boolean mirror) {
      * corner is {@code point(0, 0)}; the centre of cell (r, c) is {@code point(r + 0.5, c + 0.5)}.
      */
     Point point(double row, double column) {
-        double u = mirror ? SIZE - column : column;
-        double x = SIZE - row;
-        double z = u;
+        double x = mirror ? SIZE - column : column;
+        double z = row;
         for (int turn = 0; turn < rotation; turn++) {
             double turned = SIZE - z;
             z = x;

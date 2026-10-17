@@ -30,6 +30,8 @@ public final class GreenhouseConfig extends ConfigCategory {
     private int colorExtra = DEFAULT_COLOR_EXTRA;
     private int colorWrongState = DEFAULT_COLOR_WRONG_STATE;
     private boolean hideWhenComplete = true;
+    private boolean hideModelsOverWrongSoil = true;
+    private boolean showCrosshairLabel = true;
     private String toggleKeybind = DEFAULT_TOGGLE_KEYBIND;
 
     public float hologramOpacity() { return clampOpacity(hologramOpacity); }
@@ -48,8 +50,17 @@ public final class GreenhouseConfig extends ConfigCategory {
     public int colorWrongState() { return opaque(colorWrongState); }
     public void setColorWrongState(int color) { colorWrongState = color & RGB; save(); }
 
+    /** Turns the hologram off for good once the layout is complete. The key keeps its old name "hide" for old files. */
     public boolean hideWhenComplete() { return hideWhenComplete; }
     public void setHideWhenComplete(boolean value) { hideWhenComplete = value; save(); }
+
+    /** No crop model or to-place outline over a cell whose soil is missing or wrong. */
+    public boolean hideModelsOverWrongSoil() { return hideModelsOverWrongSoil; }
+    public void setHideModelsOverWrongSoil(boolean value) { hideModelsOverWrongSoil = value; save(); }
+
+    /** A small name label under the crosshair while it is aimed at a hologram cell or soil marker. */
+    public boolean showCrosshairLabel() { return showCrosshairLabel; }
+    public void setShowCrosshairLabel(boolean value) { showCrosshairLabel = value; save(); }
 
     /** Raw keybind text; empty means unbound. */
     public String toggleKeybind() { return toggleKeybind == null ? DEFAULT_TOGGLE_KEYBIND : toggleKeybind; }
@@ -93,7 +104,9 @@ public final class GreenhouseConfig extends ConfigCategory {
         for (String name : new String[] {"hologramOpacity", "colorToPlace", "colorWrong", "colorExtra", "colorWrongState"}) {
             keepIf(json, name, JsonPrimitive::isNumber);
         }
-        keepIf(json, "hideWhenComplete", JsonPrimitive::isBoolean);
+        for (String name : new String[] {"hideWhenComplete", "hideModelsOverWrongSoil", "showCrosshairLabel"}) {
+            keepIf(json, name, JsonPrimitive::isBoolean);
+        }
         keepIf(json, "toggleKeybind", JsonPrimitive::isString);
     }
 

@@ -40,18 +40,25 @@ final class GreenhouseHologramShapes {
      * moved by the orientation; y 0..1 above the hologram floor. Corner-relative like everything here.
      * {@code visible}: the cell currently shows something (its model, a red or orange box, a mutation's slab);
      * false where the right plant already stands, so a pick-block ray should pass through to the real world.
+     * {@code state}: what the last scan found for the footprint holding the cell (EMPTY: still to place, also before
+     * any scan); the crosshair label names it.
      */
     record CellBox(int row, int column, String crop, int flag, double minX, double minY, double minZ, double maxX,
-                   double maxY, double maxZ, boolean visible) {
-        /** A cell that shows something. */
+                   double maxY, double maxZ, boolean visible, GreenhouseScanLogic.State state) {
+        /** A cell that shows something and is still to place. */
         CellBox(int row, int column, String crop, int flag, double minX, double minY, double minZ, double maxX,
                 double maxY, double maxZ) {
-            this(row, column, crop, flag, minX, minY, minZ, maxX, maxY, maxZ, true);
+            this(row, column, crop, flag, minX, minY, minZ, maxX, maxY, maxZ, true, GreenhouseScanLogic.State.EMPTY);
         }
 
         CellBox withVisible(boolean shown) {
             return shown == visible ? this : new CellBox(row, column, crop, flag, minX, minY, minZ, maxX, maxY, maxZ,
-                shown);
+                shown, state);
+        }
+
+        CellBox withState(GreenhouseScanLogic.State found) {
+            return found == state ? this : new CellBox(row, column, crop, flag, minX, minY, minZ, maxX, maxY, maxZ,
+                visible, found);
         }
 
         /** The volume in world coordinates for a greenhouse whose grid corner is this block. */
@@ -67,9 +74,9 @@ final class GreenhouseHologramShapes {
     }
 
     /**
-     * The layout's cells with {@code visible} set from the plot scan: false where the footprint holding the cell is
-     * CORRECT. {@code states} is aligned with the layout's placements, or null when no scan matches it (then every
-     * cell shows its model).
+     * The layout's cells with {@code visible} and {@code state} set from the plot scan: not visible where the
+     * footprint holding the cell is CORRECT. {@code states} is aligned with the layout's placements, or null when no
+     * scan matches it (then every cell shows its model).
      */
     static List<CellBox> visibleCells(Layout layout, List<GreenhouseScanLogic.State> states) {
         if (states == null) return layout.cells();
@@ -78,16 +85,16 @@ final class GreenhouseHologramShapes {
         for (CellBox cell : layout.cells()) {
             double centreX = (cell.minX() + cell.maxX()) / 2;
             double centreZ = (cell.minZ() + cell.maxZ()) / 2;
-            boolean shown = true;
+            GreenhouseScanLogic.State found = GreenhouseScanLogic.State.EMPTY;
             for (int i = 0; i < footprints.size() && i < states.size(); i++) {
                 GreenhouseScanLogic.Footprint footprint = footprints.get(i);
                 if (centreX > footprint.minX() && centreX < footprint.maxX() && centreZ > footprint.minZ()
                     && centreZ < footprint.maxZ()) {
-                    shown = states.get(i) != GreenhouseScanLogic.State.CORRECT;
+                    found = states.get(i);
                     break;
                 }
             }
-            out.add(cell.withVisible(shown));
+            out.add(cell.withVisible(found != GreenhouseScanLogic.State.CORRECT).withState(found));
         }
         return List.copyOf(out);
     }

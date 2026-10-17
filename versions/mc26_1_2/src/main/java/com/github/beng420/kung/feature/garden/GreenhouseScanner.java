@@ -101,10 +101,17 @@ final class GreenhouseScanner {
      */
     static boolean complete() { return COMPLETION.complete(); }
 
-    /** Whether the player showed the complete layout with the toggle key; ends with the completion or a reset. */
-    static boolean forced() { return COMPLETION.forced(); }
-
-    static void setForced(boolean value) { COMPLETION.setForced(value); }
+    /**
+     * Feeds one completed scan to the completion rule. When the layout is complete and {@code enabled}, the hologram
+     * is deactivated through {@link GreenhouseHologram#hide()} (the path of {@code blueprint off}: the shown layout
+     * goes, scanning stops, this state resets), so nothing re-arms it when the player enters a greenhouse again; only
+     * an explicit show does. Returns true when it did.
+     */
+    static boolean completeIfDone(boolean allCorrect, boolean enabled) {
+        if (!COMPLETION.update(allCorrect, enabled)) return false;
+        GreenhouseHologram.hide();
+        return true;
+    }
 
     /** Changes whenever what is drawn from the scan changes, so the renderer rebuilds only then. */
     static int version() { return version; }
@@ -211,17 +218,16 @@ final class GreenhouseScanner {
         snapshot = next;
         ghosts = nextGhosts;
         if (changed) version++;
-        // Every ingredient right and no unplanned crop in two scans in a row: the hologram has done its job
-        // (setting permitting).
-        boolean allCorrect = GreenhouseCompletion.allIngredientsCorrect(placements, next.raw(), next.rawExtras());
-        if (COMPLETION.update(allCorrect, GreenhouseHologramSettings.hideWhenComplete())) {
-            KungMessages.send(client, KungMessages.Type.SUCCESS, "Greenhouse",
-                "Greenhouse layout complete: all crops are placed correctly.");
-        }
         if (next.unrecognisedShare() && !warned) {
             warned = true;
             KungMessages.send(client, KungMessages.Type.WARNING, "Greenhouse",
                 next.unknown() + " planted heads not recognised, run /kung greenhouse dump");
+        }
+        // Every ingredient right and no unplanned crop in two scans in a row: the hologram has done its job
+        // (setting permitting) and turns itself off; this was the last scan of that layout.
+        boolean allCorrect = GreenhouseCompletion.allIngredientsCorrect(placements, next.raw(), next.rawExtras());
+        if (completeIfDone(allCorrect, GreenhouseHologramSettings.hideWhenComplete())) {
+            KungMessages.send(client, KungMessages.Type.SUCCESS, "Greenhouse", GreenhouseCompletion.MESSAGE);
         }
     }
 

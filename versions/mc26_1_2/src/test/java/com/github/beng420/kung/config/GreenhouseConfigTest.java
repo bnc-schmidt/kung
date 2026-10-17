@@ -37,6 +37,8 @@ public final class GreenhouseConfigTest {
         config.greenhouse.setColorExtra(0x778899);
         config.greenhouse.setColorWrongState(0xAABBCC);
         config.greenhouse.setHideWhenComplete(false);
+        config.greenhouse.setHideModelsOverWrongSoil(false);
+        config.greenhouse.setShowCrosshairLabel(false);
         config.greenhouse.setToggleKeybind("key:66:48");
 
         KungConfig restored = new KungConfig(file);
@@ -49,6 +51,8 @@ public final class GreenhouseConfigTest {
         assertEquals(0xFF778899, loaded.colorExtra());
         assertEquals(0xFFAABBCC, loaded.colorWrongState());
         assertEquals(false, loaded.hideWhenComplete());
+        assertEquals(false, loaded.hideModelsOverWrongSoil());
+        assertEquals(false, loaded.showCrosshairLabel());
         assertEquals("key:66:48", loaded.toggleKeybind());
         assertEquals(66, loaded.toggleKey());
         assertTrue("The file keeps colors as plain RGB", Files.readString(file).contains("\"colorToPlace\": " + 0x112233));
@@ -89,6 +93,7 @@ public final class GreenhouseConfigTest {
             {"feast":{"enabled":true,"x":77},
              "greenhouse":{"hologramOpacity":"abc","colorToPlace":true,"colorWrong":[1],
                            "colorExtra":{"a":1},"hideWhenComplete":"yes","toggleKeybind":5,
+                           "hideModelsOverWrongSoil":0,"showCrosshairLabel":"no",
                            "colorWrongState":65280}}
             """);
         assertEquals(0.30F, config.greenhouse.hologramOpacity(), 0F);
@@ -96,6 +101,8 @@ public final class GreenhouseConfigTest {
         assertEquals(GreenhouseConfig.DEFAULT_COLOR_WRONG | 0xFF000000, config.greenhouse.colorWrong());
         assertEquals(GreenhouseConfig.DEFAULT_COLOR_EXTRA | 0xFF000000, config.greenhouse.colorExtra());
         assertTrue(config.greenhouse.hideWhenComplete());
+        assertTrue("a wrong-typed value keeps the default", config.greenhouse.hideModelsOverWrongSoil());
+        assertTrue(config.greenhouse.showCrosshairLabel());
         assertEquals("key:75:0", config.greenhouse.toggleKeybind());
         assertEquals(0xFF00FF00, config.greenhouse.colorWrongState());
         assertTrue(config.feast.enabled());
@@ -132,7 +139,9 @@ public final class GreenhouseConfigTest {
         assertEquals(0xFFFF3B3B, config.colorWrong());
         assertEquals(0xFFFF55D8, config.colorExtra());
         assertEquals(0xFFFFA126, config.colorWrongState());
-        assertTrue("Hiding a finished hologram is on by default", config.hideWhenComplete());
+        assertTrue("Deactivating a finished hologram is on by default", config.hideWhenComplete());
+        assertTrue("No models over wrong soil by default", config.hideModelsOverWrongSoil());
+        assertTrue("The crosshair label is on by default", config.showCrosshairLabel());
         assertEquals("key:75:0", config.toggleKeybind());
         assertEquals("K", 75, config.toggleKey());
     }

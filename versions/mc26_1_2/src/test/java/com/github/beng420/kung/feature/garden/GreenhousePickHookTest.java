@@ -337,7 +337,7 @@ public final class GreenhousePickHookTest {
     }
 
     @Test
-    public void aHologramHiddenByTheKeyOrByCompletionClaimsNoClickAndCostsNoScan() {
+    public void aHologramHiddenByTheKeyOrDeactivatedByCompletionClaimsNoClickAndCostsNoScan() {
         com.github.beng420.kung.config.category.GreenhouseConfig config =
             new com.github.beng420.kung.config.category.GreenhouseConfig();
         GreenhouseHologramSettings.useConfig(() -> config);
@@ -357,13 +357,13 @@ public final class GreenhousePickHookTest {
             assertClick(live, false);
 
             GreenhouseHologram.toggle();
-            GreenhouseScanner.setCompleteForTest(true);
-            assertFalse("complete and hidden by it", live.hologramShowing());
-            assertClick(live, false);
-
-            GreenhouseHologram.toggle();
-            assertTrue("the key shows it anyway", live.hologramShowing());
+            assertTrue("the key shows it again", live.hologramShowing());
             assertClick(live, true);
+
+            GreenhouseScanner.completeIfDone(true, true);
+            assertTrue(GreenhouseScanner.completeIfDone(true, true));
+            assertFalse("a finished layout deactivated it", live.hologramShowing());
+            assertClick(live, false);
         } finally {
             GreenhouseHologram.hide();
             GreenhouseHologramSettings.useConfig(null);
@@ -380,6 +380,108 @@ public final class GreenhousePickHookTest {
 
         assertEquals(drawn ? 1 : 0, game.refreshes);
         assertEquals(drawn ? 1 : 0, picked.size());
+    }
+
+    private static GreenhouseHologram.SoilGhost ghost(int dx, int dz, GreenhouseSoils.Soil soil,
+                                                      GreenhouseSoilCheck.GhostKind kind) {
+        return new GreenhouseHologram.SoilGhost(dx, dz, soil, GreenhouseLocator.FLOOR_Y, kind);
+    }
+
+    private static GreenhouseHologramShapes.CellBox box(int column, int flag, String crop,
+                                                       GreenhouseScanLogic.State state) {
+        return new GreenhouseHologramShapes.CellBox(0, column, crop, flag, column, 0, 0, column + 1, 1, 1)
+            .withState(state);
+    }
+
+    /** Straight down onto the column at world x (corner z 200), from four blocks above the hologram floor. */
+    private static View above(double x) {
+        return new View(new Vec3(x + 0.5, GreenhouseLocator.HOLOGRAM_Y + 4.0, 200.5), new Vec3(0, -1, 0), 10, INF);
+    }
+
+    @Test
+    public void aimedNamesTheCellOnTheRayWithTheWordForItsState() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        List<Cell> cells = GreenhousePickHook.worldCells(List.of(
+            box(0, GreenhouseGrid.INGREDIENT, "Moonflower", GreenhouseScanLogic.State.EMPTY),
+            box(2, GreenhouseGrid.INGREDIENT, "Sunflower", GreenhouseScanLogic.State.WRONG),
+            box(4, GreenhouseGrid.INGREDIENT, "Cactus", GreenhouseScanLogic.State.UNVERIFIED),
+            box(6, GreenhouseGrid.TARGET, "Cindershade", GreenhouseScanLogic.State.EMPTY),
+            box(8, GreenhouseGrid.INGREDIENT, "Carrot", GreenhouseScanLogic.State.CORRECT).withVisible(false)), corner);
+
+        assertEquals("Moonflower", GreenhousePickHook.aimed(above(100), cells).orElseThrow().text());
+        assertEquals("Sunflower (wrong crop planted)", GreenhousePickHook.aimed(above(102), cells).orElseThrow().text());
+        assertEquals("Cactus (unrecognised crop planted)", GreenhousePickHook.aimed(above(104), cells).orElseThrow().text());
+        assertEquals("Cindershade (mutation spot)", GreenhousePickHook.aimed(above(106), cells).orElseThrow().text());
+        assertTrue("a right plant draws nothing and has no label", GreenhousePickHook.aimed(above(108), cells).isEmpty());
+        assertTrue("between the cells", GreenhousePickHook.aimed(above(101), cells).isEmpty());
+    }
+
+    @Test
+    public void aimedFollowsTheRayRulesOfThePick() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        List<Cell> cells = GreenhousePickHook.worldCells(
+            List.of(box(0, GreenhouseGrid.INGREDIENT, "Moonflower", GreenhouseScanLogic.State.EMPTY)), corner);
+        Vec3 eye = new Vec3(95, GreenhouseLocator.HOLOGRAM_Y + 0.5, 200.5);
+        Vec3 look = new Vec3(1, 0, 0);
+
+        assertEquals(GreenhousePickHook.nearest(new View(eye, look, 20, INF), cells).map(Hit::crop),
+            GreenhousePickHook.aimed(new View(eye, look, 20, INF), cells).map(GreenhousePickHook.Aim::name));
+        assertTrue("a real block in front wins", GreenhousePickHook.aimed(new View(eye, look, 20, 3.0), cells).isEmpty());
+        assertTrue("a tie goes to the hologram", GreenhousePickHook.aimed(new View(eye, look, 20, 5.0), cells).isPresent());
+        assertTrue("out of reach", GreenhousePickHook.aimed(new View(eye, look, 4.9, INF), cells).isEmpty());
+        assertTrue(GreenhousePickHook.aimed(new View(eye, look, 20, INF), List.of()).isEmpty());
+    }
+
+    @Test
+    public void soilMarkersAreNamedBySoilAndHowTheyAreWrong() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        List<Cell> cells = GreenhousePickHook.worldCells(List.of(), List.of(
+            ghost(0, 0, GreenhouseSoils.Soil.SAND, GreenhouseSoilCheck.GhostKind.MISSING),
+            ghost(2, 0, GreenhouseSoils.Soil.SOUL_SAND, GreenhouseSoilCheck.GhostKind.WRONG_BLOCK),
+            ghost(4, 0, GreenhouseSoils.Soil.DIRT, GreenhouseSoilCheck.GhostKind.WRONG_STATE)), corner);
+
+        assertEquals("Sand (soil, to place)", GreenhousePickHook.aimed(above(100), cells).orElseThrow().text());
+        assertEquals("Soul Sand (soil, wrong block)", GreenhousePickHook.aimed(above(102), cells).orElseThrow().text());
+        assertEquals("Dirt (soil, wrong state)", GreenhousePickHook.aimed(above(104), cells).orElseThrow().text());
+    }
+
+    @Test
+    public void theCropHeadOverAWrongSoilIsLabelledWithTheSoil() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        List<Cell> cells = GreenhousePickHook.worldCells(
+            List.of(box(2, GreenhouseGrid.INGREDIENT, "Ashwreath", GreenhouseScanLogic.State.EMPTY)),
+            List.of(ghost(2, 0, GreenhouseSoils.Soil.SOUL_SAND, GreenhouseSoilCheck.GhostKind.MISSING)), corner);
+
+        assertEquals("Soul Sand (soil, to place)", GreenhousePickHook.aimed(above(102), cells).orElseThrow().text());
+    }
+
+    @Test
+    public void anUnplannedCropIsLabelledExtraButNeverPicked() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var boxes = List.of(box(0, GreenhouseGrid.INGREDIENT, "Moonflower", GreenhouseScanLogic.State.EMPTY));
+        var extras = List.of(new GreenhouseScanLogic.Extra(3, 0, "Moonflower"));
+
+        List<Cell> label = GreenhousePickHook.labelCells(boxes, List.of(), extras, corner);
+        List<Cell> pick = GreenhousePickHook.worldCells(boxes, List.of(), corner);
+
+        assertEquals("Moonflower (extra)", GreenhousePickHook.aimed(above(103), label).orElseThrow().text());
+        assertEquals("the layout's own cell keeps the plain name", "Moonflower",
+            GreenhousePickHook.aimed(above(100), label).orElseThrow().text());
+        assertEquals(1, pick.size());
+        assertTrue("a pick passes through an extra", GreenhousePickHook.nearest(above(103), pick).isEmpty());
+        assertEquals(new AABB(103, GreenhouseLocator.HOLOGRAM_Y, 200, 104, GreenhouseLocator.HOLOGRAM_Y + 1, 201),
+            label.get(1).bounds());
+    }
+
+    @Test
+    public void theLabelWordsAreShortAndThePickIgnoresThem() {
+        assertEquals("Sand", new GreenhousePickHook.Aim("Sand", "").text());
+        assertEquals("Sand (soil, to place)", new GreenhousePickHook.Aim("Sand", "soil, to place").text());
+        // The pick path sees the same cells; the state word never changes what it picks.
+        Hit hit = GreenhousePickHook.nearest(along(10, INF),
+            List.of(new Cell("Carrot", 1, null, "wrong crop planted", new AABB(0, 0, 0, 1, 1, 1)))).orElseThrow();
+        assertEquals("Carrot", hit.crop());
+        assertEquals(1, hit.flag());
     }
 
     @Test

@@ -49,8 +49,8 @@ public final class GreenhouseScanLogicTest {
         List<Footprint> footprints = GreenhouseScanLogic.footprints(
             GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements());
 
-        // Row 2, column 3 is dx 7, dz 3; the 2x2 at rows 5..6, columns 0..1 covers x 3..5 and z 0..2.
-        assertEquals(List.of(cell("Carrot", 7, 3), spot("Noctilume", 3, 0, 2)), footprints);
+        // Row 2, column 3 is dx 3, dz 2; the 2x2 at rows 5..6, columns 0..1 covers x 0..2 and z 5..7.
+        assertEquals(List.of(cell("Carrot", 3, 2), spot("Noctilume", 0, 5, 2)), footprints);
     }
 
     @Test

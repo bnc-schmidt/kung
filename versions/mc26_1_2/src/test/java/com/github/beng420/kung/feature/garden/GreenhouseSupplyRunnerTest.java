@@ -755,6 +755,24 @@ public final class GreenhouseSupplyRunnerTest {
     }
 
     @Test
+    public void noPickOfSoulSandDirtOrFarmlandEverSendsAGfsCommand() {
+        for (GreenhouseSoils.Soil soil : List.of(GreenhouseSoils.Soil.SOUL_SAND, GreenhouseSoils.Soil.DIRT,
+            GreenhouseSoils.Soil.FARMLAND)) {
+            // No Sack holds these, so the item data carries no /gfs id for them (Farmland is fetched as Dirt).
+            assertFalse(soil.name(), GreenhouseItems.soil(soil).orElseThrow().sackable());
+            host.soilNeeded.put(soil, 64);
+            runner.onPickSoil(soil);
+            host.now += 10_000;
+            runner.tick();
+        }
+
+        assertTrue("not a single command went out", host.commands.isEmpty());
+        assertFalse(runner.pendingPull());
+        assertEquals(3, host.chats.size());
+        assertTrue(host.chats.stream().allMatch(chat -> chat.startsWith("WARNING: Fetch ") && chat.contains("manually")));
+    }
+
+    @Test
     public void deadPlantsAreNowPulledLikeAnyCrop() {
         host.required.put("Dead Plants", 3);
         runner.onPick("Dead Plants", INGREDIENT);

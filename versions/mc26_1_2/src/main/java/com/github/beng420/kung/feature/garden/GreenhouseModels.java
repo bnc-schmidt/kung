@@ -101,11 +101,12 @@ final class GreenhouseModels {
     /**
      * Resolves what to draw once. {@code states} is per placement (null or short: still to place): only a spot still
      * to place gets its model (head, block or cube); a correct, wrong or unrecognised one gets none (the boxes
-     * {@link GreenhouseOverlay} builds say what is there). Of the soil ghosts only the missing blocks are drawn as
-     * blocks, at {@code soilY}. Client thread.
+     * {@link GreenhouseOverlay} builds say what is there), and neither does a spot whose soil is wrong
+     * ({@code blocked}, per placement, null for none: see {@link GreenhouseSoilCheck#blocked}). Of the soil ghosts
+     * only the missing blocks are drawn as blocks, at {@code soilY}. Client thread.
      */
     static Prepared prepare(List<Placement> placements, List<State> states, List<Ghost> soilGhosts, int soilY,
-                            BlockPos corner, GreenhousePalette palette) {
+                            boolean[] blocked, BlockPos corner, GreenhousePalette palette) {
         List<HeadDraw> heads = new ArrayList<>();
         List<BlockDraw> blocks = new ArrayList<>();
         List<GhostDraw> ghosts = new ArrayList<>();
@@ -113,7 +114,8 @@ final class GreenhouseModels {
         for (int index = 0; index < placements.size(); index++) {
             Placement placement = placements.get(index);
             State planted = states == null || index >= states.size() ? State.EMPTY : states.get(index);
-            if (planted == State.EMPTY) addModel(placement, corner, palette, heads, blocks, cubes);
+            boolean wrongSoil = blocked != null && index < blocked.length && blocked[index];
+            if (planted == State.EMPTY && !wrongSoil) addModel(placement, corner, palette, heads, blocks, cubes);
         }
         if (soilY >= 0 && !ghostBroken) {
             for (Ghost ghost : soilGhosts) {

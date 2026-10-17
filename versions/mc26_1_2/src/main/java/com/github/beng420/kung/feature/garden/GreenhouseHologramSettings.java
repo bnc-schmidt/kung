@@ -7,7 +7,7 @@ import java.util.function.Supplier;
 import net.minecraft.client.input.KeyEvent;
 
 /**
- * What the player chose for the hologram (opacity, colors, auto-hide) and its toggle key. The getters are
+ * What the player chose for the hologram (opacity, colors, auto-deactivation, soil and label options) and its toggle key. The getters are
  * package-private for the renderer and read the live config on every call, so a change in the menu shows at once;
  * before the config is loaded they return the defaults. The class is public only for the key mixins.
  */
@@ -26,7 +26,14 @@ public final class GreenhouseHologramSettings {
     static int colorExtra() { return config().colorExtra(); }
     static int colorWrongState() { return config().colorWrongState(); }
 
+    /** Whether a finished layout turns the hologram off until it is shown again. */
     static boolean hideWhenComplete() { return config().hideWhenComplete(); }
+
+    /** Whether crops over missing or wrong soil are left undrawn. */
+    static boolean hideModelsOverWrongSoil() { return config().hideModelsOverWrongSoil(); }
+
+    /** Whether the crosshair names the hologram cell or soil marker it is aimed at. */
+    static boolean showCrosshairLabel() { return config().showCrosshairLabel(); }
 
     /** The GLFW key code of the toggle key, or -1 when it is unbound or bound to a mouse button. */
     static int toggleKey() { return config().toggleKey(); }

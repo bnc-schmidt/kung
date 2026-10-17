@@ -14,24 +14,24 @@ public final class GreenhouseCompassTest {
     }
 
     @Test
-    public void theDefaultOrientationPutsEastAtTheTopAndNorthAtTheLeft() {
-        // Top, right, bottom, left: grid row 0 is the east end and column 0 the north end (see GreenhouseOrientation).
-        assertArrayEquals(new String[] {"E", "S", "W", "N"}, GreenhouseCompass.labels(GreenhouseOrientation.IDENTITY));
-        assertEquals("E", labels(0, false)[GreenhouseCompass.TOP]);
-        assertEquals("N", labels(0, false)[GreenhouseCompass.LEFT]);
+    public void theDefaultOrientationPutsNorthAtTheTopAndWestAtTheLeft() {
+        // Top, right, bottom, left: grid row 0 is the north end and column 0 the west end (see GreenhouseOrientation).
+        assertArrayEquals(new String[] {"N", "E", "S", "W"}, GreenhouseCompass.labels(GreenhouseOrientation.IDENTITY));
+        assertEquals("N", labels(0, false)[GreenhouseCompass.TOP]);
+        assertEquals("W", labels(0, false)[GreenhouseCompass.LEFT]);
     }
 
     @Test
     public void clockwiseQuarterTurnsAdvanceEveryLabelOneStep() {
-        assertArrayEquals(new String[] {"S", "W", "N", "E"}, labels(1, false));
-        assertArrayEquals(new String[] {"W", "N", "E", "S"}, labels(2, false));
-        assertArrayEquals(new String[] {"N", "E", "S", "W"}, labels(3, false));
+        assertArrayEquals(new String[] {"E", "S", "W", "N"}, labels(1, false));
+        assertArrayEquals(new String[] {"S", "W", "N", "E"}, labels(2, false));
+        assertArrayEquals(new String[] {"W", "N", "E", "S"}, labels(3, false));
         assertArrayEquals(labels(0, false), labels(4, false));
     }
 
     @Test
     public void mirroringSwapsTheLeftAndRightEdges() {
-        assertArrayEquals(new String[] {"E", "N", "W", "S"}, labels(0, true));
+        assertArrayEquals(new String[] {"N", "W", "S", "E"}, labels(0, true));
     }
 
     @Test

@@ -712,9 +712,9 @@ public final class GreenhouseScreen extends Screen {
                 THEME.control(), i == 3 ? THEME.error() : THEME.text());
         }
 
-        // Compass: UNVERIFIED against the real plot. The letters come from GreenhouseOrientation, the mapping the
-        // hologram uses, so the two agree: by default the grid's top edge faces E, its right edge S, its bottom
-        // W and its left N, and the letters follow /kung greenhouse blueprint rotate|mirror.
+        // Compass: the letters come from GreenhouseOrientation, the mapping the hologram uses, so the two agree:
+        // by default the grid's top edge faces N, its right edge E, its bottom S and its left W, and the letters
+        // follow /kung greenhouse blueprint rotate|mirror.
         GreenhouseOrientation orientation = GreenhouseHologram.orientation();
         if (!orientation.equals(compassFor)) {
             compassFor = orientation;

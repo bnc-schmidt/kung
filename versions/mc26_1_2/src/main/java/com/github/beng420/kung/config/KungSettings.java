@@ -488,9 +488,16 @@ public final class KungSettings {
             SettingEntry.color("Wrong State Color", hologram::colorWrongState,
                     () -> editColor("Wrong State Color", hologram.colorWrongState(), hologram::setColorWrongState))
                 .withTooltip("The right block in the wrong state, such as dirt where farmland belongs."),
-            SettingEntry.toggle("Hide When Complete", hologram::hideWhenComplete, hologram::setHideWhenComplete)
-                .withTooltip("Hides the whole hologram and prints a short chat note",
-                    "once every crop is placed correctly."),
+            SettingEntry.toggle("Deactivate When Complete", hologram::hideWhenComplete, hologram::setHideWhenComplete)
+                .withTooltip("Turns the hologram off for good once every crop is placed correctly,",
+                    "with a short chat note. It stays off, also in other greenhouses,",
+                    "until you show it again (Show in world or /kung greenhouse blueprint)."),
+            SettingEntry.toggle("Hide Models Over Wrong Soil", hologram::hideModelsOverWrongSoil,
+                    hologram::setHideModelsOverWrongSoil)
+                .withTooltip("Draws no crop model or outline where the soil under it is missing or wrong.",
+                    "The soil marker itself stays."),
+            SettingEntry.toggle("Crosshair Label", hologram::showCrosshairLabel, hologram::setShowCrosshairLabel)
+                .withTooltip("Shows the name of the crop or soil you aim at below the crosshair."),
             SettingEntry.keybind("Toggle Key",
                     () -> LoadoutsAutoCloseFeature.keybindDisplay(hologram.toggleKeybind()),
                     hologram::toggleKeybind, hologram::setToggleKeybind)

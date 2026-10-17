@@ -187,4 +187,61 @@ public final class GreenhouseSoilCheckTest {
 
         assertEquals(List.of(new Ghost(9, 9, Soil.FARMLAND)), GreenhouseSoilCheck.ghosts(expected, blocks));
     }
+
+    @Test
+    public void aFootprintIsBlockedWhenAGhostOfAnyKindLiesInOneOfItsCells() {
+        List<Footprint> footprints = List.of(new Footprint("Carrot", false, 0, 0, 1, 1),
+            new Footprint("Noctilume", true, 3, 4, 5, 6), new Footprint("Potato", false, 8, 8, 9, 9));
+        List<Ghost> ghosts = List.of(new Ghost(4, 5, Soil.FARMLAND, GhostKind.WRONG_STATE));
+
+        assertArrayEquals(new boolean[] {false, true, false}, GreenhouseSoilCheck.blocked(footprints, ghosts));
+        for (GhostKind kind : GhostKind.values()) {
+            assertArrayEquals(kind.name(), new boolean[] {true, false, false},
+                GreenhouseSoilCheck.blocked(footprints, List.of(new Ghost(0, 0, Soil.SAND, kind))));
+        }
+    }
+
+    @Test
+    public void aGhostOnTheNeighbouringCellOrOutsideEveryFootprintBlocksNothing() {
+        List<Footprint> footprints = List.of(new Footprint("Noctilume", true, 3, 4, 5, 6));
+
+        for (Ghost ghost : List.of(new Ghost(2, 4, Soil.SAND), new Ghost(5, 4, Soil.SAND), new Ghost(3, 3, Soil.SAND),
+            new Ghost(3, 6, Soil.SAND))) {
+            assertArrayEquals(ghost.toString(), new boolean[] {false}, GreenhouseSoilCheck.blocked(footprints, List.of(ghost)));
+        }
+        assertArrayEquals(new boolean[] {false}, GreenhouseSoilCheck.blocked(footprints, List.of()));
+        assertEquals(0, GreenhouseSoilCheck.blocked(List.of(), List.of(new Ghost(0, 0, Soil.SAND))).length);
+    }
+
+    @Test
+    public void everyCellOfAMultiCellFootprintCanBlockIt() {
+        List<Footprint> footprints = List.of(new Footprint("Snoozling", true, 2, 2, 5, 5));
+        for (int dx = 2; dx < 5; dx++) {
+            for (int dz = 2; dz < 5; dz++) {
+                assertTrue(dx + "," + dz, GreenhouseSoilCheck.blocked(footprints, List.of(new Ghost(dx, dz, Soil.SAND)))[0]);
+            }
+        }
+    }
+
+    @Test
+    public void blockedFollowsTheHologramsPlacementsInRawOffsets() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        grid.set(2, 3, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        for (int row = 5; row <= 6; row++) {
+            for (int column = 0; column <= 1; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell("Noctilume", GreenhouseGrid.TARGET));
+            }
+        }
+        List<Footprint> footprints = GreenhouseScanLogic.footprints(
+            GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements());
+        Soil soil = GreenhouseSoils.of("Noctilume");
+
+        // The carrot stands at dx 3, dz 2; the 2x2 spot covers dx 0..1 and dz 5..6.
+        assertArrayEquals(new boolean[] {true, false},
+            GreenhouseSoilCheck.blocked(footprints, List.of(new Ghost(3, 2, Soil.FARMLAND, GhostKind.MISSING))));
+        assertArrayEquals(new boolean[] {false, true},
+            GreenhouseSoilCheck.blocked(footprints, List.of(new Ghost(1, 6, soil, GhostKind.WRONG_BLOCK))));
+        assertArrayEquals(new boolean[] {true, true}, GreenhouseSoilCheck.blocked(footprints,
+            List.of(new Ghost(3, 2, Soil.FARMLAND), new Ghost(0, 5, soil, GhostKind.WRONG_STATE))));
+    }
 }

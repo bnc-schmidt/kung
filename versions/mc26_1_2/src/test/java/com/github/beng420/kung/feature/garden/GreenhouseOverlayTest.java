@@ -30,7 +30,7 @@ public final class GreenhouseOverlayTest {
     }
 
     private static List<Shape> boxes(List<State> states, List<Extra> extras, List<Ghost> ghosts, int soilLayer) {
-        return GreenhouseOverlay.boxes(layout(), states, extras, ghosts, soilLayer, PALETTE);
+        return GreenhouseOverlay.boxes(layout(), states, extras, ghosts, soilLayer, null, PALETTE);
     }
 
     @Test
@@ -46,13 +46,11 @@ public final class GreenhouseOverlayTest {
     }
 
     @Test
-    public void aMutationSpotGetsABlueOutlineAndAThinBlueSlabInsteadOfTheGoldOne() {
+    public void aMutationSpotGetsOnlyAThinBlueSlabAndNoOutline() {
         List<Shape> boxes = boxes(List.of(State.CORRECT, State.EMPTY), List.of(), List.of(), -1);
 
-        assertEquals(2, boxes.size());
-        Shape outline = boxes.get(0);
-        Shape slab = boxes.get(1);
-        assertEquals(PALETTE.placeOutline(), outline.outline());
+        assertEquals("no blue outline around the spot", 1, boxes.size());
+        Shape slab = boxes.getFirst();
         assertEquals("a translucent slab in the to-place colour", PALETTE.placeFill(), slab.fill());
         assertEquals(0, slab.outline());
         assertEquals(GreenhouseHologramShapes.LIFT + GreenhouseHologramShapes.SLAB_HEIGHT, slab.maxY(), EPSILON);
@@ -64,8 +62,8 @@ public final class GreenhouseOverlayTest {
     public void noScanMeansEverythingIsStillToPlace() {
         assertEquals(boxes(List.of(State.EMPTY, State.EMPTY), List.of(), List.of(), -1), boxes(null, List.of(),
             List.of(), -1));
-        assertEquals(3, boxes(null, List.of(), List.of(), -1).size());
-        assertEquals("a short list: the rest is still to place", 3,
+        assertEquals("the crop's outline and the spot's slab", 2, boxes(null, List.of(), List.of(), -1).size());
+        assertEquals("a short list: the rest is still to place", 2,
             boxes(List.of(State.EMPTY), List.of(), List.of(), -1).size());
     }
 
@@ -168,13 +166,55 @@ public final class GreenhouseOverlayTest {
     }
 
     @Test
+    public void aWrongOrUnrecognisedMutationSpotKeepsItsRedOrNeutralBox() {
+        // Only the to-place look lost its outline; a plant standing on the spot still shows what is wrong.
+        List<Shape> wrong = boxes(List.of(State.CORRECT, State.WRONG), List.of(), List.of(), -1);
+        List<Shape> unverified = boxes(List.of(State.CORRECT, State.UNVERIFIED), List.of(), List.of(), -1);
+
+        assertEquals(1, wrong.size());
+        assertEquals(PALETTE.wrongOutline(), wrong.getFirst().outline());
+        assertEquals(1, unverified.size());
+        assertEquals(PALETTE.unverifiedOutline(), unverified.getFirst().outline());
+    }
+
+    @Test
+    public void aSpotOverWrongSoilDrawsNoToPlaceOutlineOrSlabButTheSoilBoxStays() {
+        List<Ghost> ghosts = List.of(new Ghost(0, 0, Soil.FARMLAND, GhostKind.MISSING));
+        boolean[] blocked = {true, true};
+
+        List<Shape> boxes = GreenhouseOverlay.boxes(layout(), null, List.of(), ghosts, 73, blocked, PALETTE);
+
+        assertEquals("only the soil box is left", 1, boxes.size());
+        assertEquals(-1, boxes.getFirst().minY(), 0.01);
+        assertEquals(PALETTE.placeOutline(), boxes.getFirst().outline());
+        // Only the blocked one is hidden: the crop is fine, the spot's soil is wrong.
+        List<Shape> spotBlocked = GreenhouseOverlay.boxes(layout(), null, List.of(), List.of(), -1,
+            new boolean[] {false, true}, PALETTE);
+        assertEquals("the crop's outline stays, the spot's slab is gone", 1, spotBlocked.size());
+        assertEquals(layout().placements().get(0).area().minX(), spotBlocked.getFirst().minX(), EPSILON);
+    }
+
+    @Test
+    public void blockingOnlyHidesWhatIsStillToPlace() {
+        boolean[] blocked = {true, true};
+
+        List<Shape> wrong = GreenhouseOverlay.boxes(layout(), List.of(State.WRONG, State.UNVERIFIED), List.of(),
+            List.of(), -1, blocked, PALETTE);
+
+        assertEquals("a plant that stands there is still reported", 2, wrong.size());
+        // A short or missing mask hides nothing it was not asked to.
+        assertEquals(2, GreenhouseOverlay.boxes(layout(), null, List.of(), List.of(), -1, new boolean[0], PALETTE)
+            .size());
+    }
+
+    @Test
     public void theColoursFollowThePalette() {
         GreenhousePalette green = new GreenhousePalette(0.6F, 0x00FF00, 0x0000FF, 0xFFFF00, 0x00FFFF);
 
         Shape outline = GreenhouseOverlay.boxes(layout(), List.of(State.EMPTY, State.CORRECT), List.of(), List.of(), -1,
-            green).getFirst();
+            null, green).getFirst();
         Shape wrong = GreenhouseOverlay.boxes(layout(), List.of(State.WRONG, State.CORRECT), List.of(), List.of(), -1,
-            green).getFirst();
+            null, green).getFirst();
 
         assertEquals(0x00FF00, outline.outline() & 0xFFFFFF);
         assertEquals(0x0000FF, wrong.fill() & 0xFFFFFF);

@@ -123,13 +123,13 @@ public final class GreenhouseDump {
         for (Entity entity : others) body.line(describe(entity, corner));
 
         body.line("");
-        body.line("== blocks per cell (raw offsets from the corner; row/col = default mapping dx = 9 - row, dz = col;"
+        body.line("== blocks per cell (raw offsets from the corner; row/col = default mapping dx = col, dz = row;"
             + " y" + FIRST_Y + "..y" + LAST_Y + "; unloaded chunks read as air) ==");
         BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
         for (int dx = 0; dx < GreenhouseGrid.SIZE; dx++) {
             for (int dz = 0; dz < GreenhouseGrid.SIZE; dz++) {
                 StringBuilder cell = new StringBuilder("dx=").append(dx).append(" dz=").append(dz)
-                    .append(" row=").append(GreenhouseGrid.SIZE - 1 - dx).append(" col=").append(dz).append(" |");
+                    .append(" row=").append(dz).append(" col=").append(dx).append(" |");
                 for (int y = FIRST_Y; y <= LAST_Y; y++) {
                     at.set(corner.getX() + dx, y, corner.getZ() + dz);
                     cell.append(" y").append(y).append('=').append(block(level.getBlockState(at)));

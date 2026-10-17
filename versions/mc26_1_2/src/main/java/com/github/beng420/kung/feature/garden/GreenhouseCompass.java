@@ -3,8 +3,8 @@ package com.github.beng420.kung.feature.garden;
 /**
  * The compass letters around the planner's grid, taken from {@link GreenhouseOrientation} so they say exactly
  * what the hologram will do: each edge of the grid is labelled with the world direction ({@code N}, {@code E},
- * {@code S} or {@code W}) it faces. Whether that mapping matches the real plot is UNVERIFIED in game; the
- * compass and the hologram stay consistent because both read the same orientation.
+ * {@code S} or {@code W}) it faces: north-up by default. The compass and the hologram stay consistent because both
+ * read the same orientation.
  */
 final class GreenhouseCompass {
     /** Index of each edge in {@link #labels}. */

@@ -19,24 +19,35 @@ import net.minecraft.world.phys.Vec3;
  * and flag; a soil ghost (a missing or wrong soil block the scan draws) goes to {@link GreenhouseSupplyRunner#pickSoil}.
  * Everything else, including a real block or entity in front of the cell, is left to vanilla. The
  * ray test is plain geometry (unit-tested); {@code MinecraftPickBlockMixin} is the only caller of
- * {@link #tryPick(Minecraft)}. Client thread only.
+ * {@link #tryPick(Minecraft)}. {@link #aimed} runs the same ray test without any side effect, for the crosshair label
+ * ({@link GreenhouseCrosshairLabel}). Client thread only.
  */
 public final class GreenhousePickHook {
-    /** A hologram crop cell, or with a {@code soil} a soil ghost, in world coordinates. */
-    record Cell(String crop, int flag, GreenhouseSoils.Soil soil, AABB bounds) {
+    /**
+     * A hologram crop cell, or with a {@code soil} a soil ghost, in world coordinates. {@code state} is the short
+     * word the crosshair label puts after the name ("" for a crop still to place); the pick ignores it.
+     */
+    record Cell(String crop, int flag, GreenhouseSoils.Soil soil, String state, AABB bounds) {
         Cell(String crop, int flag, AABB bounds) {
-            this(crop, flag, null, bounds);
+            this(crop, flag, null, "", bounds);
         }
 
-        static Cell ofSoil(GreenhouseSoils.Soil soil, AABB bounds) {
-            return new Cell(soil.displayName(), GreenhouseGrid.INGREDIENT, soil, bounds);
+        static Cell ofSoil(GreenhouseSoils.Soil soil, GreenhouseSoilCheck.GhostKind kind, AABB bounds) {
+            return new Cell(soil.displayName(), GreenhouseGrid.INGREDIENT, soil, soilState(kind), bounds);
         }
     }
 
     /** The nearest cell or soil ghost the ray meets, {@code distance} blocks from the eye; {@code soil} for a ghost. */
-    record Hit(String crop, int flag, GreenhouseSoils.Soil soil, double distance) {
+    record Hit(String crop, int flag, GreenhouseSoils.Soil soil, String state, double distance) {
         Hit(String crop, int flag, double distance) {
-            this(crop, flag, null, distance);
+            this(crop, flag, null, "", distance);
+        }
+    }
+
+    /** What the crosshair label shows: the name and the short state word after it ("" when there is none). */
+    record Aim(String name, String state) {
+        String text() {
+            return state.isEmpty() ? name : name + " (" + state + ")";
         }
     }
 
@@ -45,7 +56,7 @@ public final class GreenhousePickHook {
 
     /** The game behind {@link #tryPick(Game, Consumer)}, so the conditions are unit-tested with a fake. */
     interface Game {
-        /** Whether the hologram is drawn (shown, not toggled off, not hidden by completion): nothing else is picked. */
+        /** Whether the hologram is drawn (shown and not toggled off): nothing else is picked. */
         boolean hologramShowing();
 
         /** A menu or any other screen has the mouse, so the click is not a world click. */
@@ -135,10 +146,47 @@ public final class GreenhousePickHook {
                 AABB soil = ghost.bounds(corner);
                 return soil.minX == bounds.minX && soil.minZ == bounds.minZ;
             }).findFirst().orElse(null);
-            cells.add(under == null ? new Cell(box.crop(), box.flag(), bounds) : Cell.ofSoil(under.soil(), bounds));
+            cells.add(under == null
+                ? new Cell(box.crop(), box.flag(), null, cropState(box.state(), box.flag()), bounds)
+                : Cell.ofSoil(under.soil(), under.kind(), bounds));
         }
-        for (GreenhouseHologram.SoilGhost ghost : ghosts) cells.add(Cell.ofSoil(ghost.soil(), ghost.bounds(corner)));
+        for (GreenhouseHologram.SoilGhost ghost : ghosts) {
+            cells.add(Cell.ofSoil(ghost.soil(), ghost.kind(), ghost.bounds(corner)));
+        }
         return cells;
+    }
+
+    /**
+     * What the crosshair label can name: the pickable cells plus the unplanned crops (the pink boxes), which a pick
+     * ignores. {@code extras} are raw offsets from the corner.
+     */
+    static List<Cell> labelCells(List<GreenhouseHologramShapes.CellBox> boxes, List<GreenhouseHologram.SoilGhost> ghosts,
+                                 List<GreenhouseScanLogic.Extra> extras, BlockPos corner) {
+        List<Cell> cells = new ArrayList<>(worldCells(boxes, ghosts, corner));
+        for (GreenhouseScanLogic.Extra extra : extras) {
+            cells.add(new Cell(extra.crop(), GreenhouseGrid.INGREDIENT, null, "extra",
+                new AABB(corner.getX() + extra.dx(), GreenhouseLocator.HOLOGRAM_Y, corner.getZ() + extra.dz(),
+                    corner.getX() + extra.dx() + 1, GreenhouseLocator.HOLOGRAM_Y + 1, corner.getZ() + extra.dz() + 1)));
+        }
+        return cells;
+    }
+
+    /** The label word for a crop cell by what the scan found: nothing for a crop to place, a hint otherwise. */
+    static String cropState(GreenhouseScanLogic.State state, int flag) {
+        return switch (state) {
+            case EMPTY, CORRECT -> flag == GreenhouseGrid.TARGET ? "mutation spot" : "";
+            case WRONG -> "wrong crop planted";
+            case UNVERIFIED -> "unrecognised crop planted";
+        };
+    }
+
+    /** The label word for a soil marker. */
+    static String soilState(GreenhouseSoilCheck.GhostKind kind) {
+        return switch (kind) {
+            case MISSING -> "soil, to place";
+            case WRONG_BLOCK -> "soil, wrong block";
+            case WRONG_STATE -> "soil, wrong state";
+        };
     }
 
     /**
@@ -153,14 +201,24 @@ public final class GreenhousePickHook {
             Optional<Vec3> at = cell.bounds().clip(view.eye(), end);
             if (at.isEmpty()) continue;
             double distance = view.eye().distanceTo(at.get());
-            if (best == null || distance < best.distance()) best = new Hit(cell.crop(), cell.flag(), cell.soil(), distance);
+            if (best == null || distance < best.distance()) {
+                best = new Hit(cell.crop(), cell.flag(), cell.soil(), cell.state(), distance);
+            }
         }
         return best == null || best.distance() > view.realDistance() + TIE_EPSILON ? Optional.empty() : Optional.of(best);
     }
 
+    /**
+     * What the crosshair is on, by the rules of {@link #nearest} (reach, and a real block in front wins). Pure and
+     * free of side effects: no scan, no click, nothing sent; the HUD label may call it every frame.
+     */
+    static Optional<Aim> aimed(View view, List<Cell> cells) {
+        return nearest(view, cells).map(hit -> new Aim(hit.crop(), hit.state()));
+    }
+
     /** The running client: the player's eye and view, vanilla's hit, the hologram and the greenhouse corner. */
     record LiveGame(Minecraft client) implements Game {
-        // Drawn, not just shown: hidden by the key or by completion, it claims no click and costs no scan.
+        // Drawn, not just shown: hidden by the key, it claims no click and costs no scan.
         @Override public boolean hologramShowing() { return GreenhouseHologram.isDrawn(); }
 
         @Override public boolean screenOpen() { return McCompat.screen(client) != null; }

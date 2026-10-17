@@ -109,6 +109,29 @@ final class GreenhouseSoilCheck {
     }
 
     /**
+     * Per footprint (aligned with {@code footprints}): whether a soil ghost lies in one of its cells, so the crop
+     * cannot be planted there yet. The hologram then draws neither the crop nor its to-place outline; the soil marker
+     * stays and says what to fix first. Every ghost kind counts.
+     */
+    static boolean[] blocked(List<Footprint> footprints, List<Ghost> ghosts) {
+        boolean[] blocked = new boolean[footprints.size()];
+        if (ghosts.isEmpty()) return blocked;
+        for (int i = 0; i < blocked.length; i++) {
+            Footprint footprint = footprints.get(i);
+            for (Ghost ghost : ghosts) {
+                double centreX = ghost.dx() + 0.5;
+                double centreZ = ghost.dz() + 0.5;
+                if (centreX > footprint.minX() && centreX < footprint.maxX()
+                    && centreZ > footprint.minZ() && centreZ < footprint.maxZ()) {
+                    blocked[i] = true;
+                    break;
+                }
+            }
+        }
+        return blocked;
+    }
+
+    /**
      * The cells whose real block does not suit what is planned there, each with how it differs.
      * {@code blockIds} holds the real block id per cell at the soil layer, index {@code dx * 10 + dz}; a null entry
      * was not read and is skipped. A footprint puts its soil under every cell it covers; a crop with an untrusted

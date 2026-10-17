@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.garden.GreenhouseHologramShapes.CellBox;
 import com.github.beng420.kung.feature.garden.GreenhouseHologramShapes.Layout;
 import com.github.beng420.kung.feature.garden.GreenhouseHologramShapes.Placement;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
@@ -35,7 +36,7 @@ public final class GreenhouseHologramModelsTest {
 
     @Test
     public void aCropIsAHeadSizedModelOnTheCentreOfItsCell() {
-        // Row 2, column 3 is dx = 7, dz = 3 in the default orientation.
+        // Row 2, column 3 is dx = 3, dz = 2 in the default orientation.
         Layout layout = GreenhouseHologramShapes.build(with(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"),
             GreenhouseOrientation.IDENTITY);
 
@@ -43,8 +44,8 @@ public final class GreenhouseHologramModelsTest {
         Placement crop = layout.placements().getFirst();
         assertEquals("Carrot", crop.crop());
         assertFalse(crop.mutation());
-        assertEquals(7.5, crop.x(), EPSILON);
-        assertEquals(3.5, crop.z(), EPSILON);
+        assertEquals(3.5, crop.x(), EPSILON);
+        assertEquals(2.5, crop.z(), EPSILON);
         assertEquals(GreenhouseHologramShapes.LIFT, crop.y(), EPSILON);
         assertEquals(1.1875, crop.scale(), EPSILON);
         assertEquals(GreenhouseCropLook.of("Carrot"), crop.look());
@@ -95,18 +96,18 @@ public final class GreenhouseHologramModelsTest {
         Placement small = layout.placements().get(0);
         assertEquals("Cindershade", small.crop());
         assertEquals(1.0, small.scale(), EPSILON);
-        assertEquals(9.5, small.x(), EPSILON); // row 0 is dx 9
-        assertEquals(0.5, small.z(), EPSILON);
+        assertEquals(0.5, small.x(), EPSILON); // column 0 is dx 0
+        assertEquals(0.5, small.z(), EPSILON); // row 0 is dz 0
         Placement large = layout.placements().get(1);
         assertEquals("Snoozling", large.crop());
         assertEquals(3.0, large.scale(), EPSILON);
-        assertEquals(7.5, large.x(), EPSILON); // rows 1..3 are x 6..9
-        assertEquals(7.5, large.z(), EPSILON); // columns 6..8 are z 6..9
+        assertEquals(7.5, large.x(), EPSILON); // columns 6..8 are x 6..9
+        assertEquals(2.5, large.z(), EPSILON); // rows 1..3 are z 1..4
         Placement medium = layout.placements().get(2);
         assertEquals("Noctilume", medium.crop());
         assertEquals(2.0, medium.scale(), EPSILON);
-        assertEquals(4.0, medium.x(), EPSILON); // rows 5..6 are x 3..5
-        assertEquals(1.0, medium.z(), EPSILON); // columns 0..1 are z 0..2
+        assertEquals(1.0, medium.x(), EPSILON); // columns 0..1 are x 0..2
+        assertEquals(6.0, medium.z(), EPSILON); // rows 5..6 are z 5..7
     }
 
     @Test
@@ -158,10 +159,10 @@ public final class GreenhouseHologramModelsTest {
         assertEquals(3, carrot.column());
         assertEquals("Carrot", carrot.crop());
         assertEquals(GreenhouseGrid.INGREDIENT, carrot.flag());
-        assertEquals(7, carrot.minX(), EPSILON);
-        assertEquals(8, carrot.maxX(), EPSILON);
-        assertEquals(3, carrot.minZ(), EPSILON);
-        assertEquals(4, carrot.maxZ(), EPSILON);
+        assertEquals(3, carrot.minX(), EPSILON);
+        assertEquals(4, carrot.maxX(), EPSILON);
+        assertEquals(2, carrot.minZ(), EPSILON);
+        assertEquals(3, carrot.maxZ(), EPSILON);
         assertEquals(0, carrot.minY(), EPSILON);
         assertEquals(1, carrot.maxY(), EPSILON);
         assertEquals(GreenhouseGrid.TARGET, cells.get(1).flag());
@@ -199,7 +200,7 @@ public final class GreenhouseHologramModelsTest {
 
         AABB world = box.bounds(new BlockPos(-5, 73, -5));
 
-        assertEquals(new AABB(2, 74, -2, 3, 75, -1), world);
+        assertEquals(new AABB(-2, 74, -3, -1, 75, -2), world);
     }
 
     @Test
@@ -235,6 +236,11 @@ public final class GreenhouseHologramModelsTest {
         assertTrue("empty: the model", cells.get(1).visible());
         assertTrue("wrong: the red box", cells.get(2).visible());
         assertTrue("unverified: the orange outline", cells.get(3).visible());
+        assertEquals(List.of(GreenhouseScanLogic.State.CORRECT, GreenhouseScanLogic.State.EMPTY,
+            GreenhouseScanLogic.State.WRONG, GreenhouseScanLogic.State.UNVERIFIED),
+            cells.subList(0, 4).stream().map(CellBox::state).toList());
+        assertEquals("the spot's four cells share its state", List.of(GreenhouseScanLogic.State.CORRECT),
+            cells.subList(4, 8).stream().map(CellBox::state).distinct().toList());
         for (int i = 4; i < 8; i++) {
             assertEquals(GreenhouseGrid.TARGET, cells.get(i).flag());
             assertFalse("the mutation stands on its spot: all four cells", cells.get(i).visible());
@@ -248,6 +254,8 @@ public final class GreenhouseHologramModelsTest {
 
         assertEquals(layout.cells(), GreenhouseHologramShapes.visibleCells(layout, null));
         assertTrue(GreenhouseHologramShapes.visibleCells(layout, null).getFirst().visible());
+        assertEquals("still to place before any scan", GreenhouseScanLogic.State.EMPTY,
+            GreenhouseHologramShapes.visibleCells(layout, null).getFirst().state());
     }
 
     @Test

@@ -12,23 +12,39 @@ public final class GreenhouseOrientationTest {
     private static final GreenhouseOrientation DEFAULT = GreenhouseOrientation.IDENTITY;
 
     @Test
-    public void defaultIsSkyblockersMapping() {
-        // dx = 9 - row, dz = column
-        assertEquals(new GreenhouseOrientation.Offset(9, 0), DEFAULT.offset(0, 0));
-        assertEquals(new GreenhouseOrientation.Offset(9, 9), DEFAULT.offset(0, 9));
-        assertEquals(new GreenhouseOrientation.Offset(0, 0), DEFAULT.offset(9, 0));
-        assertEquals(new GreenhouseOrientation.Offset(0, 9), DEFAULT.offset(9, 9));
-        assertEquals(new GreenhouseOrientation.Offset(6, 3), DEFAULT.offset(3, 3));
-        assertEquals(new GreenhouseOrientation.Point(10, 0), DEFAULT.point(0, 0));
+    public void defaultIsNorthUp() {
+        // dx = column, dz = row: row 0 is the north edge, column 0 the west edge.
+        assertEquals(new GreenhouseOrientation.Offset(0, 0), DEFAULT.offset(0, 0));
+        assertEquals(new GreenhouseOrientation.Offset(9, 0), DEFAULT.offset(0, 9));
+        assertEquals(new GreenhouseOrientation.Offset(0, 9), DEFAULT.offset(9, 0));
+        assertEquals(new GreenhouseOrientation.Offset(9, 9), DEFAULT.offset(9, 9));
+        assertEquals(new GreenhouseOrientation.Offset(5, 3), DEFAULT.offset(3, 5));
+        assertEquals(new GreenhouseOrientation.Point(0, 0), DEFAULT.point(0, 0));
+        assertEquals(new GreenhouseOrientation.Point(10, 10), DEFAULT.point(10, 10));
     }
 
     @Test
-    public void rotatingClockwiseMovesTheNorthEastCornerToTheSouthEast() {
+    public void theDefaultIsTheOldMappingTurnedAQuarterClockwise() {
+        // The old default (dx = 9 - row, dz = column) drew east on top. Turning that picture a quarter clockwise,
+        // new[r][c] = old[9 - c][r], gives the new default: the same cell stands at the same world offset.
+        for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
+            for (int column = 0; column < GreenhouseGrid.SIZE; column++) {
+                int oldRow = GreenhouseGrid.SIZE - 1 - column;
+                int oldColumn = row;
+                GreenhouseOrientation.Offset now = DEFAULT.offset(row, column);
+                assertEquals(9 - oldRow, now.dx());
+                assertEquals(oldColumn, now.dz());
+            }
+        }
+    }
+
+    @Test
+    public void rotatingClockwiseMovesTheNorthWestCornerToTheNorthEast() {
         GreenhouseOrientation turned = DEFAULT.rotatedClockwise();
 
-        assertEquals(new GreenhouseOrientation.Offset(9, 9), turned.offset(0, 0));
-        assertEquals(new GreenhouseOrientation.Offset(0, 9), turned.rotatedClockwise().offset(0, 0));
-        assertEquals(new GreenhouseOrientation.Offset(0, 0), turned.rotatedClockwise().rotatedClockwise().offset(0, 0));
+        assertEquals(new GreenhouseOrientation.Offset(9, 0), turned.offset(0, 0));
+        assertEquals(new GreenhouseOrientation.Offset(9, 9), turned.rotatedClockwise().offset(0, 0));
+        assertEquals(new GreenhouseOrientation.Offset(0, 9), turned.rotatedClockwise().rotatedClockwise().offset(0, 0));
     }
 
     @Test
@@ -37,7 +53,7 @@ public final class GreenhouseOrientationTest {
 
         assertEquals(DEFAULT.offset(0, 9), mirrored.offset(0, 0));
         assertEquals(DEFAULT.offset(5, 2), mirrored.offset(5, 7));
-        assertEquals(new GreenhouseOrientation.Point(10, 10), mirrored.point(0, 0));
+        assertEquals(new GreenhouseOrientation.Point(10, 0), mirrored.point(0, 0));
     }
 
     @Test

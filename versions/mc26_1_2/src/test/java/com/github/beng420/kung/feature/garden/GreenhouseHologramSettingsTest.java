@@ -35,6 +35,8 @@ public final class GreenhouseHologramSettingsTest {
         assertEquals(0xFFFF55D8, GreenhouseHologramSettings.colorExtra());
         assertEquals(0xFFFFA126, GreenhouseHologramSettings.colorWrongState());
         assertTrue(GreenhouseHologramSettings.hideWhenComplete());
+        assertTrue(GreenhouseHologramSettings.hideModelsOverWrongSoil());
+        assertTrue(GreenhouseHologramSettings.showCrosshairLabel());
         assertEquals(75, GreenhouseHologramSettings.toggleKey());
     }
 
@@ -46,6 +48,8 @@ public final class GreenhouseHologramSettingsTest {
         config.setColorExtra(0x070809);
         config.setColorWrongState(0x0A0B0C);
         config.setHideWhenComplete(false);
+        config.setHideModelsOverWrongSoil(false);
+        config.setShowCrosshairLabel(false);
         config.setToggleKeybind("key:71:34");
         assertEquals(0.6F, GreenhouseHologramSettings.opacity(), 0F);
         assertEquals(0xFF010203, GreenhouseHologramSettings.colorToPlace());
@@ -53,6 +57,8 @@ public final class GreenhouseHologramSettingsTest {
         assertEquals(0xFF070809, GreenhouseHologramSettings.colorExtra());
         assertEquals(0xFF0A0B0C, GreenhouseHologramSettings.colorWrongState());
         assertFalse(GreenhouseHologramSettings.hideWhenComplete());
+        assertFalse(GreenhouseHologramSettings.hideModelsOverWrongSoil());
+        assertFalse(GreenhouseHologramSettings.showCrosshairLabel());
         assertEquals(71, GreenhouseHologramSettings.toggleKey());
     }
 

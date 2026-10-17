@@ -9,20 +9,19 @@ import java.util.List;
 /**
  * Whether every ingredient of the layout stands right, from completed scans: the layout counts as complete after two
  * consecutive scans agree that all its ingredient cells (the mutation spots are not ingredients) are CORRECT, and as
- * incomplete again after two consecutive scans that disagree. Completion is announced once, when it begins (and only
- * while the announcing is allowed); harvesting a crop ends it and arms the next announcement.
- *
- * <p>It also holds the player's override of the hiding ({@link #forced()}), because that lasts exactly as long as
- * the completion it overrides.
+ * incomplete again after two consecutive scans that disagree. When it is complete and the setting asks for it,
+ * {@link #update} says so once; the caller then deactivates the hologram (which resets this state), so nothing
+ * lingers and nothing re-arms it.
  */
 final class GreenhouseCompletion {
+    /** The one chat line sent when a finished layout turns the hologram off. */
+    static final String MESSAGE = "Greenhouse layout complete: all crops are placed correctly. Hologram deactivated"
+        + " (show it again with Show in world or /kung greenhouse blueprint).";
     /** Consecutive scans that must agree before the answer changes. */
     static final int AGREE = 2;
 
     private boolean complete;
-    private boolean announced;
     private boolean candidate;
-    private boolean forced;
     private int streak;
 
     /**
@@ -42,47 +41,27 @@ final class GreenhouseCompletion {
     }
 
     /**
-     * One completed scan. Returns true exactly once per completion, when the layout has just become complete (or
-     * the announcing was allowed again while it is), and {@code announce} is true.
+     * One completed scan. True when the layout is complete after it and {@code enabled} (the setting) is on: the
+     * caller must deactivate the hologram, which {@link #reset resets} this state, so it is true once per completion.
      */
-    boolean update(boolean allCorrect, boolean announce) {
+    boolean update(boolean allCorrect, boolean enabled) {
         if (allCorrect == candidate) {
             streak++;
         } else {
             candidate = allCorrect;
             streak = 1;
         }
-        if (streak >= AGREE && candidate != complete) {
-            complete = candidate;
-            if (!complete) {
-                announced = false;
-                forced = false;
-            }
-        }
-        if (complete && announce && !announced) {
-            announced = true;
-            return true;
-        }
-        return false;
+        if (streak >= AGREE) complete = candidate;
+        return complete && enabled;
     }
 
     /** Whether the last agreeing scans found every ingredient right. */
     boolean complete() { return complete; }
 
-    /**
-     * Whether the player showed the hologram with the toggle key although the layout is complete. Ends with the
-     * completion (two scans that disagree) and with a reset; the toggle key sets and clears it.
-     */
-    boolean forced() { return forced; }
-
-    void setForced(boolean value) { forced = value; }
-
-    /** A new hologram or corner: nothing is known. */
+    /** A new hologram or corner, or the hologram was deactivated: nothing is known. */
     void reset() {
         complete = false;
-        announced = false;
         candidate = false;
-        forced = false;
         streak = 0;
     }
 

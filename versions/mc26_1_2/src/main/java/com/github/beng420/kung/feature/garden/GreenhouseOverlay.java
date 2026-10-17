@@ -11,11 +11,12 @@ import java.util.List;
 
 /**
  * The boxes of the hologram that are lines and fills rather than models, coloured after the settings and the plot
- * scan, the way Litematica marks a schematic: blue outline around what is still to place (a mutation spot also gets a
- * thin blue slab), red box over a wrong crop, pink box over a crop where the layout has none, a neutral outline over
- * something unrecognised, nothing where the right crop stands; and on the soil layer a blue outline where a block is
- * missing, a red box where another block is, an orange box where farmland and dirt are swapped. Pure arithmetic:
- * corner-relative like {@link GreenhouseHologramShapes} (y above the hologram floor, so the soil layer is below 0).
+ * scan, the way Litematica marks a schematic: blue outline around a crop still to place (a mutation spot gets only a
+ * thin blue slab, no outline), red box over a wrong crop, pink box over a crop where the layout has none, a neutral
+ * outline over something unrecognised, nothing where the right crop stands; and on the soil layer a blue outline where
+ * a block is missing, a red box where another block is, an orange box where farmland and dirt are swapped. Pure
+ * arithmetic: corner-relative like {@link GreenhouseHologramShapes} (y above the hologram floor, so the soil layer is
+ * below 0).
  */
 final class GreenhouseOverlay {
     /** The soil boxes are a hair larger than the block so they cover its faces without flicker. */
@@ -30,21 +31,28 @@ final class GreenhouseOverlay {
      * @param extras     crops seen where the layout has no entry
      * @param ghosts     soil cells that differ from what is expected
      * @param soilLayer  the y of the soil layer, or -1 when none was found (then no soil boxes)
+     * @param blocked    per placement, true where the crop cannot be planted yet because of its soil
+     *                   ({@link GreenhouseSoilCheck#blocked}); such a spot gets no to-place outline or slab, the soil
+     *                   boxes say what to fix first. Null: nothing is blocked
      */
     static List<Shape> boxes(Layout layout, List<State> states, List<Extra> extras, List<Ghost> ghosts, int soilLayer,
-                             GreenhousePalette palette) {
+                             boolean[] blocked, GreenhousePalette palette) {
         List<Shape> out = new ArrayList<>();
         List<Placement> placements = layout.placements();
         for (int i = 0; i < placements.size(); i++) {
             Placement placement = placements.get(i);
             State state = states == null || i >= states.size() ? State.EMPTY : states.get(i);
+            if (state == State.EMPTY && blocked != null && i < blocked.length && blocked[i]) continue;
             switch (state) {
                 case CORRECT -> { }
                 case WRONG -> out.add(placement.area().recolored(palette.wrongFill(), palette.wrongOutline(), 3.0F));
                 case UNVERIFIED -> out.add(placement.area().recolored(GreenhousePalette.none(),
                     palette.unverifiedOutline(), 2.5F));
                 case EMPTY -> {
-                    out.add(placement.area().recolored(GreenhousePalette.none(), palette.placeOutline(), 2.0F));
+                    // The slab and head already mark a mutation spot; an outline around it only confuses.
+                    if (!placement.mutation()) {
+                        out.add(placement.area().recolored(GreenhousePalette.none(), palette.placeOutline(), 2.0F));
+                    }
                     if (placement.slab() != null) {
                         out.add(placement.slab().recolored(palette.placeFill(), GreenhousePalette.none(), 0F));
                     }

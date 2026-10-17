@@ -22,14 +22,14 @@ public final class GreenhouseDumpFormatTest {
     public void cellIsTheFlooredOffsetFromTheCornerWithTheRawDefaultMapping() {
         // Corner (-5, 73, -5): a stand at the centre of the corner block.
         CellRef first = GreenhouseDumpFormat.cell(-4.5, -4.5, -5, -5);
-        assertEquals(new CellRef(0, 0, true, 9, 0), first);
+        assertEquals(new CellRef(0, 0, true, 0, 0), first);
 
         CellRef middle = GreenhouseDumpFormat.cell(-1.5, 0.5, -5, -5);
-        assertEquals(new CellRef(3, 5, true, 6, 5), middle);
+        assertEquals(new CellRef(3, 5, true, 5, 3), middle);
 
         // Block edges belong to the higher cell; the last cell is 9.
-        assertEquals(new CellRef(1, 0, true, 8, 0), GreenhouseDumpFormat.cell(-4.0, -5.0, -5, -5));
-        assertEquals(new CellRef(9, 9, true, 0, 9), GreenhouseDumpFormat.cell(4.999, 4.999, -5, -5));
+        assertEquals(new CellRef(1, 0, true, 0, 1), GreenhouseDumpFormat.cell(-4.0, -5.0, -5, -5));
+        assertEquals(new CellRef(9, 9, true, 9, 9), GreenhouseDumpFormat.cell(4.999, 4.999, -5, -5));
     }
 
     @Test

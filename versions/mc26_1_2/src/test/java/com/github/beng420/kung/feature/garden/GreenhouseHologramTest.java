@@ -125,7 +125,7 @@ public final class GreenhouseHologramTest {
         GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
         GreenhouseScanner.setSnapshotForTest(GreenhouseScanLogic.evaluate(
             GreenhouseScanLogic.footprints(GreenhouseHologram.placements()),
-            List.of(new GreenhouseScanLogic.Found("Carrot", 7.5, 3.5)), null, GreenhouseHologram.version()));
+            List.of(new GreenhouseScanLogic.Found("Carrot", 3.5, 2.5)), null, GreenhouseHologram.version()));
         assertEquals(1, GreenhouseHologram.correctlyPlaced("Carrot"));
 
         GreenhouseHologram.toggle();
@@ -135,41 +135,6 @@ public final class GreenhouseHologramTest {
         assertTrue(GreenhouseHologram.cellBoxes().isEmpty());
     }
 
-    @Test
-    public void aCompleteLayoutIsHiddenOnlyWhileTheSettingAsksForIt() {
-        com.github.beng420.kung.config.category.GreenhouseConfig config =
-            new com.github.beng420.kung.config.category.GreenhouseConfig();
-        GreenhouseHologramSettings.useConfig(() -> config);
-        try {
-            GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
-            assertFalse(GreenhouseHologram.hiddenByCompletion());
-            assertTrue(GreenhouseHologram.isDrawn());
-
-            GreenhouseScanner.setCompleteForTest(true);
-            assertTrue("the default hides it", GreenhouseHologram.hiddenByCompletion());
-            assertFalse(GreenhouseHologram.isDrawn());
-            assertTrue("nothing is claimed while hidden", GreenhouseHologram.cellBoxes().isEmpty());
-            assertTrue(GreenhouseHologram.soilGhosts().isEmpty());
-            assertTrue("the toggle key is independent of it", GreenhouseHologram.userVisible());
-
-            config.setHideWhenComplete(false);
-            assertFalse(GreenhouseHologram.hiddenByCompletion());
-            assertTrue("the setting off: the hologram stays", GreenhouseHologram.isDrawn());
-            assertFalse(GreenhouseHologram.cellBoxes().isEmpty());
-
-            config.setHideWhenComplete(true);
-            GreenhouseScanner.setCompleteForTest(false);
-            assertTrue("a crop is missing again: it is back", GreenhouseHologram.isDrawn());
-
-            GreenhouseHologram.toggle();
-            GreenhouseScanner.setCompleteForTest(true);
-            GreenhouseScanner.setCompleteForTest(false);
-            assertFalse("hidden by the key and not complete: still hidden", GreenhouseHologram.isDrawn());
-        } finally {
-            GreenhouseHologramSettings.useConfig(null);
-        }
-    }
-
     private static com.github.beng420.kung.config.category.GreenhouseConfig useDefaultConfig() {
         com.github.beng420.kung.config.category.GreenhouseConfig config =
             new com.github.beng420.kung.config.category.GreenhouseConfig();
@@ -177,96 +142,115 @@ public final class GreenhouseHologramTest {
         return config;
     }
 
+    /** One completed scan that found every ingredient right, fed the way the scanner feeds it. */
+    private static boolean allRightScan() {
+        return GreenhouseScanner.completeIfDone(true, GreenhouseHologramSettings.hideWhenComplete());
+    }
+
     @Test
-    public void theToggleKeyShowsACompleteHiddenHologramAndTheOverrideEndsWithTheCompletion() {
+    public void aFinishedLayoutDeactivatesTheHologramThroughTheSamePathAsHide() {
         useDefaultConfig();
         GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
-        GreenhouseScanner.setCompleteForTest(true);
-        assertFalse("complete: the default hides it", GreenhouseHologram.isDrawn());
-
-        // First press from the complete-hidden state: shown anyway, and it really is drawn and claims its cells.
-        assertEquals("Greenhouse hologram shown", GreenhouseHologram.toggle());
-        assertTrue(GreenhouseHologram.userVisible());
-        assertTrue(GreenhouseScanner.forced());
-        assertFalse(GreenhouseHologram.hiddenByCompletion());
-        assertTrue(GreenhouseHologram.isDrawn());
-        assertFalse(GreenhouseHologram.cellBoxes().isEmpty());
-
-        // Second press: hidden by the key, and the message says why it comes back with one more press.
-        assertEquals("Greenhouse hologram hidden: layout is complete (press K to show anyway)",
-            GreenhouseHologram.toggle());
-        assertFalse(GreenhouseHologram.userVisible());
-        assertFalse(GreenhouseScanner.forced());
-        assertFalse(GreenhouseHologram.isDrawn());
-        assertTrue(GreenhouseHologram.cellBoxes().isEmpty());
-
-        // Third press: forced again.
-        assertEquals("Greenhouse hologram shown", GreenhouseHologram.toggle());
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
         assertTrue(GreenhouseHologram.isDrawn());
 
-        // The layout stops being complete: the override is over and does not come back with the next completion.
-        GreenhouseScanner.setCompleteForTest(false);
-        assertFalse(GreenhouseScanner.forced());
-        assertTrue("incomplete and visible: drawn on its own", GreenhouseHologram.isDrawn());
-        GreenhouseScanner.setCompleteForTest(true);
-        assertTrue(GreenhouseHologram.hiddenByCompletion());
+        assertFalse("one scan is not enough", allRightScan());
+        assertTrue(GreenhouseHologram.isDrawn());
+        assertTrue("the second agrees: deactivated", allRightScan());
+
+        assertFalse(GreenhouseHologram.isShowing());
         assertFalse(GreenhouseHologram.isDrawn());
+        assertTrue(GreenhouseHologram.grid().isEmpty());
+        assertTrue(GreenhouseHologram.shapes().isEmpty());
+        assertTrue(GreenhouseHologram.placements().isEmpty());
+        assertTrue("nothing is claimed", GreenhouseHologram.cellBoxes().isEmpty());
+        assertTrue(GreenhouseHologram.soilGhosts().isEmpty());
+        assertTrue("the scan state is gone too", GreenhouseScanner.ghosts().isEmpty());
+        assertFalse("the completion was reset", GreenhouseScanner.complete());
+        assertEquals(0, GreenhouseHologram.plantedCount("Carrot"));
     }
 
     @Test
-    public void theToggleKeyHidesAnIncompleteHologramAndForcesItBackOnceCompleteToo() {
-        useDefaultConfig();
-        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
-
-        assertEquals("plain message while the layout is not complete", "Greenhouse hologram hidden",
-            GreenhouseHologram.toggle());
-        assertFalse(GreenhouseHologram.isDrawn());
-
-        GreenhouseScanner.setCompleteForTest(true);
-        assertFalse(GreenhouseHologram.isDrawn());
-        assertEquals("Greenhouse hologram shown", GreenhouseHologram.toggle());
-        assertTrue("hidden by the key and by completion: one press overrides both", GreenhouseHologram.isDrawn());
-        assertTrue(GreenhouseScanner.forced());
-    }
-
-    @Test
-    public void withTheSettingOffTheToggleKeyNeedsNoOverride() {
-        useDefaultConfig().setHideWhenComplete(false);
-        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
-        GreenhouseScanner.setCompleteForTest(true);
-        assertTrue("complete but not hidden by it", GreenhouseHologram.isDrawn());
-
-        assertEquals("Greenhouse hologram hidden", GreenhouseHologram.toggle());
-        assertFalse(GreenhouseHologram.isDrawn());
-        assertEquals("Greenhouse hologram shown", GreenhouseHologram.toggle());
-        assertTrue(GreenhouseHologram.isDrawn());
-        assertFalse("nothing to override", GreenhouseScanner.forced());
-    }
-
-    @Test
-    public void showingHidingOrAResetEndsTheOverride() {
+    public void nothingReArmsADeactivatedHologramOnlyAnExplicitShowDoes() {
         useDefaultConfig();
         GreenhouseGrid layout = cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot");
         GreenhouseHologram.show(layout, true);
-        GreenhouseScanner.setCompleteForTest(true);
-        GreenhouseHologram.toggle();
-        assertTrue(GreenhouseScanner.forced());
+        allRightScan();
+        assertTrue(allRightScan());
 
-        GreenhouseHologram.show(layout, true);
-        assertFalse("a new hologram knows nothing of the old completion", GreenhouseScanner.forced());
-        assertFalse(GreenhouseScanner.complete());
-        assertTrue(GreenhouseHologram.isDrawn());
-
-        GreenhouseScanner.setCompleteForTest(true);
-        GreenhouseHologram.toggle();
-        GreenhouseHologram.hide();
-        assertFalse(GreenhouseScanner.forced());
-
-        GreenhouseHologram.show(layout, true);
-        GreenhouseScanner.setCompleteForTest(true);
-        GreenhouseHologram.toggle();
+        // Entering another greenhouse, re-entering this one and rejoining the server.
         GreenhouseScanner.switchCorner(new net.minecraft.core.BlockPos(10, 70, 20));
-        assertFalse("another greenhouse: the override is gone with the completion", GreenhouseScanner.forced());
+        GreenhouseScanner.switchCorner(new net.minecraft.core.BlockPos(-5, 73, -5));
+        GreenhouseHologram.onConnectionChange();
+        GreenhouseScanner.completeIfDone(false, true);
+        assertFalse(GreenhouseHologram.isShowing());
+        assertFalse(GreenhouseHologram.isDrawn());
+        assertTrue(GreenhouseHologram.cellBoxes().isEmpty());
+
+        GreenhouseHologram.show(layout, true);
+        assertTrue("showing it again is what brings it back", GreenhouseHologram.isDrawn());
+        assertFalse("and it starts without a completion", GreenhouseScanner.complete());
+        assertFalse(allRightScan());
+    }
+
+    @Test
+    public void withTheSettingOffAFinishedLayoutStaysShownUntilTheSettingIsSwitchedOn() {
+        var config = useDefaultConfig();
+        config.setHideWhenComplete(false);
+        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
+
+        assertFalse(allRightScan());
+        assertFalse(allRightScan());
+        assertTrue("complete but not deactivated", GreenhouseHologram.isDrawn());
+        assertTrue(GreenhouseScanner.complete());
+        assertFalse(GreenhouseHologram.cellBoxes().isEmpty());
+
+        config.setHideWhenComplete(true);
+        assertTrue("switched on while complete: deactivated at the next scan", allRightScan());
+        assertFalse(GreenhouseHologram.isShowing());
+    }
+
+    @Test
+    public void aLayoutThatIsNotFinishedIsNeverDeactivated() {
+        useDefaultConfig();
+        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
+
+        for (int i = 0; i < 5; i++) assertFalse(GreenhouseScanner.completeIfDone(false, true));
+        // Good scans that never come twice in a row do not count either.
+        assertFalse(allRightScan());
+        assertFalse(GreenhouseScanner.completeIfDone(false, true));
+        assertFalse(allRightScan());
+        assertTrue(GreenhouseHologram.isDrawn());
+        assertFalse(GreenhouseScanner.complete());
+    }
+
+    @Test
+    public void deactivatingKeepsTheSessionsOrientationForTheNextShow() {
+        useDefaultConfig();
+        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
+        GreenhouseHologram.rotate();
+        GreenhouseHologram.mirror();
+        GreenhouseOrientation turned = GreenhouseHologram.orientation();
+        allRightScan();
+        assertTrue(allRightScan());
+
+        assertEquals(turned, GreenhouseHologram.orientation());
+    }
+
+    @Test
+    public void theToggleKeyIsAPlainShowAndHide() {
+        useDefaultConfig();
+        GreenhouseHologram.show(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"), true);
+
+        assertEquals("Greenhouse hologram hidden", GreenhouseHologram.toggle());
+        assertFalse(GreenhouseHologram.isDrawn());
+        assertTrue("still a shown layout", GreenhouseHologram.isShowing());
+        assertEquals("Greenhouse hologram shown", GreenhouseHologram.toggle());
+        assertTrue(GreenhouseHologram.isDrawn());
+        // A complete layout is not special any more: it is deactivated, not hidden behind an override.
+        GreenhouseScanner.setCompleteForTest(true);
+        assertTrue(GreenhouseHologram.isDrawn());
+        assertEquals("Greenhouse hologram hidden", GreenhouseHologram.toggle());
     }
 
     @Test
@@ -274,7 +258,6 @@ public final class GreenhouseHologramTest {
         assertFalse(GreenhouseHologram.isShowing());
         assertEquals("no chat message at all", Optional.empty(), GreenhouseHologram.toggleMessage());
         assertTrue("and no state change", GreenhouseHologram.userVisible());
-        assertFalse(GreenhouseScanner.forced());
         GreenhouseHologram.toggleVisible();
         assertTrue(GreenhouseHologram.userVisible());
 
@@ -355,16 +338,16 @@ public final class GreenhouseHologramTest {
 
     @Test
     public void anIngredientIsAnInsetTranslucentCubeOnTheFloor() {
-        // Row 2, column 3 lands at dx = 7, dz = 3 in the default orientation.
+        // Row 2, column 3 lands at dx = 3, dz = 2 in the default orientation.
         var layout = GreenhouseHologramShapes.build(cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot"),
             GreenhouseOrientation.IDENTITY);
 
         // The cube is only the last-rung stand-in for the crop's model now.
         Shape cube = layout.placements().getFirst().cube();
-        assertEquals(7.12, cube.minX(), EPSILON);
-        assertEquals(7.88, cube.maxX(), EPSILON);
-        assertEquals(3.12, cube.minZ(), EPSILON);
-        assertEquals(3.88, cube.maxZ(), EPSILON);
+        assertEquals(3.12, cube.minX(), EPSILON);
+        assertEquals(3.88, cube.maxX(), EPSILON);
+        assertEquals(2.12, cube.minZ(), EPSILON);
+        assertEquals(2.88, cube.maxZ(), EPSILON);
         assertEquals(0.01, cube.minY(), EPSILON);
         assertEquals(0.91, cube.maxY(), EPSILON);
         assertEquals(0x4D, cube.fill() >>> 24);
@@ -391,12 +374,12 @@ public final class GreenhouseHologramTest {
 
         var layout = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY);
 
-        // Rows 3..4 are x 5..7 and columns 5..6 are z 5..7; 0.04 inset.
+        // Columns 5..6 are x 5..7 and rows 3..4 are z 3..5; 0.04 inset.
         Shape slab = layout.placements().getFirst().slab();
         assertEquals(5.04, slab.minX(), EPSILON);
         assertEquals(6.96, slab.maxX(), EPSILON);
-        assertEquals(5.04, slab.minZ(), EPSILON);
-        assertEquals(6.96, slab.maxZ(), EPSILON);
+        assertEquals(3.04, slab.minZ(), EPSILON);
+        assertEquals(4.96, slab.maxZ(), EPSILON);
         assertEquals(0.16, slab.maxY(), EPSILON);
         assertEquals(0xFFFFD700, slab.outline());
         assertEquals(0x2E, slab.fill() >>> 24);
@@ -429,16 +412,16 @@ public final class GreenhouseHologramTest {
         assertEquals(2, shapes.size());
         Shape frame = shapes.get(0);
         Shape post = shapes.get(1);
-        // Default: cell (0, 0) is dx 9, dz 0.
-        assertEquals(9.02, frame.minX(), EPSILON);
-        assertEquals(9.98, frame.maxX(), EPSILON);
+        // Default: cell (0, 0) is dx 0, dz 0, the north-west corner of the plot.
+        assertEquals(0.02, frame.minX(), EPSILON);
+        assertEquals(0.98, frame.maxX(), EPSILON);
         assertEquals(0.02, frame.minZ(), EPSILON);
         assertEquals(4.0F, frame.width(), 0);
         assertEquals(0xFFFFFFFF, frame.outline());
         assertTrue(post.maxY() > 1.5);
-        // Hugging the grid's outer corner (x 10, z 0) inside the cell.
-        assertEquals(9.76, post.minX(), EPSILON);
-        assertEquals(9.96, post.maxX(), EPSILON);
+        // Hugging the grid's outer corner (x 0, z 0) inside the cell.
+        assertEquals(0.04, post.minX(), EPSILON);
+        assertEquals(0.24, post.maxX(), EPSILON);
         assertEquals(0.04, post.minZ(), EPSILON);
         assertEquals(0.24, post.maxZ(), EPSILON);
     }
@@ -447,9 +430,10 @@ public final class GreenhouseHologramTest {
     public void theMarkerFollowsTheOrientation() {
         List<Shape> mirrored = shapesOf(new GreenhouseGrid(), GreenhouseOrientation.IDENTITY.mirrored());
 
-        // Mirrored: cell (0, 0) is dx 9, dz 9 and the outer corner is (10, 10).
+        // Mirrored: cell (0, 0) is dx 9, dz 0 and the outer corner is (10, 0).
         assertEquals(9.02, mirrored.get(0).minX(), EPSILON);
-        assertEquals(9.02, mirrored.get(0).minZ(), EPSILON);
-        assertEquals(9.76, mirrored.get(1).minZ(), EPSILON);
+        assertEquals(0.02, mirrored.get(0).minZ(), EPSILON);
+        assertEquals(9.76, mirrored.get(1).minX(), EPSILON);
+        assertEquals(0.04, mirrored.get(1).minZ(), EPSILON);
     }
 }

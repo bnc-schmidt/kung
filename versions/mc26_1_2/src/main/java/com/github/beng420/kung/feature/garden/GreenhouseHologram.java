@@ -31,7 +31,7 @@ public final class GreenhouseHologram {
     private static GreenhouseOrientation orientation = GreenhouseOrientation.IDENTITY;
     private static GreenhouseHologramShapes.Layout shown = GreenhouseHologramShapes.Layout.EMPTY;
     private static int version;
-    /** The player's own show/hide (the toggle key): independent of showing a layout and of completion. */
+    /** The player's own show/hide (the toggle key): independent of showing a layout. */
     private static boolean visible = true;
 
     private GreenhouseHologram() { }
@@ -39,6 +39,7 @@ public final class GreenhouseHologram {
     /** Registers the world renderer once at client start; the hologram stays off until something shows one. */
     public static void initialize() {
         GreenhouseWorldRenderer.initialize();
+        GreenhouseCrosshairLabel.initialize();
         GreenhouseHologramSettings.setToggleHandler(GreenhouseHologram::toggleVisible);
         // Leaving or joining a server (also a profile change): the scan of the last session is not this one's.
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> onConnectionChange());
@@ -108,6 +109,10 @@ public final class GreenhouseHologram {
         return GreenhouseCode.decode(text).filter(layout -> layout.filled() > 0);
     }
 
+    /**
+     * Turns the hologram off: drops the shown layout and stops scanning. The orientation stays for the next show.
+     * {@code blueprint off} calls this, and so does a finished layout ({@link GreenhouseScanner#completeIfDone}).
+     */
     public static void hide() {
         GreenhouseScanner.reset();
         grid = null;
@@ -120,23 +125,8 @@ public final class GreenhouseHologram {
     /** Whether the player has not hidden the hologram with the toggle key (true whenever nothing is shown). */
     static boolean userVisible() { return visible; }
 
-    /**
-     * Whether completion hides the hologram now: the layout is complete (all its ingredient cells stood right and no
-     * unplanned crop stood in the last two scans), the setting wants it hidden then and the player has not shown it
-     * anyway with the toggle key ({@link GreenhouseScanner#forced()}). The scan goes on meanwhile, and the hologram
-     * is back when a crop is missing again.
-     */
-    static boolean hiddenByCompletion() {
-        return completionHides() && !GreenhouseScanner.forced();
-    }
-
-    /** Complete and the setting asks for hiding then, whatever the player's override. */
-    private static boolean completionHides() {
-        return GreenhouseScanner.complete() && GreenhouseHologramSettings.hideWhenComplete();
-    }
-
-    /** Whether anything is drawn and claimed: shown, not toggled off and not complete (when that hides it). */
-    static boolean isDrawn() { return isShowing() && visible && !hiddenByCompletion(); }
+    /** Whether anything is drawn and claimed: a layout is shown and the player has not toggled it off. */
+    static boolean isDrawn() { return isShowing() && visible; }
 
     /**
      * The toggle key's action, client thread: flips the hologram as {@link #toggle()} says and returns the chat
@@ -152,29 +142,10 @@ public final class GreenhouseHologram {
             message -> KungMessages.send(Minecraft.getInstance(), KungMessages.Type.INFO, "", message));
     }
 
-    /**
-     * The toggle key's state machine, with {@code drawn} = {@link #isDrawn()} while a layout is shown:
-     * <ul>
-     * <li>drawn: the key hides it ({@code visible = false}, any override ends);</li>
-     * <li>not drawn, whatever the reason (key, completion or both): the key shows it ({@code visible = true}) and,
-     * when completion would still hide it, overrides that ({@link GreenhouseScanner#forced()}), so "shown" is only
-     * said for a hologram that really is drawn.</li>
-     * </ul>
-     * The override ends with the completion (the layout becomes incomplete), with {@link #show} / {@link #hide()}
-     * and with a corner change, all through {@link GreenhouseScanner#reset()} or the completion's own update.
-     * Returns the chat message for the new state.
-     */
+    /** The toggle key: flips the player's show/hide and returns the chat message for the new state. */
     static String toggle() {
-        boolean completionHides = completionHides();
-        if (visible && !hiddenByCompletion()) {
-            visible = false;
-            GreenhouseScanner.setForced(false);
-            return completionHides ? "Greenhouse hologram hidden: layout is complete (press K to show anyway)"
-                : "Greenhouse hologram hidden";
-        }
-        visible = true;
-        GreenhouseScanner.setForced(completionHides);
-        return "Greenhouse hologram shown";
+        visible = !visible;
+        return visible ? "Greenhouse hologram shown" : "Greenhouse hologram hidden";
     }
 
     /**
@@ -219,7 +190,7 @@ public final class GreenhouseHologram {
 
     /**
      * The soil ghosts of the latest scan (missing, wrong block and wrong state), for ray tests such as picking the soil
-     * to fetch. Empty while nothing is drawn (no hologram, toggled off or complete), before a scan and when no soil
+     * to fetch. Empty while nothing is drawn (no hologram or toggled off), before a scan and when no soil
      * layer was found.
      */
     static List<SoilGhost> soilGhosts() {
@@ -261,7 +232,7 @@ public final class GreenhouseHologram {
     /** For the debug dump: whether something is shown, how it is turned and how many boxes it is. */
     static String stateSummary() {
         return "showing=" + isShowing() + " userVisible=" + visible + " complete=" + GreenhouseScanner.complete()
-            + " forced=" + GreenhouseScanner.forced() + " orientation=" + orientation.describe()
+            + " orientation=" + orientation.describe()
             + " boxes=" + shown.shapes().size() + " models=" + shown.placements().size();
     }
 
@@ -276,7 +247,7 @@ public final class GreenhouseHologram {
      * the crop the player looks at. Corner-relative (y 0..1 above the hologram floor): add the greenhouse corner,
      * or use {@link GreenhouseHologramShapes.CellBox#bounds}. Follows the orientation; empty while hidden. A cell
      * whose plant is already right (per the last plot scan) has {@code visible() == false}: nothing is drawn there.
-     * Empty while nothing is drawn (toggled off with the key, or complete and hidden for it), so a pick-block ray
+     * Empty while nothing is drawn (toggled off with the key), so a pick-block ray
      * claims nothing then. Not a per-frame call: it builds the list.
      */
     static List<GreenhouseHologramShapes.CellBox> cellBoxes() {

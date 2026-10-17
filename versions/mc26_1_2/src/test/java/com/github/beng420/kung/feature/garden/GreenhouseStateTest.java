@@ -481,6 +481,112 @@ public final class GreenhouseStateTest {
             GreenhouseState.fromJson("{\"version\":1,\"costMode\":\"IRONMAN\",\"stopEarly\":true}").costMode());
     }
 
+    /** A file as the first planner wrote it: no orientation field, a hole at (2, 3), a Noctilume 2x2 and a Carrot. */
+    private static String oldFile(String extra) {
+        StringBuilder mask = new StringBuilder("1".repeat(100));
+        mask.setCharAt(2 * 10 + 3, '0');
+        return "{\"version\":1," + extra + "\"unlocked\":\"" + mask + "\",\"layout\":[[0,0,\"Carrot\",1],"
+            + "[1,1,\"Noctilume\",0],[1,2,\"Noctilume\",0],[2,1,\"Noctilume\",0],[2,2,\"Noctilume\",0]]}";
+    }
+
+    @Test
+    public void anOldFileIsTurnedAQuarterClockwiseSoItKeepsItsPlaceOnThePlot() {
+        GreenhouseState loaded = GreenhouseState.fromJson(oldFile(""));
+
+        // new[r][c] = old[9 - c][r]: the hole at (2, 3) lands at (3, 7).
+        assertEquals(99, loaded.unlockedCount());
+        assertFalse(loaded.isUnlocked(3 * 10 + 7));
+        assertTrue(loaded.isUnlocked(2 * 10 + 3));
+        GreenhouseGrid layout = loaded.layout();
+        assertEquals(new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT), layout.get(0, 9));
+        assertNull(layout.get(0, 0));
+        for (int row = 1; row <= 2; row++) {
+            for (int column = 7; column <= 8; column++) {
+                assertEquals(new GreenhouseGrid.Cell("Noctilume", GreenhouseGrid.TARGET), layout.get(row, column));
+            }
+        }
+        assertEquals(5, layout.filled());
+        // The 2x2 footprint is still one block after the turn.
+        assertEquals(List.of(new GreenhousePlan.Block("Noctilume", 1, 7, 2, 2)), GreenhousePlan.of(layout).blocks());
+    }
+
+    @Test
+    public void aTurnedCellStandsAtTheWorldOffsetItHadUnderTheOldMapping() {
+        GreenhouseGrid old = GreenhouseState.fromJson(oldFile("\"orientationVersion\":2,")).layout();
+        GreenhouseGrid turned = GreenhouseState.fromJson(oldFile("")).layout();
+        // Old default: dx = 9 - row, dz = column. New default: dx = column, dz = row (GreenhouseOrientation.IDENTITY).
+        for (int row = 0; row < 10; row++) {
+            for (int column = 0; column < 10; column++) {
+                int dx = 9 - row;
+                int dz = column;
+                GreenhouseOrientation.Offset moved = GreenhouseOrientation.IDENTITY.offset(dz, dx);
+                assertEquals(dx, moved.dx());
+                assertEquals(dz, moved.dz());
+                assertEquals(old.get(row, column), turned.get(dz, dx));
+            }
+        }
+    }
+
+    @Test
+    public void filesAtOrientationVersionTwoOrLaterAreNotTurned() {
+        for (String version : new String[] {"2", "3", "99"}) {
+            GreenhouseState loaded = GreenhouseState.fromJson(oldFile("\"orientationVersion\":" + version + ","));
+
+            assertFalse(version, loaded.isUnlocked(2 * 10 + 3));
+            assertEquals(version, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT), loaded.layout().get(0, 0));
+        }
+        // An explicit 1 (or 0) is the same as the field being absent.
+        for (String version : new String[] {"1", "0", "-3"}) {
+            GreenhouseState loaded = GreenhouseState.fromJson(oldFile("\"orientationVersion\":" + version + ","));
+            assertFalse(version, loaded.isUnlocked(3 * 10 + 7));
+            assertEquals(version, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT), loaded.layout().get(0, 9));
+        }
+    }
+
+    @Test
+    public void savingWritesVersionTwoAndReloadingNeverTurnsAgain() throws IOException {
+        GreenhouseState first = GreenhouseState.fromJson(oldFile(""));
+        Path file = temporary.getRoot().toPath().resolve("greenhouse.json");
+
+        first.save(file);
+        String written = Files.readString(file, StandardCharsets.UTF_8);
+        GreenhouseState second = GreenhouseState.load(file);
+        second.save(file);
+        GreenhouseState third = GreenhouseState.load(file);
+
+        assertTrue(written, written.contains("\"orientationVersion\":2"));
+        assertEquals(written, second.toJson());
+        assertEquals(written, third.toJson());
+        assertEquals(first.layout(), third.layout());
+        assertFalse(third.isUnlocked(3 * 10 + 7));
+        assertTrue("a new file carries the version too",
+            new GreenhouseState().toJson().contains("\"orientationVersion\":" + GreenhouseState.ORIENTATION_VERSION));
+    }
+
+    @Test
+    public void turningAnOldFileSurvivesCorruptPartsAndNeverThrows() {
+        // A bad mask opens every cell and a bad layout is none; the turn must not trip over either.
+        GreenhouseState badMask = GreenhouseState.fromJson("{\"version\":1,\"unlocked\":\"1x\",\"layout\":[[0,0,\"Carrot\",1]]}");
+        assertEquals(100, badMask.unlockedCount());
+        assertEquals(new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT), badMask.layout().get(0, 9));
+
+        GreenhouseState badLayout = GreenhouseState.fromJson(
+            "{\"version\":1,\"unlocked\":\"" + "0".repeat(10) + "1".repeat(90) + "\",\"layout\":[[0,10,\"Carrot\",1]]}");
+        assertNull(badLayout.layout());
+        // Mask row 0 (ten locked cells) became column 9.
+        assertEquals(90, badLayout.unlockedCount());
+        for (int row = 0; row < 10; row++) assertFalse(badLayout.isUnlocked(row * 10 + 9));
+
+        // No layout and no mask at all.
+        GreenhouseState nothing = GreenhouseState.fromJson("{\"version\":1}");
+        assertNull(nothing.layout());
+        assertEquals(100, nothing.unlockedCount());
+
+        // A version that is not a number breaks the document like any other wrong type: defaults.
+        assertDefaults(GreenhouseState.fromJson(oldFile("\"orientationVersion\":\"two\",")));
+        assertDefaults(GreenhouseState.fromJson(oldFile("\"orientationVersion\":[2],")));
+    }
+
     @Test
     public void nullDocumentGivesDefaults() {
         assertNotNull(GreenhouseState.fromJson(null));

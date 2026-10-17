@@ -71,68 +71,69 @@ public final class GreenhouseCompletionTest {
     }
 
     @Test
-    public void twoAgreeingScansComplete_andTheMessageComesOnce() {
+    public void twoAgreeingScansFireAndTheDeactivationsResetStartsOverFromNothing() {
         GreenhouseCompletion completion = new GreenhouseCompletion();
 
         assertFalse(completion.update(true, true));
         assertFalse("one scan is not enough", completion.complete());
-        assertTrue("the second agrees: announce", completion.update(true, true));
+        assertTrue("the second agrees: deactivate", completion.update(true, true));
         assertTrue(completion.complete());
-        assertFalse("no second message", completion.update(true, true));
+
+        // Deactivating the hologram resets the state, so the next layout needs two scans of its own.
+        completion.reset();
+        assertFalse(completion.complete());
         assertFalse(completion.update(true, true));
-        assertTrue(completion.complete());
+        assertTrue(completion.update(true, true));
     }
 
     @Test
     public void aSingleOddScanChangesNothing() {
         GreenhouseCompletion completion = new GreenhouseCompletion();
-        completion.update(true, true);
-        completion.update(true, true);
+        completion.update(true, false);
+        completion.update(true, false);
         assertTrue(completion.complete());
 
-        assertFalse(completion.update(false, true));
+        completion.update(false, false);
         assertTrue("one scan without it: still complete", completion.complete());
-        assertFalse(completion.update(true, true));
+        completion.update(true, false);
         assertTrue(completion.complete());
-        assertFalse("and no repeat message", completion.update(true, true));
 
         // And the other way round: one lone success does not complete a layout.
         GreenhouseCompletion fresh = new GreenhouseCompletion();
         fresh.update(false, true);
         fresh.update(false, true);
-        fresh.update(true, true);
+        assertFalse("one lone success", fresh.update(true, true));
         assertFalse(fresh.complete());
         fresh.update(false, true);
-        fresh.update(true, true);
+        assertFalse("and the next scan is not a second success", fresh.update(true, true));
         assertFalse(fresh.complete());
     }
 
     @Test
-    public void aHarvestEndsItAfterTwoScansAndTheNextCompletionIsAnnouncedAgain() {
+    public void aMissingCropEndsTheCompletionAfterTwoScansWhileTheSettingIsOff() {
         GreenhouseCompletion completion = new GreenhouseCompletion();
-        completion.update(true, true);
-        assertTrue(completion.update(true, true));
+        completion.update(true, false);
+        completion.update(true, false);
 
-        completion.update(false, true);
+        completion.update(false, false);
         assertTrue(completion.complete());
-        completion.update(false, true);
-        assertFalse("two scans with a crop missing: the hologram is back", completion.complete());
+        completion.update(false, false);
+        assertFalse("two scans with a crop missing: not complete any more", completion.complete());
 
-        assertFalse(completion.update(true, true));
-        assertTrue("planted again: announced once more", completion.update(true, true));
+        assertFalse(completion.update(true, false));
+        completion.update(true, false);
         assertTrue(completion.complete());
     }
 
     @Test
-    public void withTheSettingOffNothingIsAnnouncedButCompletionIsTrackedAndAnnouncedWhenItIsSwitchedOn() {
+    public void withTheSettingOffNothingFiresButCompletionIsTrackedAndFiresWhenItIsSwitchedOn() {
         GreenhouseCompletion completion = new GreenhouseCompletion();
 
         assertFalse(completion.update(true, false));
         assertFalse(completion.update(true, false));
         assertTrue("tracked all the same", completion.complete());
         assertFalse(completion.update(true, false));
-        assertTrue("switched on while complete: announced now, once", completion.update(true, true));
-        assertFalse(completion.update(true, true));
+        assertTrue("switched on while complete: fires now", completion.update(true, true));
     }
 
     @Test
@@ -149,7 +150,7 @@ public final class GreenhouseCompletionTest {
     }
 
     @Test
-    public void theTestSeamSettlesOnAnAnswerWithoutAnnouncing() {
+    public void theTestSeamSettlesOnAnAnswerWithoutScans() {
         GreenhouseCompletion completion = new GreenhouseCompletion();
 
         completion.setForTest(true);
@@ -159,33 +160,8 @@ public final class GreenhouseCompletionTest {
     }
 
     @Test
-    public void theForcedShowEndsWithTheCompletionAndAfterAReset() {
-        GreenhouseCompletion completion = new GreenhouseCompletion();
-        assertFalse(completion.forced());
-        completion.update(true, true);
-        completion.update(true, true);
-        completion.setForced(true);
-        assertTrue(completion.forced());
-
-        completion.update(true, true);
-        completion.update(false, true);
-        assertTrue("one odd scan: still complete, still forced", completion.forced());
-        completion.update(true, true);
-        completion.update(false, true);
-        completion.update(false, true);
-        assertFalse(completion.complete());
-        assertFalse("the layout is incomplete again: the override is over", completion.forced());
-
-        completion.update(true, true);
-        completion.update(true, true);
-        assertTrue(completion.complete());
-        assertFalse("a new completion is not forced", completion.forced());
-
-        completion.setForced(true);
-        completion.reset();
-        assertFalse(completion.forced());
-        completion.setForced(true);
-        completion.setForTest(true);
-        assertFalse("the test seam starts unforced", completion.forced());
+    public void theChatLineIsTheOneTheCompletionSends() {
+        assertEquals("Greenhouse layout complete: all crops are placed correctly. Hologram deactivated"
+            + " (show it again with Show in world or /kung greenhouse blueprint).", GreenhouseCompletion.MESSAGE);
     }
 }
