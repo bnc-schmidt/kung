@@ -1,9 +1,11 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.KungMod;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -49,10 +51,31 @@ final class GreenhouseItems {
 
     private record Data(int schema, Map<String, Row> crops, Map<String, Row> soils) { }
 
-    private record Loaded(Map<String, Item> items, Map<String, Item> soils, String error) { }
+    /**
+     * Both sections of the resource. They load independently: a broken {@code soils} section empties only the soils
+     * (and the other way round), and {@code error} names each section that failed.
+     */
+    record Bundle(Map<String, Item> items, Map<String, Item> soils, String error) {
+        static Bundle read(String text) {
+            Map<String, Item> crops = Map.of();
+            Map<String, Item> soils = Map.of();
+            List<String> errors = new ArrayList<>();
+            try {
+                crops = parse(text);
+            } catch (RuntimeException failure) {
+                errors.add("crops: " + failure.getMessage());
+            }
+            try {
+                soils = parseSoils(text);
+            } catch (RuntimeException failure) {
+                errors.add("soils: " + failure.getMessage());
+            }
+            return new Bundle(crops, soils, String.join("; ", errors));
+        }
+    }
 
     private static final class Holder {
-        static final Loaded LOADED = load();
+        static final Bundle LOADED = load();
     }
 
     private GreenhouseItems() { }
@@ -77,16 +100,21 @@ final class GreenhouseItems {
         return Optional.ofNullable(Holder.LOADED.items().get(GreenhouseCrops.canonical(crop)));
     }
 
-    private static Loaded load() {
+    private static Bundle load() {
+        Bundle bundle;
         try (InputStream stream = GreenhouseItems.class.getClassLoader().getResourceAsStream(RESOURCE)) {
-            if (stream == null) return new Loaded(Map.of(), Map.of(), "Missing bundled item data");
-            byte[] bytes = stream.readNBytes(MAX_BYTES + 1);
-            if (bytes.length > MAX_BYTES) return new Loaded(Map.of(), Map.of(), "Item data exceeds 100 KB");
-            String text = new String(bytes, StandardCharsets.UTF_8);
-            return new Loaded(parse(text), parseSoils(text), "");
+            if (stream == null) {
+                bundle = new Bundle(Map.of(), Map.of(), "Missing bundled item data");
+            } else {
+                byte[] bytes = stream.readNBytes(MAX_BYTES + 1);
+                bundle = bytes.length > MAX_BYTES ? new Bundle(Map.of(), Map.of(), "Item data exceeds 100 KB")
+                    : Bundle.read(new String(bytes, StandardCharsets.UTF_8));
+            }
         } catch (IOException | RuntimeException exception) {
-            return new Loaded(Map.of(), Map.of(), "Cannot read item data: " + exception.getMessage());
+            bundle = new Bundle(Map.of(), Map.of(), "Cannot read item data: " + exception.getMessage());
         }
+        if (!bundle.error().isEmpty()) KungMod.LOGGER.warn("Greenhouse item data is not fully usable: {}", bundle.error());
+        return bundle;
     }
 
     /** Validates strictly so a bad edit of the resource fails a test instead of pulling the wrong item. */

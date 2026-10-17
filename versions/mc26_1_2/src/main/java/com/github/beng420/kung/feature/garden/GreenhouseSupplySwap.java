@@ -11,13 +11,19 @@ import net.minecraft.world.inventory.Slot;
  * only: Hypixel disallows automatic interaction with inventories, so {@code versions/common.gradle} cuts this
  * class from the Modrinth jar (and fails the build if anything there still names it); the one caller sits in
  * {@code if (!KungBuild.MODRINTH)}.
+ *
+ * <p>Known risk, accepted by the user for the full (GitHub) flavor: the click is sent whether or not the
+ * inventory screen is open. A vanilla client sends an inventory click only from an open container screen, so a
+ * server that checks for that can tell this click from a player's.
  */
 final class GreenhouseSupplySwap {
     private GreenhouseSupplySwap() { }
 
     /**
-     * Swaps main inventory slot {@code mainSlot} (9-35) with the selected hotbar slot, only while the player's own
-     * inventory is the open menu (no chest or NPC window). False when nothing was sent.
+     * Swaps main inventory slot {@code mainSlot} (9-35) with the selected hotbar slot by sending the click packet
+     * for the player's own inventory menu (id 0). That menu is also the current one when NO screen is open, so
+     * this does send with the inventory closed; it only refuses while another container (a chest, an NPC window)
+     * is the open menu. False when nothing was sent.
      */
     static boolean swap(Minecraft client, int mainSlot) {
         var player = client.player;

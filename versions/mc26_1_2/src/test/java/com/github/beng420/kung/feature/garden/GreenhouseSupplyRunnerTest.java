@@ -681,6 +681,54 @@ public final class GreenhouseSupplyRunnerTest {
     }
 
     @Test
+    public void aHintForAnUnsackableItemKeepsTheRunningPullsAutoSwitch() {
+        host.required.put("Carrot", 3);
+        host.soilNeeded.put(GreenhouseSoils.Soil.SOUL_SAND, 5);
+        runner.onPick("Carrot", INGREDIENT);
+
+        host.now += 900;
+        runner.onPickSoil(GreenhouseSoils.Soil.SOUL_SAND);
+
+        assertTrue(runner.pendingPull());
+        assertEquals("WARNING: Fetch Soul Sand manually (not in any Sack): 5 more needed", host.chats.get(1));
+        runner.onChat("Moved 3 Carrot from your Sacks to your inventory.");
+        host.put(0, "CARROT_ITEM", 3);
+        runner.tick();
+
+        assertFalse(runner.pendingPull());
+        assertEquals(List.of(0), host.selects);
+        assertEquals("INFO: Pulled 3 Carrot", host.chats.get(2));
+        // The cooldown still holds, and the pull is not repeated.
+        assertEquals(List.of("gfs CARROT_ITEM 3"), host.commands);
+    }
+
+    @Test
+    public void holdingTheUnsackableItemAlreadyReplacesTheRunningPullsAutoSwitch() {
+        host.required.put("Carrot", 3);
+        host.soilNeeded.put(GreenhouseSoils.Soil.DIRT, 2);
+        host.put(4, "DIRT", 1);
+        runner.onPick("Carrot", INGREDIENT);
+
+        runner.onPickSoil(GreenhouseSoils.Soil.DIRT);
+
+        assertEquals(List.of(4), host.selects);
+        assertFalse(runner.pendingPull());
+    }
+
+    @Test
+    public void aSwitchPlanWithNothingToHoldLeavesARunningPullAlone() {
+        host.required.put("Carrot", 3);
+        host.required.put("Potato", 2);
+        runner.onPick("Carrot", INGREDIENT);
+        GreenhouseSupply.setPlantedSource(crop -> 2);
+
+        runner.onPick("Potato", INGREDIENT);
+
+        assertTrue(runner.pendingPull());
+        assertEquals("INFO: All 2 Potato are already placed correctly.", host.chats.get(1));
+    }
+
+    @Test
     public void farmlandHasNoItemAndLeavesARunningPullAlone() {
         host.required.put("Carrot", 3);
         host.put(2, "FARMLAND_DECOY", 1);

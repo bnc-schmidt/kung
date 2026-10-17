@@ -125,7 +125,7 @@ final class GreenhouseSupply {
                      Map<String, Integer> inventory) {
         String name = GreenhouseCrops.canonical(crop == null ? "" : crop);
         if (flag == GreenhouseGrid.TARGET) return plain(Action.TARGET_SPOT, name, null, TARGET_SPOT);
-        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, "Unknown crop " + name);
+        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, unknown("crop", name));
         GreenhouseItems.Item item = found.get();
         int held = item.id() == null ? 0 : inventory.getOrDefault(normalizeId(item.id()), 0);
         int inInventory = held * item.plantsPerItem();
@@ -143,7 +143,7 @@ final class GreenhouseSupply {
     static Plan planSoil(GreenhouseSoils.Soil soil, int needed, Map<String, Integer> inventory) {
         String name = soil.displayName();
         Optional<GreenhouseItems.Item> found = GreenhouseItems.soil(soil);
-        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, "Unknown soil " + name);
+        if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, unknown("soil", name));
         GreenhouseItems.Item item = found.get();
         if (item.id() == null) {
             return new Plan(Action.NOT_SACKABLE, name, item, needed, 0, 0, needed, 0, false,
@@ -174,6 +174,15 @@ final class GreenhouseSupply {
         return new Plan(Action.PULL, name, item, required, planted, inInventory, missing, amount, clamped,
             "Pulling " + amount + " " + item.unit() + " from Sacks" + forPlants + " (" + counts + ")"
                 + (clamped ? ", capped at " + MAX_AMOUNT : ""));
+    }
+
+    private static String unknown(String kind, String name) {
+        return unknown(kind, name, GreenhouseItems.loadError());
+    }
+
+    /** "Unknown crop X", plus why the item data is unusable when it is (a broken section empties its lookups). */
+    static String unknown(String kind, String name, String loadError) {
+        return "Unknown " + kind + " " + name + (loadError.isEmpty() ? "" : " (item data: " + loadError + ")");
     }
 
     /** Why nothing is pulled: the layout is done, the crop is not part of it, or the inventory already covers it. */

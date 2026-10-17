@@ -61,7 +61,20 @@ public final class GreenhousePickHook {
 
         /** The soil blocks the latest scan found missing or wrong. */
         default List<GreenhouseHologram.SoilGhost> soilGhosts() { return List.of(); }
+
+        /**
+         * Scans the plot now, whatever the scan interval says, so the counts below are the plot as it is at the
+         * click (the inventory is live, the scan is up to a second old). Called with the confirmed corner.
+         */
+        default void refreshScan(BlockPos corner) { }
     }
+
+    /**
+     * A real hit this much nearer than the hologram still loses: a ghost's top face coincides with the real block's,
+     * and {@code client.hitResult} comes from the previous frame's eye and rotation, so an exact tie test would
+     * fail at random while the player moves.
+     */
+    static final double TIE_EPSILON = 0.05;
 
     private static boolean failed;
 
@@ -86,6 +99,7 @@ public final class GreenhousePickHook {
             if (view == null) return false;
             Optional<BlockPos> corner = game.corner();
             if (corner.isEmpty()) return false;
+            game.refreshScan(corner.get());
             Optional<Hit> hit = nearest(view, worldCells(game.cells(), game.soilGhosts(), corner.get()));
             hit.ifPresent(action);
             return hit.isPresent();
@@ -105,8 +119,9 @@ public final class GreenhousePickHook {
     }
 
     /**
-     * Crop cells plus soil ghosts. A ghost is always pickable. A cell with a ghost in its column is left out: the
-     * ghost sits right under the cell's volume, so a ray at the soil would always meet the cell first, and nothing
+     * Crop cells plus soil ghosts. A ghost is always pickable. A cell with a ghost in its column becomes a SOIL hit
+     * over the cell's own volume: the ghost (one block at the soil layer) sits right under the cell's volume and the
+     * translucent crop head is what the player aims at, so the whole column has to answer with the soil; nothing
      * can be planted on a missing soil anyway, so the soil is what that spot needs first.
      */
     static List<Cell> worldCells(List<GreenhouseHologramShapes.CellBox> boxes,
@@ -115,20 +130,20 @@ public final class GreenhousePickHook {
         for (GreenhouseHologramShapes.CellBox box : boxes) {
             if (!box.visible()) continue;
             AABB bounds = box.bounds(corner);
-            boolean soilMissing = ghosts.stream().anyMatch(ghost -> {
+            GreenhouseHologram.SoilGhost under = ghosts.stream().filter(ghost -> {
                 AABB soil = ghost.bounds(corner);
                 return soil.minX == bounds.minX && soil.minZ == bounds.minZ;
-            });
-            if (!soilMissing) cells.add(new Cell(box.crop(), box.flag(), bounds));
+            }).findFirst().orElse(null);
+            cells.add(under == null ? new Cell(box.crop(), box.flag(), bounds) : Cell.ofSoil(under.soil(), bounds));
         }
         for (GreenhouseHologram.SoilGhost ghost : ghosts) cells.add(Cell.ofSoil(ghost.soil(), ghost.bounds(corner)));
         return cells;
     }
 
     /**
-     * The cell nearest to the eye along the view ray within reach, unless the real hit is nearer (a tie goes to
-     * the cell: the hologram stands on the same floor the ray would otherwise hit). A cell the eye is inside is
-     * not hit, as {@link AABB#clip} defines it.
+     * The cell nearest to the eye along the view ray within reach, unless the real hit is nearer by more than
+     * {@link #TIE_EPSILON} (the hologram stands on the same floor the ray would otherwise hit). A cell the eye is
+     * inside is not hit, as {@link AABB#clip} defines it.
      */
     static Optional<Hit> nearest(View view, List<Cell> cells) {
         Vec3 end = view.eye().add(view.look().scale(view.reach()));
@@ -139,7 +154,7 @@ public final class GreenhousePickHook {
             double distance = view.eye().distanceTo(at.get());
             if (best == null || distance < best.distance()) best = new Hit(cell.crop(), cell.flag(), cell.soil(), distance);
         }
-        return best == null || best.distance() > view.realDistance() ? Optional.empty() : Optional.of(best);
+        return best == null || best.distance() > view.realDistance() + TIE_EPSILON ? Optional.empty() : Optional.of(best);
     }
 
     /** The running client: the player's eye and view, vanilla's hit, the hologram and the greenhouse corner. */
@@ -159,6 +174,8 @@ public final class GreenhousePickHook {
         }
 
         @Override public Optional<BlockPos> corner() { return GreenhouseLocator.current(client, false); }
+
+        @Override public void refreshScan(BlockPos corner) { GreenhouseScanner.scanNow(client, corner, GreenhouseHologram.version()); }
 
         @Override public List<GreenhouseHologramShapes.CellBox> cells() { return GreenhouseHologram.cellBoxes(); }
 

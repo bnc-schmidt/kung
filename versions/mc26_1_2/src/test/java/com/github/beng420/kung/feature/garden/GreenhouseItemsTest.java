@@ -140,6 +140,37 @@ public final class GreenhouseItemsTest {
     }
 
     @Test
+    public void aBrokenSectionOnlyEmptiesItself() {
+        String crops = "\"crops\":{\"Carrot\":{\"id\":\"CARROT_ITEM\",\"gfs\":\"CARROT_ITEM\"}}";
+        String soils = "\"soils\":{\"Sand\":{\"id\":\"SAND\",\"gfs\":\"SAND\"}}";
+
+        var whole = GreenhouseItems.Bundle.read("{\"schema\":1," + crops + "," + soils + "}");
+        assertEquals("", whole.error());
+        assertEquals(1, whole.items().size());
+        assertEquals(1, whole.soils().size());
+
+        var badSoils = GreenhouseItems.Bundle.read("{\"schema\":1," + crops
+            + ",\"soils\":{\"Bedrock\":{\"id\":\"BEDROCK\"}}}");
+        assertEquals(1, badSoils.items().size());
+        assertTrue(badSoils.soils().isEmpty());
+        assertTrue(badSoils.error(), badSoils.error().startsWith("soils: ") && !badSoils.error().contains("crops: "));
+
+        var badCrops = GreenhouseItems.Bundle.read("{\"schema\":1,\"crops\":{\"Banana\":{\"id\":\"BANANA\"}}," + soils + "}");
+        assertTrue(badCrops.items().isEmpty());
+        assertEquals(1, badCrops.soils().size());
+        assertTrue(badCrops.error(), badCrops.error().startsWith("crops: ") && !badCrops.error().contains("soils: "));
+    }
+
+    @Test
+    public void anUnreadableFileEmptiesBothAndSaysWhy() {
+        var broken = GreenhouseItems.Bundle.read("{\"schema\":2}");
+
+        assertTrue(broken.items().isEmpty());
+        assertTrue(broken.soils().isEmpty());
+        assertTrue(broken.error(), broken.error().contains("crops: ") && broken.error().contains("soils: "));
+    }
+
+    @Test
     public void lookupUsesTheCropListsLooseMatching() {
         assertEquals("Do-not-eat-shroom", item("do not eat shroom").crop());
         assertEquals("Wheat Seeds", item("wheat_seeds").crop());

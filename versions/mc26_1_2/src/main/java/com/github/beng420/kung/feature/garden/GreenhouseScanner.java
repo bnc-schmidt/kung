@@ -115,6 +115,17 @@ final class GreenhouseScanner {
             + " (" + soilNote + ")";
     }
 
+    /**
+     * Scans now, whatever the interval says, for a caller that is about to act on the plot (the pick-block supply).
+     * The same guards as {@link #tick} apply: nothing runs without a level, after a failed scan or while the chunks
+     * are not loaded (the last scan stays). The next regular scan is due an interval after this one.
+     */
+    static void scanNow(Minecraft client, BlockPos corner, int hologramVersion) {
+        long now = System.nanoTime();
+        tick(client, corner, hologramVersion, now + INTERVAL_NANOS);
+        if (scannedAt > now) scannedAt = now;
+    }
+
     /** Runs a scan when one is due. {@code corner} is the confirmed greenhouse corner. */
     static void tick(Minecraft client, BlockPos corner, int hologramVersion, long nowNanos) {
         Level level = client.level;

@@ -106,13 +106,13 @@ public final class GreenhouseSupplyRunner {
             case TARGET_SPOT -> host.chat(Level.INFO, plan.message());
             case UNKNOWN_CROP -> host.chat(Level.WARNING, plan.message());
             case SWITCH -> {
-                pending = null;
-                if (!switchTo(plan)) host.chat(Level.INFO, plan.message());
+                Held held = switchTo(plan);
+                if (held == Held.NONE) host.chat(Level.INFO, plan.message());
+                else pending = null;
             }
             case NOT_SACKABLE -> {
-                // A hint about something with no item (Farmland, Fire) leaves a running pull alone.
-                if (plan.item().id() != null) pending = null;
-                switchTo(plan);
+                // A hint leaves a running pull alone; only a real switch to this item replaces its auto-switch.
+                if (switchTo(plan) == Held.SWITCHED) pending = null;
                 host.chat(Level.WARNING, plan.message());
             }
             case PULL -> pull(plan);
@@ -199,20 +199,28 @@ public final class GreenhouseSupplyRunner {
 
     boolean pendingPull() { return pending != null; }
 
-    /** False when the player holds none of the plan's item anywhere in the inventory. */
-    private boolean switchTo(Plan plan) {
-        if (plan.item().id() == null) return false;
+    /** What a switch to the plan's item came to. */
+    private enum Held {
+        /** The player holds none of it anywhere in the inventory (or it has no item). */
+        NONE,
+        /** It sits in the main inventory and could not be swapped in: the player was told to move it. */
+        HINTED,
+        /** It is in the selected hotbar slot now. */
+        SWITCHED
+    }
+
+    private Held switchTo(Plan plan) {
+        if (plan.item().id() == null) return Held.NONE;
         String id = GreenhouseSupply.normalizeId(plan.item().id());
         int hotbar = host.hotbarSlot(id);
         if (hotbar >= 0) {
             host.select(hotbar);
-            return true;
+            return Held.SWITCHED;
         }
         int main = host.mainSlot(id);
-        if (main < 0) return false;
-        if (!host.swapIntoSelected(main)) {
-            host.chat(Level.WARNING, "Move " + plan.item().unit() + " into your hotbar to hold it");
-        }
-        return true;
+        if (main < 0) return Held.NONE;
+        if (host.swapIntoSelected(main)) return Held.SWITCHED;
+        host.chat(Level.WARNING, "Move " + plan.item().unit() + " into your hotbar to hold it");
+        return Held.HINTED;
     }
 }

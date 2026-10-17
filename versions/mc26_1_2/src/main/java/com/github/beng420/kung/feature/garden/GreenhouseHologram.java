@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.garden;
 
 import java.util.List;
 import java.util.Optional;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
@@ -35,6 +36,14 @@ public final class GreenhouseHologram {
     /** Registers the world renderer once at client start; the hologram stays off until something shows one. */
     public static void initialize() {
         GreenhouseWorldRenderer.initialize();
+        // Leaving or joining a server (also a profile change): the scan of the last session is not this one's.
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> onConnectionChange());
+        ClientPlayConnectionEvents.JOIN.register((handler, sender, client) -> onConnectionChange());
+    }
+
+    /** The scan results belong to one session: the same corner after a rejoin must not reuse them. */
+    static void onConnectionChange() {
+        GreenhouseScanner.reset();
     }
 
     /** Shows the layout until {@link #hide()}; it is drawn only while the player is in their greenhouse. */

@@ -53,9 +53,20 @@ public final class GreenhousePickHookTest {
         List<Cell> cells = List.of(cell("Carrot", 1, 0));
 
         assertTrue(GreenhousePickHook.nearest(along(10, 3.0), cells).isEmpty());
-        assertTrue(GreenhousePickHook.nearest(along(10, 4.999), cells).isEmpty());
+        assertTrue(GreenhousePickHook.nearest(along(10, 4.9), cells).isEmpty());
         assertEquals("Carrot", GreenhousePickHook.nearest(along(10, 5.0), cells).orElseThrow().crop());
         assertEquals("Carrot", GreenhousePickHook.nearest(along(10, 8.0), cells).orElseThrow().crop());
+    }
+
+    @Test
+    public void aRealHitAHairNearerStillLosesToTheHologram() {
+        List<Cell> cells = List.of(cell("Carrot", 1, 0));
+
+        // The hit result is a frame old and a ghost shares its top face with the real block: ties and near-ties
+        // must not fail at random while the player moves.
+        assertTrue(GreenhousePickHook.nearest(along(10, 5.0 - 0.04), cells).isPresent());
+        assertTrue(GreenhousePickHook.nearest(along(10, 5.0 - GreenhousePickHook.TIE_EPSILON), cells).isPresent());
+        assertTrue(GreenhousePickHook.nearest(along(10, 5.0 - 0.06), cells).isEmpty());
     }
 
     @Test
@@ -168,10 +179,53 @@ public final class GreenhousePickHookTest {
         List<Cell> cells = GreenhousePickHook.worldCells(List.of(over, elsewhere),
             List.of(ghost(2, 0, GreenhouseSoils.Soil.SOUL_SAND)), corner);
 
-        assertEquals(List.of("Carrot", "Soul Sand"), cells.stream().map(Cell::crop).toList());
-        // From straight above the ghost's column the ray reaches the ghost, not the cell over it.
+        // The cell over the missing soil answers with the soil too; the other column keeps its crop.
+        assertEquals(List.of("Soul Sand", "Carrot", "Soul Sand"), cells.stream().map(Cell::crop).toList());
+        assertEquals(java.util.Arrays.asList(GreenhouseSoils.Soil.SOUL_SAND, null, GreenhouseSoils.Soil.SOUL_SAND),
+            cells.stream().map(Cell::soil).toList());
+        // From straight above the column the ray reaches the soil.
         View down = new View(new Vec3(102.5, GreenhouseLocator.HOLOGRAM_Y + 4.0, 200.5), new Vec3(0, -1, 0), 10, INF);
         assertEquals(GreenhouseSoils.Soil.SOUL_SAND, GreenhousePickHook.nearest(down, cells).orElseThrow().soil());
+    }
+
+    @Test
+    public void aimingAtTheCropHeadOverAMissingSoilPicksTheSoilNotTheNextColumn() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        // Column (dx 2, dz 0) has a missing sand block; the cell one row further (dz 1) is an ordinary Potato.
+        var over = new GreenhouseHologramShapes.CellBox(0, 2, "Carrot", 1, 2, 0, 0, 3, 1, 1);
+        var next = new GreenhouseHologramShapes.CellBox(1, 2, "Potato", 1, 2, 0, 1, 3, 1, 2);
+        var ghost = ghost(2, 0, GreenhouseSoils.Soil.SAND);
+        // The translucent head floats ~0.6 above the hologram floor; the eye is a standing player's.
+        Vec3 head = new Vec3(102.5, GreenhouseLocator.HOLOGRAM_Y + 0.6, 200.5);
+
+        for (double distance : new double[] {1.0, 2.0, 3.0}) {
+            Vec3 eye = new Vec3(102.5, GreenhouseLocator.HOLOGRAM_Y + 1.62, 200.5 - distance);
+            View view = new View(eye, head.subtract(eye).normalize(), 4.5, INF);
+
+            // Without the column's cell (the old rule) the ghost at the soil layer is overshot at this pitch ...
+            if (distance >= 2.0) {
+                Hit missed = GreenhousePickHook.nearest(view,
+                    GreenhousePickHook.worldCells(List.of(next), List.of(ghost), corner)).orElseThrow();
+                assertEquals("Potato", missed.crop());
+            }
+            // ... and with it the whole column answers with the soil.
+            Hit hit = GreenhousePickHook.nearest(view,
+                GreenhousePickHook.worldCells(List.of(over, next), List.of(ghost), corner)).orElseThrow();
+            assertEquals("distance " + distance, GreenhouseSoils.Soil.SAND, hit.soil());
+        }
+    }
+
+    @Test
+    public void aCorrectCropOverAMissingSoilStillOffersOnlyTheGhost() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var done = new GreenhouseHologramShapes.CellBox(0, 2, "Carrot", 1, 2, 0, 0, 3, 1, 1).withVisible(false);
+
+        List<Cell> cells = GreenhousePickHook.worldCells(List.of(done), List.of(ghost(2, 0, GreenhouseSoils.Soil.SAND)),
+            corner);
+
+        assertEquals(1, cells.size());
+        assertEquals(GreenhouseSoils.Soil.SAND, cells.get(0).soil());
+        assertEquals(GreenhouseLocator.FLOOR_Y, cells.get(0).bounds().minY, 1e-9);
     }
 
     @Test
@@ -214,6 +268,9 @@ public final class GreenhousePickHookTest {
         final List<GreenhouseHologram.SoilGhost> ghosts = new ArrayList<>();
         int viewCalls;
         int cornerCalls;
+        int refreshes;
+        BlockPos refreshedCorner;
+        Runnable duringRefresh;
 
         @Override public boolean hologramShowing() { return showing; }
 
@@ -233,6 +290,12 @@ public final class GreenhousePickHookTest {
         @Override public List<GreenhouseHologramShapes.CellBox> cells() { return cells; }
 
         @Override public List<GreenhouseHologram.SoilGhost> soilGhosts() { return ghosts; }
+
+        @Override public void refreshScan(BlockPos corner) {
+            refreshes++;
+            refreshedCorner = corner;
+            if (duringRefresh != null) duringRefresh.run();
+        }
     }
 
     @Test
@@ -268,6 +331,40 @@ public final class GreenhousePickHookTest {
         assertEquals("a hidden hologram is not even probed", 0, hidden.viewCalls + hidden.cornerCalls);
         assertEquals(0, screen.viewCalls + screen.cornerCalls);
         assertEquals("no player, no corner lookup", 0, noPlayer.cornerCalls);
+        for (FakeGame game : List.of(hidden, screen, noPlayer, noCorner)) {
+            assertEquals("no scan unless the click can be taken", 0, game.refreshes);
+        }
+    }
+
+    @Test
+    public void thePlotIsScannedFreshBeforeTheHologramIsRead() {
+        FakeGame game = new FakeGame();
+        List<Hit> picked = new ArrayList<>();
+        // The scan finds the carrot planted just now: the cell stops showing, so vanilla picks the real crop.
+        game.duringRefresh = () -> game.cells.replaceAll(cell -> cell.withVisible(false));
+
+        assertFalse(GreenhousePickHook.tryPick(game, picked::add));
+
+        assertEquals(1, game.refreshes);
+        assertEquals(new BlockPos(100, 0, 200), game.refreshedCorner);
+        assertTrue(picked.isEmpty());
+
+        // One scan per click, and a click on a still-visible cell is taken as before.
+        FakeGame plain = new FakeGame();
+        assertTrue(GreenhousePickHook.tryPick(plain, picked::add));
+        assertEquals(1, plain.refreshes);
+    }
+
+    @Test
+    public void aScanThatFailsLeavesTheClickToVanilla() {
+        FakeGame game = new FakeGame();
+        game.duringRefresh = () -> {
+            throw new IllegalStateException("scan");
+        };
+        List<Hit> picked = new ArrayList<>();
+
+        assertFalse(GreenhousePickHook.tryPick(game, picked::add));
+        assertTrue(picked.isEmpty());
     }
 
     @Test

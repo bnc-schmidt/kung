@@ -86,6 +86,21 @@ public final class GreenhouseSupplyScanTest {
     }
 
     @Test
+    public void leavingOrJoiningAServerDropsTheLastScan() {
+        scan(cells("Carrot", "Carrot"), Map.of("Carrot", 2), State.CORRECT, State.CORRECT);
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
+        assertEquals(2, GreenhouseHologram.correctlyPlaced("Carrot"));
+        assertEquals(1, GreenhouseHologram.soilGhosts().size());
+
+        GreenhouseHologram.onConnectionChange();
+
+        assertEquals(0, GreenhouseHologram.correctlyPlaced("Carrot"));
+        assertEquals(0, GreenhouseHologram.plantedCount("Carrot"));
+        assertEquals(0, GreenhouseHologram.soilGhosts().size());
+        assertEquals(-1, GreenhouseScanner.soilLayer());
+    }
+
+    @Test
     public void nothingIsPlacedWhileNoHologramIsShown() {
         scan(cells("Carrot"), Map.of(), State.CORRECT);
         GreenhouseHologram.hide();

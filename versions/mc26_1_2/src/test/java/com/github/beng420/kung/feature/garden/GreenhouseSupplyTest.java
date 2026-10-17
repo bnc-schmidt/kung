@@ -133,6 +133,14 @@ public final class GreenhouseSupplyTest {
     }
 
     @Test
+    public void anUnknownNameSaysWhyWhenTheItemDataIsBroken() {
+        assertEquals("Unknown crop Banana", GreenhouseSupply.unknown("crop", "Banana", ""));
+        assertEquals("Unknown soil Sand (item data: soils: Bad item id sand for Sand)",
+            GreenhouseSupply.unknown("soil", "Sand", "soils: Bad item id sand for Sand"));
+        assertEquals("", GreenhouseItems.loadError());
+    }
+
+    @Test
     public void cropNamesUseTheListsLooseMatching() {
         Plan plan = GreenhouseSupply.plan("wheat_seeds", INGREDIENT, 2, 0, Map.of());
 
