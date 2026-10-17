@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -1075,5 +1076,158 @@ public final class GreenhouseSolverTest {
         assertTrue(result.ingredients().isEmpty());
         assertEquals(16, result.targets().size());
         assertTrue(result.notes().toString(), result.notes().stream().anyMatch(n -> n.startsWith("Lonelily needs")));
+    }
+
+    // ----- corner compaction -----
+
+    private static int at(int row, int column) {
+        return row * SIZE + column;
+    }
+
+    private static byte[] cropsAt(int... cells) {
+        byte[] labels = new byte[SIZE * SIZE];
+        Arrays.fill(labels, GreenhouseSearch.EMPTY);
+        for (int cell : cells) labels[cell] = 0;
+        return labels;
+    }
+
+    private static int[] cropCells(byte[] labels) {
+        return IntStream.range(0, labels.length).filter(p -> labels[p] != GreenhouseSearch.EMPTY).toArray();
+    }
+
+    /** One crop in the ring turns a free cell into a site, so a lone crop makes up to eight sites. */
+    private static GreenhouseSearch oneCropSearch(boolean[] open) {
+        GreenhouseSearch.Recipe next = new GreenhouseSearch.Recipe(1, 1, new int[] {0}, new int[] {1}, false, 10);
+        return new GreenhouseSearch(open, 1, new GreenhouseSearch.Recipe[] {next},
+            new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[1], new long[1], 1);
+    }
+
+    private static void assertSameOutcome(GreenhouseSearch.Evaluation expected, GreenhouseSearch.Evaluation actual) {
+        assertEquals(expected.sites().size(), actual.sites().size());
+        assertArrayEquals(expected.candidates(), actual.candidates());
+        assertArrayEquals(expected.goalTotals(), actual.goalTotals(), EPS);
+        assertEquals(expected.ambiguous(), actual.ambiguous());
+        assertEquals(expected.unrequested(), actual.unrequested());
+    }
+
+    /** Empty rows plus empty columns between the filled cells' bounding box and its nearest plot corner. */
+    private static int cornerGap(GreenhouseGrid grid) {
+        int top = SIZE;
+        int bottom = -1;
+        int left = SIZE;
+        int right = -1;
+        for (int row = 0; row < SIZE; row++) {
+            for (int column = 0; column < SIZE; column++) {
+                if (grid.get(row, column) == null) continue;
+                top = Math.min(top, row);
+                bottom = Math.max(bottom, row);
+                left = Math.min(left, column);
+                right = Math.max(right, column);
+            }
+        }
+        int below = SIZE - 1 - bottom;
+        int opposite = SIZE - 1 - right;
+        return Math.min(Math.min(top + left, top + opposite), Math.min(below + left, below + opposite));
+    }
+
+    @Test
+    public void aFloatingLayoutMovesRigidlyIntoTheTopLeftCornerWithTheSameOutcome() {
+        boolean[] open = region(0, 0, 10, 10);
+        GreenhouseSearch search = oneCropSearch(open);
+        byte[] floating = cropsAt(at(4, 4), at(4, 6), at(6, 5));
+        GreenhouseSearch.Evaluation before = search.evaluate(floating);
+
+        GreenhouseSolver.Placed placed = GreenhouseSolver.compacted(floating, search, open);
+
+        // Crops and their sites span rows 3-7 and columns 3-7, so the whole piece moves up and left by three.
+        int[] was = cropCells(floating);
+        int[] now = cropCells(placed.labels());
+        assertEquals(was.length, now.length);
+        for (int i = 0; i < was.length; i++) assertEquals(at(-3, -3), now[i] - was[i]);
+        assertSameOutcome(before, placed.evaluation());
+        assertSameOutcome(search.evaluate(placed.labels()), placed.evaluation());
+    }
+
+    @Test
+    public void aMoveThatWouldAddASiteFallsThroughToTheNextCorner() {
+        // On the bottom edge the crop has five sites; in a top corner it would have eight.
+        boolean[] open = region(0, 0, 10, 10);
+        GreenhouseSearch search = oneCropSearch(open);
+        byte[] atTheEdge = cropsAt(at(9, 5));
+        GreenhouseSearch.Evaluation before = search.evaluate(atTheEdge);
+        assertEquals(5, before.sites().size());
+        assertEquals(8, search.evaluate(cropsAt(at(1, 1))).sites().size());
+
+        GreenhouseSolver.Placed placed = GreenhouseSolver.compacted(atTheEdge, search, open);
+
+        assertArrayEquals(new int[] {at(9, 1)}, cropCells(placed.labels()));
+        assertSameOutcome(before, placed.evaluation());
+    }
+
+    @Test
+    public void aLockedCellKeepsTheFootprintsOutOfThatCorner() {
+        // The block's top-left site would land on the locked (0, 0), so the top-right corner is taken instead.
+        boolean[] open = region(0, 0, 10, 10);
+        open[0] = false;
+        GreenhouseSearch search = oneCropSearch(open);
+        byte[] block = cropsAt(at(5, 5));
+        GreenhouseSearch.Evaluation before = search.evaluate(block);
+        assertEquals(8, before.sites().size());
+
+        GreenhouseSolver.Placed placed = GreenhouseSolver.compacted(block, search, open);
+
+        assertArrayEquals(new int[] {at(1, 8)}, cropCells(placed.labels()));
+        assertSameOutcome(before, placed.evaluation());
+        for (GreenhouseSearch.Site site : placed.evaluation().sites()) {
+            for (int p : site.cells()) assertTrue(open[p]);
+        }
+    }
+
+    @Test
+    public void aLayoutAlreadyInItsCornerAndAnEmptyOneStayPut() {
+        boolean[] open = region(0, 0, 10, 10);
+        GreenhouseSearch search = oneCropSearch(open);
+        byte[] cornered = cropsAt(at(1, 1));
+        byte[] nothing = cropsAt();
+
+        assertArrayEquals(cropCells(cornered), cropCells(GreenhouseSolver.compacted(cornered, search, open).labels()));
+        assertArrayEquals(nothing, GreenhouseSolver.compacted(nothing, search, open).labels());
+    }
+
+    @Test
+    public void aSolvedLayoutHugsACornerAndRescoresToTheReportedCounts() {
+        boolean[] open = region(0, 0, 10, 10);
+        for (SolveRequest request : List.of(SolveRequest.of(Goal.fixed("Timestalk", 6)),
+            SolveRequest.of(Goal.fixed("Dustgrain", 6)), SolveRequest.of(Goal.fixed("Snoozling", 1)))) {
+            for (long seed = 1; seed <= 3; seed++) {
+                SolveResult result = GreenhouseSolver.solve(request, BUDGET, seed, ITERATIONS, () -> false);
+
+                String label = request.goals() + " seed " + seed;
+                assertEquals(label, 0, cornerGap(result.grid()));
+                Outcome counted = outcome(result.grid(), open);
+                for (GoalResult goal : result.goals()) {
+                    assertEquals(label, counted.expected().getOrDefault(goal.mutation(), 0.0), goal.achieved(), EPS);
+                    assertEquals(label, (int) counted.sites().getOrDefault(goal.mutation(), 0), goal.sites());
+                }
+                assertEquals(label, counted.shared(), result.ambiguousTargets());
+            }
+        }
+    }
+
+    @Test
+    public void everyPreviewIsCompactedAndRescoresLikeTheFinalPlan() {
+        boolean[] open = region(0, 0, 10, 10);
+        Previews previews = preview(new FakeClock(100_000), SolveRequest.of(Goal.fixed("Snoozling", 1)), 600_000, 60_000);
+
+        assertTrue("previews " + previews.results.size(), previews.results.size() > 1);
+        for (SolveResult snapshot : previews.results) {
+            if (snapshot.grid().filled() == 0) continue;
+            assertEquals(0, cornerGap(snapshot.grid()));
+            Outcome counted = outcome(snapshot.grid(), open);
+            for (GoalResult goal : snapshot.goals()) {
+                assertEquals(counted.expected().getOrDefault(goal.mutation(), 0.0), goal.achieved(), EPS);
+                assertEquals((int) counted.sites().getOrDefault(goal.mutation(), 0), goal.sites());
+            }
+        }
     }
 }

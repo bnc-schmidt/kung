@@ -335,7 +335,7 @@ final class GreenhouseSolver {
         }
 
         Plan plan = new Plan(results, resolved, included, includedAt, possible, aims, aimGoal,
-            new ArrayList<>(cropIndex.keySet()), cropCost, List.copyOf(notes));
+            new ArrayList<>(cropIndex.keySet()), cropCost, List.copyOf(notes), request.unlocked());
         GreenhouseSearch search = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
             aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
         Consumer<byte[]> preview = null;
@@ -344,7 +344,7 @@ final class GreenhouseSolver {
             GreenhouseSearch twin = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
                 aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
             preview = labels -> {
-                SolveResult snapshot = plan.build(labels, twin.evaluate(labels),
+                SolveResult snapshot = plan.build(labels, twin,
                     (options.clock().getAsLong() - started) / 1_000_000L, List.of(), false);
                 try {
                     options.onBest().accept(snapshot);
@@ -367,22 +367,100 @@ final class GreenhouseSolver {
                 search.idleNanos() / 1e9) + ", the last " + search.consistentRestarts()
                 + " restarts all ended on the same plan");
         }
-        return plan.build(labels, search.evaluate(labels), (options.clock().getAsLong() - started) / 1_000_000L,
+        return plan.build(labels, search, (options.clock().getAsLong() - started) / 1_000_000L,
             ending, search.stagnated());
+    }
+
+    /** A layout and what {@link GreenhouseSearch#evaluate} reads back from it. */
+    record Placed(byte[] labels, GreenhouseSearch.Evaluation evaluation) { }
+
+    /**
+     * Pushes a layout into the plot corner it is nearest to ({@link GreenhouseCompaction}), so the free space
+     * stays in one block. A move keeps every ring but can add a site in space the layout leaves (a footprint
+     * that used to hang over the plot edge now fits), so the first move, best first, whose read-back reports the
+     * same counts is taken; if none does the layout stays where it is. Reads back through {@code search}, which
+     * is left holding whichever layout was read last.
+     */
+    static Placed compacted(byte[] labels, GreenhouseSearch search, boolean[] unlocked) {
+        GreenhouseSearch.Evaluation evaluation = search.evaluate(labels);
+        boolean[] occupied = new boolean[GreenhouseSearch.CELLS];
+        for (int p = 0; p < occupied.length; p++) occupied[p] = labels[p] != GreenhouseSearch.EMPTY;
+        for (GreenhouseSearch.Site site : evaluation.sites()) {
+            for (int p : site.cells()) occupied[p] = true;
+        }
+        for (GreenhouseCompaction.Shift shift : GreenhouseCompaction.shifts(occupied, unlocked)) {
+            if (shift.equals(GreenhouseCompaction.Shift.NONE)) break;
+            byte[] moved = new byte[GreenhouseSearch.CELLS];
+            Arrays.fill(moved, GreenhouseSearch.EMPTY);
+            for (int p = 0; p < moved.length; p++) {
+                if (labels[p] != GreenhouseSearch.EMPTY) moved[shift.move(p)] = labels[p];
+            }
+            GreenhouseSearch.Evaluation after = search.evaluate(moved);
+            if (sameOutcome(evaluation, after)) return new Placed(moved, after);
+        }
+        return new Placed(labels, evaluation);
+    }
+
+    private static boolean sameOutcome(GreenhouseSearch.Evaluation a, GreenhouseSearch.Evaluation b) {
+        if (a.unrequested() != b.unrequested() || a.ambiguous() != b.ambiguous()
+            || a.sites().size() != b.sites().size() || !Arrays.equals(a.candidates(), b.candidates())) {
+            return false;
+        }
+        for (int g = 0; g < a.goalTotals().length; g++) {
+            if (Math.abs(a.goalTotals()[g] - b.goalTotals()[g]) > 1e-9) return false;
+        }
+        return true;
     }
 
     /** Everything resolved from a request, and how to turn a layout into a {@link SolveResult}. */
     private record Plan(GoalResult[] template, List<GreenhouseMutations.Mutation> resolved, List<Goal> included,
                         List<Integer> includedAt, List<GreenhouseMutations.Mutation> possible,
                         List<GreenhouseSearch.Aim> aims, List<Integer> aimGoal, List<String> cropNames,
-                        long[] cropCost, List<String> baseNotes) {
+                        long[] cropCost, List<String> baseNotes, boolean[] unlocked) {
+
+        /** The grid (crops and every cell of every target footprint) and the targets read off it. */
+        private record Layout(GreenhouseGrid grid, List<Target> targets) { }
 
         /**
-         * {@code ending} are the notes that belong to a finished run (cancelled, stagnated); they go before the
-         * notes derived from the layout.
+         * Builds the result for {@code labels}, read back through {@code search}, with the layout moved by
+         * {@link GreenhouseSolver#compacted}. {@code ending} are the notes that belong to a finished run (cancelled, stagnated);
+         * they go before the notes derived from the layout.
          */
-        SolveResult build(byte[] labels, GreenhouseSearch.Evaluation evaluation, long elapsedMillis,
-                          List<String> ending, boolean stoppedEarly) {
+        SolveResult build(byte[] labels, GreenhouseSearch search, long elapsedMillis, List<String> ending,
+                          boolean stoppedEarly) {
+            Placed placed = compacted(labels, search, unlocked);
+            return build(placed.labels(), placed.evaluation(), elapsedMillis, ending, stoppedEarly);
+        }
+
+        private Layout layout(byte[] labels, GreenhouseSearch.Evaluation evaluation) {
+            GreenhouseGrid grid = new GreenhouseGrid();
+            for (int p = 0; p < GreenhouseSearch.CELLS; p++) {
+                if (labels[p] == GreenhouseSearch.EMPTY) continue;
+                grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
+                    new GreenhouseGrid.Cell(cropNames.get(labels[p]), GreenhouseGrid.INGREDIENT));
+            }
+            // A site is named after the highest-priority goal it can grow.
+            List<Target> targets = new ArrayList<>();
+            for (GreenhouseSearch.Site site : evaluation.sites()) {
+                int named = 0;
+                while ((site.recipes() >> aims.get(named).recipe() & 1L) == 0) named++;
+                GreenhouseMutations.Mutation mutation = possible.get(aims.get(named).recipe());
+                for (int p : site.cells()) {
+                    grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
+                        new GreenhouseGrid.Cell(mutation.name(), GreenhouseGrid.TARGET));
+                }
+                int anchor = Arrays.stream(site.cells()).min().orElse(0);
+                targets.add(new Target(mutation.name(), anchor / GreenhouseGrid.SIZE, anchor % GreenhouseGrid.SIZE,
+                    mutation.width(), mutation.height(), Long.bitCount(site.recipes())));
+            }
+            targets.sort((x, y) -> x.row() != y.row() ? Integer.compare(x.row(), y.row())
+                : Integer.compare(x.column(), y.column()));
+            return new Layout(grid, targets);
+        }
+
+        private SolveResult build(byte[] labels, GreenhouseSearch.Evaluation evaluation, long elapsedMillis,
+                                  List<String> ending, boolean stoppedEarly) {
+            Layout layout = layout(labels, evaluation);
             GoalResult[] results = template.clone();
             double[] achieved = new double[included.size()];
             int[] sites = new int[included.size()];
@@ -406,15 +484,11 @@ final class GreenhouseSolver {
                 }
             }
 
-            GreenhouseGrid grid = new GreenhouseGrid();
             Map<String, Integer> counted = new LinkedHashMap<>();
             long costUnits = 0;
             for (int p = 0; p < GreenhouseSearch.CELLS; p++) {
                 if (labels[p] == GreenhouseSearch.EMPTY) continue;
-                String crop = cropNames.get(labels[p]);
-                grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
-                    new GreenhouseGrid.Cell(crop, GreenhouseGrid.INGREDIENT));
-                counted.merge(crop, 1, Integer::sum);
+                counted.merge(cropNames.get(labels[p]), 1, Integer::sum);
                 costUnits += cropCost[labels[p]];
             }
             Map<String, Integer> ingredients = new LinkedHashMap<>();
@@ -425,23 +499,6 @@ final class GreenhouseSolver {
             for (String crop : ingredients.keySet()) {
                 unitCosts.put(crop, cropCost[cropNames.indexOf(crop)] / (double) COST_SCALE);
             }
-
-            // A site is named after the highest-priority goal it can grow.
-            List<Target> targets = new ArrayList<>();
-            for (GreenhouseSearch.Site site : evaluation.sites()) {
-                int named = 0;
-                while ((site.recipes() >> aims.get(named).recipe() & 1L) == 0) named++;
-                GreenhouseMutations.Mutation mutation = possible.get(aims.get(named).recipe());
-                for (int p : site.cells()) {
-                    grid.set(p / GreenhouseGrid.SIZE, p % GreenhouseGrid.SIZE,
-                        new GreenhouseGrid.Cell(mutation.name(), GreenhouseGrid.TARGET));
-                }
-                int anchor = Arrays.stream(site.cells()).min().orElse(0);
-                targets.add(new Target(mutation.name(), anchor / GreenhouseGrid.SIZE, anchor % GreenhouseGrid.SIZE,
-                    mutation.width(), mutation.height(), Long.bitCount(site.recipes())));
-            }
-            targets.sort((a, b) -> a.row() != b.row() ? Integer.compare(a.row(), b.row())
-                : Integer.compare(a.column(), b.column()));
 
             Set<String> soils = new LinkedHashSet<>();
             for (int a = 0; a < aims.size(); a++) {
@@ -455,7 +512,8 @@ final class GreenhouseSolver {
             if (resolved.stream().anyMatch(GreenhouseMutations.Mutation::emptyRing)) {
                 notes.add("Lonelily needs a ring without crops, so those cells stay free of ingredients");
             }
-            return new SolveResult(grid, List.of(results), List.copyOf(targets), Collections.unmodifiableMap(ingredients),
+            return new SolveResult(layout.grid(), List.of(results), List.copyOf(layout.targets()),
+                Collections.unmodifiableMap(ingredients),
                 evaluation.ambiguous(), evaluation.unrequested(), List.copyOf(soils), elapsedMillis, List.copyOf(notes),
                 stoppedEarly, costUnits / (double) COST_SCALE, Collections.unmodifiableMap(unitCosts));
         }
