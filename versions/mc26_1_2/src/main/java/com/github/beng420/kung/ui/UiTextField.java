@@ -11,11 +11,14 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 
 public final class UiTextField {
+    /** Vanilla's EditBox cuts text to 32 characters, which silently truncates pasted links. */
+    static final int DEFAULT_MAX_LENGTH = 8192;
     private final EditBox control;
     private Predicate<String> filter;
 
     public UiTextField(Font font, Component narration) {
         control = new EditBox(font, 0, 0, narration);
+        control.setMaxLength(DEFAULT_MAX_LENGTH);
     }
 
     public UiTextField maxLength(int maxLength) {
@@ -54,10 +57,13 @@ public final class UiTextField {
     }
 
     public void setBounds(int x, int y, int width, int height) {
-        control.setX(x);
-        control.setY(y);
+        // EditBox works out where its text and hint sit inside setX/setY and not again after setWidth/setHeight,
+        // and starts 0 high (the (font, int, int, Component) constructor is width and height). Size first, or
+        // the first frame draws the hint (height - 8) / 2 = -4 units from the top until the first click.
         control.setWidth(width);
         control.setHeight(height);
+        control.setX(x);
+        control.setY(y);
     }
 
     public UiBounds bounds() {

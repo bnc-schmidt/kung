@@ -16,6 +16,9 @@ import com.github.beng420.kung.feature.dungeon.DungeonRoomProject;
 import com.github.beng420.kung.feature.dungeon.DungeonScanUtils;
 import com.github.beng420.kung.feature.dungeon.KungServerSession;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
+import com.github.beng420.kung.feature.garden.GreenhouseDump;
+import com.github.beng420.kung.feature.garden.GreenhouseHologram;
+import com.github.beng420.kung.feature.garden.GreenhouseScreen;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.message.KungMessages;
@@ -762,6 +765,67 @@ final class KungCommandActions {
         Minecraft client = context.getSource().getClient();
         // Chat finishes handling the click before the new screen is opened.
         client.schedule(() -> McCompat.setScreen(client, KungConfigScreen.updates()));
+        return 1;
+    }
+
+    static int openGreenhouse(CommandContext<FabricClientCommandSource> context) {
+        Minecraft client = context.getSource().getClient();
+        client.schedule(() -> McCompat.setScreen(client, new GreenhouseScreen()));
+        return 1;
+    }
+
+    static int showHologram(CommandContext<FabricClientCommandSource> context) {
+        var shown = GreenhouseHologram.showFromClipboard();
+        if (shown.isEmpty()) {
+            context.getSource().sendFeedback(KungMessages.error("Greenhouse", "No valid layout code in clipboard"));
+            return 0;
+        }
+        context.getSource().sendFeedback(KungMessages.info("Greenhouse", shown.get().message()));
+        return 1;
+    }
+
+    /** For when the Carpenter is not found: the plot the player stands in is taken as the greenhouse. */
+    static int showHologramHere(CommandContext<FabricClientCommandSource> context) {
+        var shown = GreenhouseHologram.showFromClipboardHere();
+        if (shown.isEmpty()) {
+            context.getSource().sendFeedback(KungMessages.error("Greenhouse", "No valid layout code in clipboard"));
+            return 0;
+        }
+        context.getSource().sendFeedback(shown.get().insideGreenhouse()
+            ? KungMessages.info("Greenhouse", shown.get().message())
+            : KungMessages.warning("Greenhouse", shown.get().message()));
+        return shown.get().insideGreenhouse() ? 1 : 0;
+    }
+
+    /** Developer dump of the plot the player stands in: armor stands, heads, soil blocks. */
+    static int dumpGreenhouse(CommandContext<FabricClientCommandSource> context) {
+        var outcome = GreenhouseDump.run(context.getSource().getClient());
+        if (outcome.error() != null) {
+            context.getSource().sendFeedback(KungMessages.error("Greenhouse", outcome.error()));
+            return 0;
+        }
+        context.getSource().sendFeedback(KungMessages.info("Greenhouse", "Dump saved: " + outcome.path() + " ("
+            + outcome.armorStands() + " armor stands, " + outcome.cells() + " cells)"));
+        return 1;
+    }
+
+    static int hideHologram(CommandContext<FabricClientCommandSource> context) {
+        boolean wasShowing = GreenhouseHologram.isShowing();
+        GreenhouseHologram.hide();
+        context.getSource().sendFeedback(KungMessages.info("Greenhouse",
+            wasShowing ? "Hologram hidden." : "No hologram is showing."));
+        return wasShowing ? 1 : 0;
+    }
+
+    static int rotateHologram(CommandContext<FabricClientCommandSource> context) {
+        context.getSource().sendFeedback(KungMessages.info("Greenhouse",
+            "Hologram " + GreenhouseHologram.rotate() + "."));
+        return 1;
+    }
+
+    static int mirrorHologram(CommandContext<FabricClientCommandSource> context) {
+        context.getSource().sendFeedback(KungMessages.info("Greenhouse",
+            "Hologram " + GreenhouseHologram.mirror() + "."));
         return 1;
     }
 

@@ -12,6 +12,7 @@
     "FontAccessor",
     "ItemInHandLayerMixin",
     "LocalPlayerMixin",
+    "MinecraftPickBlockMixin",
     "MouseHandlerMixin",
     "MultiPlayerGameModeMixin",
     "PacketUtilsMixin",

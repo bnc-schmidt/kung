@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.dungeon.DungeonMimicEspFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitsOverlayFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
+import com.github.beng420.kung.feature.garden.GreenhouseHologram;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
@@ -65,6 +66,7 @@ public final class FeatureRegistry {
         register(new SafariOverlayFeature());
         register(FeastOverlayFeature.INSTANCE);
         register(VisitorAlarmFeature.INSTANCE);
+        GreenhouseHologram.initialize();
 
         bootstrapped = true;
         FEATURES.forEach(feature -> feature.initialize(services));

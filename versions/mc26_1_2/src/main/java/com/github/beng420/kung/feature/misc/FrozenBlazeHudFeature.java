@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.skyblock.SkyblockItemId;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.List;
@@ -37,7 +38,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.phys.Vec3;
 
@@ -181,7 +181,7 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
 
     /** The SkyBlock item id of a stack ("" when the client has no custom data for it). */
     static String skyblockId(ItemStack stack) {
-        return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY).copyTag().getStringOr("id", "");
+        return SkyblockItemId.of(stack);
     }
 
     /** SkyBlock armor IDs, helmet to boots; only a full set grants the aura. */

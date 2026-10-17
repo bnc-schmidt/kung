@@ -46,6 +46,10 @@ public final class McCompat {
 
     public static void setSubtitle(Minecraft client, Component subtitle) { client.gui.setSubtitle(subtitle); }
 
+    public static net.minecraft.client.gui.components.toasts.ToastManager toasts(Minecraft client) {
+        return client.getToastManager();
+    }
+
     public static Camera camera(Minecraft client) { return client.gameRenderer.getMainCamera(); }
 
     /** Re-meshes every loaded section, like F3+A. */
