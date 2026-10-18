@@ -46,12 +46,27 @@ public final class FrozenBlazeHudFeatureTest {
 
     @Test
     public void alarmFiresOncePerShutdownAndRearmsWhenOnAgain() {
-        int afk = FrozenBlazeHudFeature.AFK_TICKS;
-        assertFalse(FrozenBlazeHudFeature.wentOff(0, 0)); // on and active
-        assertFalse(FrozenBlazeHudFeature.wentOff(afk - 2, afk - 1)); // still on
-        assertTrue(FrozenBlazeHudFeature.wentOff(afk - 1, afk)); // on -> off
-        assertFalse(FrozenBlazeHudFeature.wentOff(afk, afk)); // already off, no repeat
-        assertFalse(FrozenBlazeHudFeature.wentOff(afk, 0)); // back on
-        assertTrue(FrozenBlazeHudFeature.wentOff(afk - 1, afk)); // and it fires again after rearming
+        assertFalse(FrozenBlazeHudFeature.wentOff(true, true)); // still on
+        assertTrue(FrozenBlazeHudFeature.wentOff(true, false)); // on -> off
+        assertFalse(FrozenBlazeHudFeature.wentOff(false, false)); // already off, no repeat
+        assertFalse(FrozenBlazeHudFeature.wentOff(false, true)); // back on
+        assertTrue(FrozenBlazeHudFeature.wentOff(true, false)); // and it fires again after rearming
+    }
+
+    @Test
+    public void pulsesDecideOnceSeenAndTheIdleEstimateCoversTheTimeBefore() {
+        int afk = FrozenBlazeHudFeature.AFK_TICKS, timeout = FrozenBlazeHudFeature.PULSE_TIMEOUT;
+        assertTrue(FrozenBlazeHudFeature.auraOn(-1, afk - 1)); // no pulse yet: estimate says on
+        assertFalse(FrozenBlazeHudFeature.auraOn(-1, afk)); // and off at 30 s idle
+        assertTrue(FrozenBlazeHudFeature.auraOn(0, afk)); // a pulse wins over the estimate
+        assertTrue(FrozenBlazeHudFeature.auraOn(timeout, 0)); // the capture's longest gap is 40 ticks
+        assertFalse(FrozenBlazeHudFeature.auraOn(timeout + 1, 0)); // silence means off, even while moving
+    }
+
+    @Test
+    public void onlyAFlameBurstAtTheOwnChestIsThePulse() {
+        assertTrue(FrozenBlazeHudFeature.atPlayer(0, 1, 0)); // capture: rel=(0.00,+1.00,0.00)
+        assertFalse(FrozenBlazeHudFeature.atPlayer(6.2, 7.5, -1.0)); // a flame trail away from the player
+        assertFalse(FrozenBlazeHudFeature.atPlayer(2.4, 1, 0.5)); // another player's burst
     }
 }

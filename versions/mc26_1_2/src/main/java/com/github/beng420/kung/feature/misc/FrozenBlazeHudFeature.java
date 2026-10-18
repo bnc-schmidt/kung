@@ -24,6 +24,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.core.component.DataComponents;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.Packet;
@@ -45,6 +46,8 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     public static final FrozenBlazeHudFeature INSTANCE = new FrozenBlazeHudFeature();
     /** Wiki: the aura stops after 30 seconds without the player moving their mouse and player; it needs both. */
     static final int AFK_TICKS = 30 * 20;
+    /** The aura pulses about once a second (40 ticks apart at most in the capture), so 3 s of silence means off. */
+    static final int PULSE_TIMEOUT = 60;
     private static final String HINT = "Walk + look to reactivate";
     private static final int WIDTH = 136;
     private static final int HEIGHT = 26;
@@ -52,6 +55,9 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     private Vec3 lastPos;
     private float lastYaw, lastPitch;
     private int moveIdle, lookIdle;
+    /** Ticks since the last own aura pulse, -1 until one arrives (then the idle estimate decides). */
+    private int sincePulse = -1;
+    private boolean wasOn;
     /** Candidate signals of the current second: key -> {packets, summed count, nearest distance}; see trace. */
     private final Map<String, double[]> seen = new TreeMap<>();
     private int traceTicks;
@@ -85,24 +91,25 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
             onReset();
             return;
         }
-        // ponytail: client-side estimate of a server rule; no real on/off signal is proven yet, see trace().
+        // The idle counters only time the countdown; the server's own pulse (see observeParticles) decides on/off.
         boolean first = lastPos == null;
-        int before = idleTicks(moveIdle, lookIdle);
         moveIdle = advance(moveIdle, first || !player.position().equals(lastPos));
         lookIdle = advance(lookIdle, first || player.getYRot() != lastYaw || player.getXRot() != lastPitch);
         lastPos = player.position();
         lastYaw = player.getYRot();
         lastPitch = player.getXRot();
-        if (config().frozenBlazeAlarmEnabled() && wentOff(before, idleTicks(moveIdle, lookIdle))) alarm(client, set);
+        if (sincePulse >= 0) sincePulse = Math.min(sincePulse + 1, PULSE_TIMEOUT + 1);
+        boolean on = auraOn(sincePulse, idleTicks(moveIdle, lookIdle));
+        if (config().frozenBlazeAlarmEnabled() && wentOff(wasOn, on)) alarm(client, set);
+        wasOn = on;
         if (++traceTicks % 20 == 0) trace(player);
     }
 
     /**
-     * Trace only, area "frozen-blaze": no source names a real on/off signal for the aura. The wiki only says it adds a
-     * flame and snow particle effect; forum posts and other mods (Squid-Utils, bomboFabric) just guess from input. So
-     * every candidate is logged once a second next to the idle counters; the one that stops when idle reaches 600
-     * (30 s, shows as "quiet" or lost tags) is the signal to build the state on. Particles, sounds and outgoing move
-     * packets near the player come in through observe*; lore, damage-tag armor stands and slowed mobs are read here.
+     * Trace only, area "frozen-blaze". The signal is found (the own flame pulse, see observeParticles; /kung fbcapture
+     * showed it stop at 30 s idle); this stays to check whether plain Blaze pulses the same way. Particles, sounds and
+     * outgoing move packets near the player come in through observe*; lore, damage-tag armor stands and slowed mobs
+     * are read here.
      */
     private void trace(Player player) {
         var tags = new ArrayList<String>();
@@ -125,6 +132,10 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     }
 
     public void observeParticles(ClientboundLevelParticlesPacket packet) {
+        var player = Minecraft.getInstance().player;
+        if (set != null && player != null && packet.getParticle().getType() == ParticleTypes.FLAME && packet.getCount() == 8
+            && atPlayer(packet.getX() - player.getX(), packet.getY() - player.getY(), packet.getZ() - player.getZ()))
+            sincePulse = 0;
         near("particle " + BuiltInRegistries.PARTICLE_TYPE.getKey(packet.getParticle().getType()), packet.getCount(),
             packet.getX(), packet.getY(), packet.getZ());
     }
@@ -163,8 +174,18 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     /** Hypixel damage numbers float as named armor stands; mob nameplates carry [Lv..] and health hearts, so they are not tags. */
     static boolean damageTag(String name) { return name.chars().anyMatch(Character::isDigit) && name.indexOf(0x2764) < 0; }
 
-    /** The aura just ran out; idle time saturates at AFK_TICKS, so this fires once until an input brings it back on. */
-    static boolean wentOff(int idleBefore, int idleNow) { return idleBefore < AFK_TICKS && idleNow >= AFK_TICKS; }
+    /** The aura just ran out; fires once until it comes back on. */
+    static boolean wentOff(boolean before, boolean now) { return before && !now; }
+
+    /** Pulses decide once one was seen; before that (and for sets that may not pulse) the idle estimate does. */
+    static boolean auraOn(int sincePulse, int idleTicks) {
+        return sincePulse < 0 ? idleTicks < AFK_TICKS : sincePulse <= PULSE_TIMEOUT;
+    }
+
+    /** The own pulse is a flame burst at the player's chest (capture: offset 0.00 / +1.00 / 0.00); other players' auras send none. */
+    static boolean atPlayer(double dx, double dy, double dz) {
+        return Math.abs(dx) < 0.5 && Math.abs(dz) < 0.5 && Math.abs(dy - 1) < 0.5;
+    }
 
     private static void alarm(Minecraft client, String set) {
         McCompat.setTitleTimes(client, 0, 40, 10);
@@ -196,6 +217,8 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
         set = null;
         lastPos = null;
         moveIdle = lookIdle = 0;
+        sincePulse = -1;
+        wasOn = false;
         seen.clear();
         traceTicks = 0;
         lastLore = "";
@@ -204,15 +227,15 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     private void render(GuiGraphicsExtractor graphics) {
         var client = Minecraft.getInstance();
         if (set == null || McCompat.hudHidden(client) || KungHudEditorState.externalEditing()) return;
-        draw(graphics, config(), set, idleTicks(moveIdle, lookIdle));
+        int idle = idleTicks(moveIdle, lookIdle);
+        draw(graphics, config(), set, auraOn(sincePulse, idle), idle);
     }
 
-    private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, String set, int idleTicks) {
+    private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, String set, boolean on, int idleTicks) {
         var font = Minecraft.getInstance().font;
-        boolean on = idleTicks < AFK_TICKS;
         var status = Component.literal(set + " ").withColor(set.equals("Blaze") ? 0xFFAA00 : 0x55FFFF)
             .append(on ? Component.literal("on").withColor(0x55FF55) : Component.literal("off").withColor(0xFF5555));
-        if (on) status.append(Component.literal(" " + (AFK_TICKS - idleTicks + 19) / 20 + "s").withColor(0xAAAAAA));
+        if (on && idleTicks < AFK_TICKS) status.append(Component.literal(" " + (AFK_TICKS - idleTicks + 19) / 20 + "s").withColor(0xAAAAAA));
         graphics.pose().pushMatrix();
         try {
             graphics.pose().translate(config.frozenBlazeHudX(), config.frozenBlazeHudY());
@@ -226,7 +249,7 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     }
 
     public static void drawPreview(GuiGraphicsExtractor graphics, MiscConfig config) {
-        draw(graphics, config, "Frozen Blaze", AFK_TICKS);
+        draw(graphics, config, "Frozen Blaze", false, AFK_TICKS);
     }
 
     public static KungHudLayout.Bounds overlayBounds(MiscConfig config) {
