@@ -71,7 +71,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static final int MUTED_TEXT = 0xFF7F8790;
     private static final int MIMIC_ROOM_OUTLINE = 0xFFFF3333;
     private static final int MIMIC_ROOM_GLOW = 0x44FF3333;
-    private static final int UNKNOWN_CLASS_BORDER = 0xFFE9EDF2;
     private static final int FOOTER_HEIGHT = 26;
     private static final float FOOTER_TEXT_SCALE = 0.72F;
     private static final Map<String, SmoothedMarker> SMOOTHED_PLAYER_MARKERS = new HashMap<>();
@@ -1948,37 +1947,26 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         DungeonRunStats.DungeonClass slotClass
     ) {
         if (slotClass != null && slotClass != DungeonRunStats.DungeonClass.UNKNOWN) {
-            return new ClassRenderInfo(slotClass, colorForDungeonClass(slotClass), "slot");
+            return new ClassRenderInfo(slotClass, slotClass.argb(), "slot");
         }
 
         DungeonRunStats.DungeonClass dungeonClass = stats.dungeonClass(uuid);
         if (dungeonClass != DungeonRunStats.DungeonClass.UNKNOWN) {
-            return new ClassRenderInfo(dungeonClass, colorForDungeonClass(dungeonClass), "uuid");
+            return new ClassRenderInfo(dungeonClass, dungeonClass.argb(), "uuid");
         }
 
         dungeonClass = stats.dungeonClass(name);
         if (dungeonClass != DungeonRunStats.DungeonClass.UNKNOWN) {
-            return new ClassRenderInfo(dungeonClass, colorForDungeonClass(dungeonClass), "name");
+            return new ClassRenderInfo(dungeonClass, dungeonClass.argb(), "name");
         }
 
         String trackedName = stats.trackedPlayerName(uuid);
         dungeonClass = stats.dungeonClass(trackedName);
         if (dungeonClass != DungeonRunStats.DungeonClass.UNKNOWN) {
-            return new ClassRenderInfo(dungeonClass, colorForDungeonClass(dungeonClass), "tracked-name");
+            return new ClassRenderInfo(dungeonClass, dungeonClass.argb(), "tracked-name");
         }
 
-        return new ClassRenderInfo(DungeonRunStats.DungeonClass.UNKNOWN, UNKNOWN_CLASS_BORDER, "unknown");
-    }
-
-    private static int colorForDungeonClass(DungeonRunStats.DungeonClass dungeonClass) {
-        return switch (dungeonClass) {
-            case ARCHER -> 0xFFFF2D32;
-            case BERSERKER -> 0xFFFF9829;
-            case MAGE -> 0xFF62DFFF;
-            case HEALER -> 0xFFD68CFF;
-            case TANK -> 0xFF34A853;
-            default -> UNKNOWN_CLASS_BORDER;
-        };
+        return new ClassRenderInfo(DungeonRunStats.DungeonClass.UNKNOWN, DungeonRunStats.DungeonClass.UNKNOWN.argb(), "unknown");
     }
 
     private static String colorText(int color) {

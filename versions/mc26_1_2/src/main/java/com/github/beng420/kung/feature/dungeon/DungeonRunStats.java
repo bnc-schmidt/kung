@@ -693,7 +693,8 @@ public final class DungeonRunStats {
                     sortedPlayers.stream().map(DungeonPlayerStats::name).toList(), textWidth);
                 for (DungeonPlayerStats stats : sortedPlayers) {
                     output.accept(DungeonRunSummaryLayout.playerLine(
-                        stats.name(), playerStatsDetails(stats, totalFoundSecrets), nameWidth, textWidth));
+                        stats.name(), dungeonClass(stats.uuid()).argb(),
+                        playerStatsDetails(stats, totalFoundSecrets), nameWidth, textWidth));
                 }
             }
         } finally {
@@ -2400,12 +2401,23 @@ public final class DungeonRunStats {
 
 
     public enum DungeonClass {
-        UNKNOWN,
-        ARCHER,
-        BERSERKER,
-        MAGE,
-        HEALER,
-        TANK
+        UNKNOWN(0xFFE9EDF2),
+        ARCHER(0xFFFF2D32),
+        BERSERKER(0xFFFF9829),
+        MAGE(0xFF62DFFF),
+        HEALER(0xFFD68CFF),
+        TANK(0xFF34A853);
+
+        private final int argb;
+
+        DungeonClass(int argb) {
+            this.argb = argb;
+        }
+
+        /** Class colour shared by the dungeon map markers and the run summary. */
+        public int argb() {
+            return argb;
+        }
     }
 
     public record DungeonPlayerSlot(int index, UUID uuid, String name, DungeonClass dungeonClass) {
