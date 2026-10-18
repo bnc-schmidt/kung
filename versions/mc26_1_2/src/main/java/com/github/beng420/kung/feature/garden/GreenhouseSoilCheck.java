@@ -131,6 +131,16 @@ final class GreenhouseSoilCheck {
         return blocked;
     }
 
+    /** The footprints {@link #blocked} flags, in order: the ones the hologram draws no model for. */
+    static List<Footprint> blockedFootprints(List<Footprint> footprints, List<Ghost> ghosts) {
+        boolean[] blocked = blocked(footprints, ghosts);
+        List<Footprint> out = new ArrayList<>();
+        for (int i = 0; i < blocked.length; i++) {
+            if (blocked[i]) out.add(footprints.get(i));
+        }
+        return List.copyOf(out);
+    }
+
     /**
      * The cells whose real block does not suit what is planned there, each with how it differs.
      * {@code blockIds} holds the real block id per cell at the soil layer, index {@code dx * 10 + dz}; a null entry

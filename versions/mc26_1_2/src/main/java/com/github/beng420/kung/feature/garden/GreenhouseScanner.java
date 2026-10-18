@@ -49,6 +49,8 @@ final class GreenhouseScanner {
     private static Snapshot snapshot;
     private static List<Ghost> ghosts = List.of();
     private static int soilLayer = -1;
+    /** The hologram version the ghosts and the layer belong to (-1: none): they are raw offsets of that orientation. */
+    private static int soilVersion = -1;
     private static String[] soilBlocks;
     private static String soilNote = "not scanned yet";
     private static int version;
@@ -66,6 +68,7 @@ final class GreenhouseScanner {
         snapshot = null;
         ghosts = List.of();
         soilLayer = -1;
+        soilVersion = -1;
         soilBlocks = null;
         soilNote = "not scanned yet";
         scannedCorner = null;
@@ -86,6 +89,7 @@ final class GreenhouseScanner {
     static void setGhostsForTest(List<Ghost> value, int layer) {
         ghosts = List.copyOf(value);
         soilLayer = layer;
+        soilVersion = GreenhouseHologram.version();
         version++;
     }
 
@@ -126,10 +130,14 @@ final class GreenhouseScanner {
         return snapshot != null && snapshot.layoutVersion() == hologramVersion ? snapshot.shown() : null;
     }
 
-    static List<Ghost> ghosts() { return ghosts; }
+    /**
+     * The soil ghosts of the scan made for this hologram version; empty when no scan matches it (after a rotate, mirror
+     * or re-show whose scan was skipped, the old orientation's ghosts would sit on the wrong cells).
+     */
+    static List<Ghost> ghosts(int hologramVersion) { return soilVersion == hologramVersion ? ghosts : List.of(); }
 
-    /** The y of the soil layer, or -1 when none was found. */
-    static int soilLayer() { return soilLayer; }
+    /** The y of the soil layer found by the scan of this hologram version, or -1 when none was or no scan matches. */
+    static int soilLayer(int hologramVersion) { return soilVersion == hologramVersion ? soilLayer : -1; }
 
     /** Recognised planted things of this crop in the grid area at the last scan; mushrooms count by own name. */
     static int plantedCount(String crop) {
@@ -195,6 +203,7 @@ final class GreenhouseScanner {
         snapshot = null;
         ghosts = List.of();
         soilLayer = -1;
+        soilVersion = -1;
         soilBlocks = null;
         scannedCorner = corner;
         scannedVersion = -1;
@@ -217,6 +226,7 @@ final class GreenhouseScanner {
             || !ghosts.equals(nextGhosts) || layerBefore != soilLayer;
         snapshot = next;
         ghosts = nextGhosts;
+        soilVersion = hologramVersion;
         if (changed) version++;
         if (next.unrecognisedShare() && !warned) {
             warned = true;

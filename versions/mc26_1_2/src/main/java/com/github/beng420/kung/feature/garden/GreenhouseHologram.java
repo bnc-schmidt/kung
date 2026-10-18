@@ -194,10 +194,25 @@ public final class GreenhouseHologram {
      * layer was found.
      */
     static List<SoilGhost> soilGhosts() {
-        int layer = GreenhouseScanner.soilLayer();
+        int layer = GreenhouseScanner.soilLayer(version);
         if (!isDrawn() || layer < 0) return List.of();
-        return GreenhouseScanner.ghosts().stream()
+        return GreenhouseScanner.ghosts(version).stream()
             .map(ghost -> new SoilGhost(ghost.dx(), ghost.dz(), ghost.soil(), layer, ghost.kind())).toList();
+    }
+
+    /**
+     * The layout's footprints that a soil ghost keeps from being planted while the hide-models-over-wrong-soil setting
+     * is on: the renderer draws no model, slab or outline for them, so a pick or crosshair label must not claim their
+     * cells either (see {@link GreenhousePickHook#worldCells}). Empty with the setting off, while nothing is drawn and
+     * when no soil layer is known, the same conditions the renderer hides under.
+     */
+    static List<GreenhouseScanLogic.Footprint> blockedFootprints() {
+        if (!isDrawn() || !GreenhouseHologramSettings.hideModelsOverWrongSoil()
+            || GreenhouseScanner.soilLayer(version) < 0) {
+            return List.of();
+        }
+        return GreenhouseSoilCheck.blockedFootprints(GreenhouseScanLogic.footprints(shown.placements()),
+            GreenhouseScanner.ghosts(version));
     }
 
     /** Test seam for {@link #correctlyPlaced(String)}. */

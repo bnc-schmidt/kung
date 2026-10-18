@@ -29,8 +29,12 @@ final class GreenhouseCrosshairLabel {
     private static int builtVersion = -1;
     private static int builtScan = -1;
     private static BlockPos builtCorner;
+    private static boolean builtHideOverWrongSoil;
     private static List<Cell> cells = List.of();
-    private static boolean failed;
+    /** After an error the label rests this long, then tries again: one transient failure must not end it for good. */
+    private static final long RETRY_NANOS = 10_000_000_000L;
+    private static final GreenhouseBackoff BACKOFF = new GreenhouseBackoff(RETRY_NANOS, System::nanoTime);
+    private static boolean logged;
 
     private GreenhouseCrosshairLabel() { }
 
@@ -43,7 +47,7 @@ final class GreenhouseCrosshairLabel {
         // Guarded like the pick hook: an exception inside a HUD element would crash the frame.
         try {
             Minecraft client = Minecraft.getInstance();
-            if (failed || !GreenhouseHologramSettings.showCrosshairLabel() || !GreenhouseHologram.isDrawn()
+            if (!BACKOFF.ready() || !GreenhouseHologramSettings.showCrosshairLabel() || !GreenhouseHologram.isDrawn()
                 || client.player == null || McCompat.hudHidden(client) || McCompat.screen(client) != null) return;
             Optional<BlockPos> corner = GreenhouseLocator.current(client, false);
             if (corner.isEmpty()) return;
@@ -53,21 +57,29 @@ final class GreenhouseCrosshairLabel {
             String text = aim.get().text();
             graphics.text(client.font, text, (graphics.guiWidth() - client.font.width(text)) / 2,
                 graphics.guiHeight() / 2 + OFFSET_Y, TEXT_COLOR, true);
-        } catch (RuntimeException failure) {
-            failed = true;
-            KungMod.LOGGER.warn("Greenhouse crosshair label stopped after an error", failure);
+        } catch (Throwable failure) {
+            // Throwable: a LinkageError from a changed game class would otherwise end the label until the next start.
+            BACKOFF.trip();
+            if (!logged) {
+                logged = true;
+                KungMod.LOGGER.warn("Greenhouse crosshair label hit an error; retrying in 10 seconds", failure);
+            }
         }
     }
 
     private static List<Cell> cells(BlockPos corner) {
         int version = GreenhouseHologram.version();
         int scan = GreenhouseScanner.version();
-        if (version != builtVersion || scan != builtScan || !corner.equals(builtCorner)) {
+        boolean hideOverWrongSoil = GreenhouseHologramSettings.hideModelsOverWrongSoil();
+        if (version != builtVersion || scan != builtScan || !corner.equals(builtCorner)
+            || hideOverWrongSoil != builtHideOverWrongSoil) {
+            // Built before the key is set: a throw leaves the key stale, so the retry builds again.
+            cells = GreenhousePickHook.labelCells(GreenhouseHologram.cellBoxes(), GreenhouseHologram.soilGhosts(),
+                GreenhouseHologram.blockedFootprints(), GreenhouseScanner.extras(version), corner);
             builtVersion = version;
             builtScan = scan;
             builtCorner = corner;
-            cells = GreenhousePickHook.labelCells(GreenhouseHologram.cellBoxes(), GreenhouseHologram.soilGhosts(),
-                GreenhouseScanner.extras(version), corner);
+            builtHideOverWrongSoil = hideOverWrongSoil;
         }
         return cells;
     }

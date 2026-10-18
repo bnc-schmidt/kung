@@ -16,7 +16,7 @@ import java.util.List;
 final class GreenhouseCompletion {
     /** The one chat line sent when a finished layout turns the hologram off. */
     static final String MESSAGE = "Greenhouse layout complete: all crops are placed correctly. Hologram deactivated"
-        + " (show it again with Show in world or /kung greenhouse blueprint).";
+        + " (use Show in world in /kung greenhouse to show it again).";
     /** Consecutive scans that must agree before the answer changes. */
     static final int AGREE = 2;
 

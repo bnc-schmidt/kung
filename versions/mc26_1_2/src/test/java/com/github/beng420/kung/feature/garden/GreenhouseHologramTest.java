@@ -165,7 +165,7 @@ public final class GreenhouseHologramTest {
         assertTrue(GreenhouseHologram.placements().isEmpty());
         assertTrue("nothing is claimed", GreenhouseHologram.cellBoxes().isEmpty());
         assertTrue(GreenhouseHologram.soilGhosts().isEmpty());
-        assertTrue("the scan state is gone too", GreenhouseScanner.ghosts().isEmpty());
+        assertTrue("the scan state is gone too", GreenhouseScanner.ghosts(GreenhouseHologram.version()).isEmpty());
         assertFalse("the completion was reset", GreenhouseScanner.complete());
         assertEquals(0, GreenhouseHologram.plantedCount("Carrot"));
     }
@@ -287,6 +287,47 @@ public final class GreenhouseHologramTest {
         assertEquals(73, ghosts.get(2).y());
         assertEquals(new net.minecraft.world.phys.AABB(-5 + 2, 73, -5 + 2, -5 + 3, 74, -5 + 3),
             ghosts.get(1).bounds(new net.minecraft.core.BlockPos(-5, 73, -5)));
+    }
+
+    private static GreenhouseGrid carrotAndNoctilume() {
+        GreenhouseGrid grid = cropAt(2, 3, GreenhouseGrid.INGREDIENT, "Carrot");
+        for (int row = 5; row <= 6; row++) {
+            for (int column = 0; column <= 1; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell("Noctilume", GreenhouseGrid.TARGET));
+            }
+        }
+        return grid;
+    }
+
+    @Test
+    public void blockedFootprintsAreTheOnesWithAGhostWhileTheSettingIsOnAndTheHologramIsDrawn() {
+        var config = useDefaultConfig();
+        GreenhouseHologram.show(carrotAndNoctilume(), true);
+        assertTrue("no scan yet", GreenhouseHologram.blockedFootprints().isEmpty());
+
+        // Raw dx 1, dz 6 lies in the 2x2 spot (dx 0..1, dz 5..6), not in the carrot's cell.
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 6, GreenhouseSoils.Soil.FARMLAND)), 73);
+        var blocked = GreenhouseHologram.blockedFootprints();
+        assertEquals(1, blocked.size());
+        assertTrue(blocked.get(0).mutation());
+        assertEquals("Noctilume", blocked.get(0).crop());
+
+        config.setHideModelsOverWrongSoil(false);
+        assertTrue("the models are drawn over the ghost: nothing is undrawn", GreenhouseHologram.blockedFootprints().isEmpty());
+        config.setHideModelsOverWrongSoil(true);
+        assertEquals(1, GreenhouseHologram.blockedFootprints().size());
+
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 6, GreenhouseSoils.Soil.FARMLAND)), -1);
+        assertTrue("no soil layer, no ghosts drawn, nothing hidden", GreenhouseHologram.blockedFootprints().isEmpty());
+
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 6, GreenhouseSoils.Soil.FARMLAND)), 73);
+        GreenhouseHologram.toggle();
+        assertTrue("toggled off: nothing is claimed", GreenhouseHologram.blockedFootprints().isEmpty());
+        GreenhouseHologram.toggle();
+
+        GreenhouseHologram.rotate();
+        assertTrue("a rotate without a re-scan: the old ghosts are not read against the new footprints",
+            GreenhouseHologram.blockedFootprints().isEmpty());
     }
 
     @Test

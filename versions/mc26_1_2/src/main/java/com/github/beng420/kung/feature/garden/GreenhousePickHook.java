@@ -74,6 +74,9 @@ public final class GreenhousePickHook {
         /** The soil blocks the latest scan found missing or wrong. */
         default List<GreenhouseHologram.SoilGhost> soilGhosts() { return List.of(); }
 
+        /** The footprints the hologram draws no model for because of a soil ghost (see {@link GreenhousePickHook#worldCells}). */
+        default List<GreenhouseScanLogic.Footprint> blockedFootprints() { return List.of(); }
+
         /**
          * Scans the plot now, whatever the scan interval says, so the counts below are the plot as it is at the
          * click (the inventory is live, the scan is up to a second old). Called with the confirmed corner.
@@ -112,7 +115,8 @@ public final class GreenhousePickHook {
             Optional<BlockPos> corner = game.corner();
             if (corner.isEmpty()) return false;
             game.refreshScan(corner.get());
-            Optional<Hit> hit = nearest(view, worldCells(game.cells(), game.soilGhosts(), corner.get()));
+            Optional<Hit> hit = nearest(view,
+                worldCells(game.cells(), game.soilGhosts(), game.blockedFootprints(), corner.get()));
             hit.ifPresent(action);
             return hit.isPresent();
         } catch (RuntimeException failure) {
@@ -130,14 +134,23 @@ public final class GreenhousePickHook {
         return worldCells(boxes, List.of(), corner);
     }
 
+    static List<Cell> worldCells(List<GreenhouseHologramShapes.CellBox> boxes,
+                                 List<GreenhouseHologram.SoilGhost> ghosts, BlockPos corner) {
+        return worldCells(boxes, ghosts, List.of(), corner);
+    }
+
     /**
      * Crop cells plus soil ghosts. A ghost is always pickable. A cell with a ghost in its column becomes a SOIL hit
      * over the cell's own volume: the ghost (one block at the soil layer) sits right under the cell's volume and the
      * translucent crop head is what the player aims at, so the whole column has to answer with the soil; nothing
-     * can be planted on a missing soil anyway, so the soil is what that spot needs first.
+     * can be planted on a missing soil anyway, so the soil is what that spot needs first. A cell of a
+     * {@code blocked} footprint (the renderer draws no model or slab for it, see
+     * {@link GreenhouseSoilCheck#blocked}) without a ghost of its own claims nothing: a 2x2 or 3x3 mutation with a
+     * ghost under one cell has its other cells undrawn, and neither pick nor label may name what is not there.
      */
     static List<Cell> worldCells(List<GreenhouseHologramShapes.CellBox> boxes,
-                                 List<GreenhouseHologram.SoilGhost> ghosts, BlockPos corner) {
+                                 List<GreenhouseHologram.SoilGhost> ghosts,
+                                 List<GreenhouseScanLogic.Footprint> blocked, BlockPos corner) {
         List<Cell> cells = new ArrayList<>(boxes.size() + ghosts.size());
         for (GreenhouseHologramShapes.CellBox box : boxes) {
             if (!box.visible()) continue;
@@ -146,6 +159,9 @@ public final class GreenhousePickHook {
                 AABB soil = ghost.bounds(corner);
                 return soil.minX == bounds.minX && soil.minZ == bounds.minZ;
             }).findFirst().orElse(null);
+            double centreX = (box.minX() + box.maxX()) / 2;
+            double centreZ = (box.minZ() + box.maxZ()) / 2;
+            if (under == null && blocked.stream().anyMatch(footprint -> footprint.covers(centreX, centreZ))) continue;
             cells.add(under == null
                 ? new Cell(box.crop(), box.flag(), null, cropState(box.state(), box.flag()), bounds)
                 : Cell.ofSoil(under.soil(), under.kind(), bounds));
@@ -161,8 +177,9 @@ public final class GreenhousePickHook {
      * ignores. {@code extras} are raw offsets from the corner.
      */
     static List<Cell> labelCells(List<GreenhouseHologramShapes.CellBox> boxes, List<GreenhouseHologram.SoilGhost> ghosts,
-                                 List<GreenhouseScanLogic.Extra> extras, BlockPos corner) {
-        List<Cell> cells = new ArrayList<>(worldCells(boxes, ghosts, corner));
+                                 List<GreenhouseScanLogic.Footprint> blocked, List<GreenhouseScanLogic.Extra> extras,
+                                 BlockPos corner) {
+        List<Cell> cells = new ArrayList<>(worldCells(boxes, ghosts, blocked, corner));
         for (GreenhouseScanLogic.Extra extra : extras) {
             cells.add(new Cell(extra.crop(), GreenhouseGrid.INGREDIENT, null, "extra",
                 new AABB(corner.getX() + extra.dx(), GreenhouseLocator.HOLOGRAM_Y, corner.getZ() + extra.dz(),
@@ -240,5 +257,9 @@ public final class GreenhousePickHook {
         @Override public List<GreenhouseHologramShapes.CellBox> cells() { return GreenhouseHologram.cellBoxes(); }
 
         @Override public List<GreenhouseHologram.SoilGhost> soilGhosts() { return GreenhouseHologram.soilGhosts(); }
+
+        @Override public List<GreenhouseScanLogic.Footprint> blockedFootprints() {
+            return GreenhouseHologram.blockedFootprints();
+        }
     }
 }

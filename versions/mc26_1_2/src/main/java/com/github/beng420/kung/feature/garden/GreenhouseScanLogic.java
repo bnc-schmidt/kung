@@ -37,7 +37,12 @@ final class GreenhouseScanLogic {
     record Found(String crop, double x, double z) { }
 
     /** A place where a crop (or a mutation) is expected: a rectangle in raw offsets. */
-    record Footprint(String crop, boolean mutation, double minX, double minZ, double maxX, double maxZ) { }
+    record Footprint(String crop, boolean mutation, double minX, double minZ, double maxX, double maxZ) {
+        /** Whether the point lies strictly inside (a cell's centre: the cell belongs to exactly one footprint). */
+        boolean covers(double x, double z) {
+            return x > minX && x < maxX && z > minZ && z < maxZ;
+        }
+    }
 
     /** What one scan saw at a footprint, before debouncing; {@code signature} names what was found there. */
     record Verdict(State state, String signature) { }

@@ -162,6 +162,6 @@ public final class GreenhouseCompletionTest {
     @Test
     public void theChatLineIsTheOneTheCompletionSends() {
         assertEquals("Greenhouse layout complete: all crops are placed correctly. Hologram deactivated"
-            + " (show it again with Show in world or /kung greenhouse blueprint).", GreenhouseCompletion.MESSAGE);
+            + " (use Show in world in /kung greenhouse to show it again).", GreenhouseCompletion.MESSAGE);
     }
 }

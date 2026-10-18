@@ -97,7 +97,7 @@ public final class GreenhouseSupplyScanTest {
         assertEquals(0, GreenhouseHologram.correctlyPlaced("Carrot"));
         assertEquals(0, GreenhouseHologram.plantedCount("Carrot"));
         assertEquals(0, GreenhouseHologram.soilGhosts().size());
-        assertEquals(-1, GreenhouseScanner.soilLayer());
+        assertEquals(-1, GreenhouseScanner.soilLayer(GreenhouseHologram.version()));
     }
 
     @Test

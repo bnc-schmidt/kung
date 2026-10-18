@@ -131,8 +131,8 @@ final class GreenhouseWorldRenderer {
         GreenhousePalette palette = GreenhousePalette.live();
         int version = GreenhouseHologram.version();
         var states = GreenhouseScanner.states(version);
-        var ghosts = GreenhouseScanner.ghosts();
-        int soilLayer = GreenhouseScanner.soilLayer();
+        var ghosts = GreenhouseScanner.ghosts(version);
+        int soilLayer = GreenhouseScanner.soilLayer(version);
         var placements = GreenhouseHologram.placements();
         // Ghosts only exist (and are only drawn) with a known soil layer; a spot over one of them is not drawn.
         boolean[] blocked = hideOverWrongSoil && soilLayer >= 0

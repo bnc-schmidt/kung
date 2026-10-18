@@ -491,7 +491,7 @@ public final class KungSettings {
             SettingEntry.toggle("Deactivate When Complete", hologram::hideWhenComplete, hologram::setHideWhenComplete)
                 .withTooltip("Turns the hologram off for good once every crop is placed correctly,",
                     "with a short chat note. It stays off, also in other greenhouses,",
-                    "until you show it again (Show in world or /kung greenhouse blueprint)."),
+                    "until you show it again (Show in world in /kung greenhouse)."),
             SettingEntry.toggle("Hide Models Over Wrong Soil", hologram::hideModelsOverWrongSoil,
                     hologram::setHideModelsOverWrongSoil)
                 .withTooltip("Draws no crop model or outline where the soil under it is missing or wrong.",

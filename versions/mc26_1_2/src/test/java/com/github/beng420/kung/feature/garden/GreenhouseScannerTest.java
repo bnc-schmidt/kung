@@ -21,6 +21,9 @@ public final class GreenhouseScannerTest {
     public void reset() {
         GreenhouseHologram.hide();
         GreenhouseScanner.reset();
+        // The orientation outlives hide(); a test that turned the hologram must not move the next one's cells.
+        if (GreenhouseHologram.orientation().mirror()) GreenhouseHologram.mirror();
+        while (GreenhouseHologram.orientation().rotation() != 0) GreenhouseHologram.rotate();
     }
 
     private static GreenhouseGrid carrotAt(int row, int column) {
@@ -122,9 +125,37 @@ public final class GreenhouseScannerTest {
 
         assertFalse("the other greenhouse is not complete yet", GreenhouseScanner.complete());
         assertEquals(0, GreenhouseScanner.plantedCount("Carrot"));
-        assertTrue(GreenhouseScanner.ghosts().isEmpty());
-        assertEquals(-1, GreenhouseScanner.soilLayer());
+        assertTrue(GreenhouseScanner.ghosts(GreenhouseHologram.version()).isEmpty());
+        assertEquals(-1, GreenhouseScanner.soilLayer(GreenhouseHologram.version()));
         assertTrue("the renderer rebuilds", GreenhouseScanner.version() != before);
+    }
+
+    @Test
+    public void soilGhostsAndTheLayerAreOnlyHandedOutForTheLayoutTheyWereScannedFor() {
+        GreenhouseHologram.show(carrotAt(2, 3), true);
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(1, 1, GreenhouseSoils.Soil.SAND)), 73);
+        int scanned = GreenhouseHologram.version();
+        assertEquals(1, GreenhouseScanner.ghosts(scanned).size());
+        assertEquals(73, GreenhouseScanner.soilLayer(scanned));
+        assertEquals(1, GreenhouseHologram.soilGhosts().size());
+
+        // Rotate, mirror or a re-show bump the version; when the re-scan is skipped (chunks not loaded, a failed
+        // scan) the old orientation's ghosts must not be read against the new footprints.
+        GreenhouseHologram.rotate();
+        int rotated = GreenhouseHologram.version();
+        assertTrue(rotated != scanned);
+        assertTrue(GreenhouseScanner.ghosts(rotated).isEmpty());
+        assertEquals(-1, GreenhouseScanner.soilLayer(rotated));
+        assertTrue("and nothing derived from them", GreenhouseHologram.soilGhosts().isEmpty());
+
+        GreenhouseHologram.mirror();
+        assertTrue(GreenhouseScanner.ghosts(GreenhouseHologram.version()).isEmpty());
+
+        // A scan of the new version brings them back.
+        GreenhouseScanner.setGhostsForTest(List.of(new GreenhouseSoilCheck.Ghost(2, 2, GreenhouseSoils.Soil.SAND)), 72);
+        assertEquals(List.of(new GreenhouseSoilCheck.Ghost(2, 2, GreenhouseSoils.Soil.SAND)),
+            GreenhouseScanner.ghosts(GreenhouseHologram.version()));
+        assertEquals(72, GreenhouseScanner.soilLayer(GreenhouseHologram.version()));
     }
 
     @Test

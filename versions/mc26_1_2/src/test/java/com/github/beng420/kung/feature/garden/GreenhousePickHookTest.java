@@ -266,6 +266,7 @@ public final class GreenhousePickHookTest {
             List.of(new GreenhouseHologramShapes.CellBox(0, 0, "Carrot", 1, 0, 0, 0, 1, 1, 1)));
         RuntimeException failure;
         final List<GreenhouseHologram.SoilGhost> ghosts = new ArrayList<>();
+        List<GreenhouseScanLogic.Footprint> blocked = List.of();
         int viewCalls;
         int cornerCalls;
         int refreshes;
@@ -290,6 +291,8 @@ public final class GreenhousePickHookTest {
         @Override public List<GreenhouseHologramShapes.CellBox> cells() { return cells; }
 
         @Override public List<GreenhouseHologram.SoilGhost> soilGhosts() { return ghosts; }
+
+        @Override public List<GreenhouseScanLogic.Footprint> blockedFootprints() { return blocked; }
 
         @Override public void refreshScan(BlockPos corner) {
             refreshes++;
@@ -395,7 +398,12 @@ public final class GreenhousePickHookTest {
 
     /** Straight down onto the column at world x (corner z 200), from four blocks above the hologram floor. */
     private static View above(double x) {
-        return new View(new Vec3(x + 0.5, GreenhouseLocator.HOLOGRAM_Y + 4.0, 200.5), new Vec3(0, -1, 0), 10, INF);
+        return above(x, 200);
+    }
+
+    /** The same onto the column at world x and z. */
+    private static View above(double x, double z) {
+        return new View(new Vec3(x + 0.5, GreenhouseLocator.HOLOGRAM_Y + 4.0, z + 0.5), new Vec3(0, -1, 0), 10, INF);
     }
 
     @Test
@@ -461,7 +469,7 @@ public final class GreenhousePickHookTest {
         var boxes = List.of(box(0, GreenhouseGrid.INGREDIENT, "Moonflower", GreenhouseScanLogic.State.EMPTY));
         var extras = List.of(new GreenhouseScanLogic.Extra(3, 0, "Moonflower"));
 
-        List<Cell> label = GreenhousePickHook.labelCells(boxes, List.of(), extras, corner);
+        List<Cell> label = GreenhousePickHook.labelCells(boxes, List.of(), List.of(), extras, corner);
         List<Cell> pick = GreenhousePickHook.worldCells(boxes, List.of(), corner);
 
         assertEquals("Moonflower (extra)", GreenhousePickHook.aimed(above(103), label).orElseThrow().text());
@@ -482,6 +490,122 @@ public final class GreenhousePickHookTest {
             List.of(new Cell("Carrot", 1, null, "wrong crop planted", new AABB(0, 0, 0, 1, 1, 1)))).orElseThrow();
         assertEquals("Carrot", hit.crop());
         assertEquals(1, hit.flag());
+    }
+
+    /** A real layout (cell boxes and placements): one mutation of size x size cells at row 0, column 0, a carrot at 8, 8. */
+    private static GreenhouseHologramShapes.Layout mutationLayout(String mutation, int size) {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        for (int row = 0; row < size; row++) {
+            for (int column = 0; column < size; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell(mutation, GreenhouseGrid.TARGET));
+            }
+        }
+        grid.set(8, 8, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        return GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY);
+    }
+
+    private static List<GreenhouseScanLogic.Footprint> blockedBy(GreenhouseHologramShapes.Layout layout,
+                                                                  GreenhouseHologram.SoilGhost... ghosts) {
+        return GreenhouseSoilCheck.blockedFootprints(GreenhouseScanLogic.footprints(layout.placements()),
+            java.util.Arrays.stream(ghosts)
+                .map(ghost -> new GreenhouseSoilCheck.Ghost(ghost.dx(), ghost.dz(), ghost.soil(), ghost.kind()))
+                .toList());
+    }
+
+    @Test
+    public void aMutationWithASoilGhostUnderOneCellClaimsNothingOverItsOtherCells() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var layout = mutationLayout("Noctilume", 2);
+        var ghost = ghost(1, 1, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_BLOCK);
+        var blocked = blockedBy(layout, ghost);
+        assertEquals("only the mutation is blocked, not the carrot", 1, blocked.size());
+        assertTrue(blocked.get(0).mutation());
+
+        // Without the blocked footprint: the renderer draws neither head nor slab, yet three cells still named the spot.
+        List<Cell> before = GreenhousePickHook.worldCells(layout.cells(), List.of(ghost), corner);
+        assertEquals("Noctilume (mutation spot)", GreenhousePickHook.aimed(above(100, 200), before).orElseThrow().text());
+
+        List<Cell> cells = GreenhousePickHook.worldCells(layout.cells(), List.of(ghost), blocked, corner);
+        String soil = "Farmland (soil, wrong block)";
+        assertTrue(GreenhousePickHook.aimed(above(100, 200), cells).isEmpty());
+        assertTrue(GreenhousePickHook.aimed(above(101, 200), cells).isEmpty());
+        assertTrue(GreenhousePickHook.aimed(above(100, 201), cells).isEmpty());
+        assertEquals("the cell over the ghost still names the soil", soil,
+            GreenhousePickHook.aimed(above(101, 201), cells).orElseThrow().text());
+        assertEquals("the ghost block itself is still there", GreenhouseSoils.Soil.FARMLAND,
+            GreenhousePickHook.nearest(new View(new Vec3(95, GreenhouseLocator.FLOOR_Y + 0.5, 201.5),
+                new Vec3(1, 0, 0), 20, INF), cells).orElseThrow().soil());
+        assertEquals("a cell of another footprint is untouched", "Carrot",
+            GreenhousePickHook.aimed(above(108, 208), cells).orElseThrow().text());
+        assertEquals("the soil cell, the soil ghost and the carrot", 3, cells.size());
+    }
+
+    @Test
+    public void aThreeByThreeMutationDropsEightCellsWhicheverOneHoldsTheGhost() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var layout = mutationLayout("Snoozling", 3);
+        for (int dx = 0; dx < 3; dx++) {
+            for (int dz = 0; dz < 3; dz++) {
+                var ghost = ghost(dx, dz, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.MISSING);
+                List<Cell> cells = GreenhousePickHook.worldCells(layout.cells(), List.of(ghost), blockedBy(layout, ghost),
+                    corner);
+
+                for (int x = 0; x < 3; x++) {
+                    for (int z = 0; z < 3; z++) {
+                        var aimed = GreenhousePickHook.aimed(above(100 + x, 200 + z), cells);
+                        String where = "ghost " + dx + "," + dz + " cell " + x + "," + z;
+                        if (x == dx && z == dz) assertEquals(where, "Farmland (soil, to place)", aimed.orElseThrow().text());
+                        else assertTrue(where, aimed.isEmpty());
+                    }
+                }
+                assertEquals("the soil cell, the soil ghost and the carrot", 3, cells.size());
+            }
+        }
+    }
+
+    @Test
+    public void withoutABlockedFootprintTheMutationCellsKeepTheirLabel() {
+        // The setting off (nothing is blocked): the head is drawn over the ghost, so every cell still names the spot.
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var layout = mutationLayout("Noctilume", 2);
+        var ghost = ghost(1, 1, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_BLOCK);
+
+        List<Cell> cells = GreenhousePickHook.worldCells(layout.cells(), List.of(ghost), List.of(), corner);
+
+        assertEquals("Noctilume (mutation spot)", GreenhousePickHook.aimed(above(100, 200), cells).orElseThrow().text());
+        assertEquals("Noctilume (mutation spot)", GreenhousePickHook.aimed(above(101, 200), cells).orElseThrow().text());
+    }
+
+    @Test
+    public void theLabelAndThePickAgreeOnABlockedMutation() {
+        BlockPos corner = new BlockPos(100, 0, 200);
+        var layout = mutationLayout("Noctilume", 2);
+        var ghost = ghost(1, 1, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_BLOCK);
+        var blocked = blockedBy(layout, ghost);
+
+        List<Cell> label = GreenhousePickHook.labelCells(layout.cells(), List.of(ghost), blocked, List.of(), corner);
+        List<Cell> pick = GreenhousePickHook.worldCells(layout.cells(), List.of(ghost), blocked, corner);
+
+        assertEquals(pick, label);
+    }
+
+    @Test
+    public void aMiddleClickOnAnUndrawnMutationCellIsLeftToVanilla() {
+        FakeGame game = new FakeGame();
+        var layout = mutationLayout("Noctilume", 2);
+        game.cells.clear();
+        game.cells.addAll(layout.cells());
+        game.ghosts.add(ghost(1, 1, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.MISSING));
+        List<Hit> picked = new ArrayList<>();
+
+        // Looking down at the footprint's (0, 0) cell: without the blocked footprint it is the mutation spot.
+        assertTrue(GreenhousePickHook.tryPick(game, picked::add));
+        assertEquals(GreenhouseGrid.TARGET, picked.get(0).flag());
+
+        picked.clear();
+        game.blocked = blockedBy(layout, game.ghosts.get(0));
+        assertFalse("the cell is not drawn: no info chat, no pick", GreenhousePickHook.tryPick(game, picked::add));
+        assertTrue(picked.isEmpty());
     }
 
     @Test
