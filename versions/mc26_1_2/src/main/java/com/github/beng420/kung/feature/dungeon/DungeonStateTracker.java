@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.regex.Pattern;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.core.BlockPos;
@@ -46,16 +47,21 @@ public final class DungeonStateTracker {
     /** The latest baby-zombie deaths: a Mimic can die between two Mimic ESP scans, so the ESP matches these to its chests. */
     private final List<BabyZombieDeath> babyZombieDeaths = new ArrayList<>();
     /**
-     * Hypixel's score report arrives in the same moment the run ends; printing the splits right
-     * away landed them between its header and the rest. Hold them until the report is through.
+     * Hypixel's score report is a chat block that ends in a dashed line, and the run-end lines arrive
+     * inside it. Printing a split line right away landed it in the middle, on every floor. From the
+     * first run-end line on, Kung's lines wait for the closing dashed line, or a fallback if it never comes.
      */
-    private final DungeonSplitTracker splitTracker = new DungeonSplitTracker(notices -> {
-        this.pendingSplitSummary = notices;
-        this.pendingSplitSummaryTick = this.dungeonTick + SPLIT_SUMMARY_DELAY_TICKS;
-    });
-    private List<DungeonSplitMessages.Notice> pendingSplitSummary;
-    private long pendingSplitSummaryTick;
-    private static final long SPLIT_SUMMARY_DELAY_TICKS = 10;
+    private final List<DungeonSplitMessages.Notice> heldSplitNotices = new ArrayList<>();
+    private long splitReportDueTick = Long.MIN_VALUE;
+    private static final long SPLIT_REPORT_FALLBACK_TICKS = 20;
+    private static final long SPLIT_REPORT_END_DELAY_TICKS = 5;
+    private static final Pattern SPLIT_REPORT_END = Pattern.compile("^-{20,}$");
+    private final DungeonSplitTracker splitTracker = new DungeonSplitTracker(
+        phase -> {
+            if (this.splitReportDueTick == Long.MIN_VALUE) DungeonSplitMessages.send(phase);
+            else this.heldSplitNotices.addAll(0, DungeonSplitMessages.notices(phase));
+        },
+        notices -> this.heldSplitNotices.addAll(notices));
     private boolean dungeonInstanceActive;
     // Commit scan readiness only after instance setup/reset reaches its existing boundary.
     private boolean scanReady;
@@ -798,8 +804,28 @@ public final class DungeonStateTracker {
             splitTracker.configureKnownFloor(floor.floor(), floor.masterMode());
         }
         if (!overlay) traceNecronEnd(text);
+        observeSplitReport(text, dungeonTick);
         splitTracker.observeMessage(text, dungeonTick);
         observeRunFinishedSignal(text);
+    }
+
+    /** Opens the report on its first run-end line (before the split tracker answers it) and ends the wait at the dashed line. */
+    void observeSplitReport(String text, long tick) {
+        String clean = DungeonLifecycleSignals.clean(text);
+        if (splitReportDueTick == Long.MIN_VALUE) {
+            if (DungeonLifecycleSignals.isRunFinished(clean)) splitReportDueTick = tick + SPLIT_REPORT_FALLBACK_TICKS;
+        } else if (SPLIT_REPORT_END.matcher(clean).matches()) {
+            splitReportDueTick = Math.min(splitReportDueTick, tick + SPLIT_REPORT_END_DELAY_TICKS);
+        }
+    }
+
+    /** The held lines once their report is through, phase line first; empty while it is still going. */
+    List<DungeonSplitMessages.Notice> dueSplitNotices(long tick) {
+        if (splitReportDueTick == Long.MIN_VALUE || tick < splitReportDueTick) return List.of();
+        splitReportDueTick = Long.MIN_VALUE;
+        List<DungeonSplitMessages.Notice> due = List.copyOf(heldSplitNotices);
+        heldSplitNotices.clear();
+        return due;
     }
 
     /** Hypixel changed the Necron-death dialogue: until the first dragon, keep every line that could mark it. */
@@ -1599,10 +1625,7 @@ public final class DungeonStateTracker {
                 BloodRushHelperFeature.INSTANCE.maybeShowDoorTitle(client, this);
             }
         }
-        if (pendingSplitSummary != null && dungeonTick >= pendingSplitSummaryTick) {
-            DungeonSplitMessages.send(pendingSplitSummary);
-            pendingSplitSummary = null;
-        }
+        DungeonSplitMessages.send(dueSplitNotices(dungeonTick));
         if (pendingRunSummaryTick != Long.MIN_VALUE && dungeonTick >= pendingRunSummaryTick) {
             sendRunSummaryOnce(client);
         }

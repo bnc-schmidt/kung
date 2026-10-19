@@ -87,11 +87,11 @@ public final class DungeonSplitTracker {
             () -> KungConfig.get().splits, DungeonSplitMessages::send, DungeonSplitMessages::send);
     }
 
-    /** Live tracker whose run-end summary goes to the caller instead of straight to chat. */
-    DungeonSplitTracker(Consumer<List<DungeonSplitMessages.Notice>> runSummaries) {
+    /** Live tracker whose phase and run-end lines go to the caller instead of straight to chat. */
+    DungeonSplitTracker(Consumer<PhaseMessage> phaseMessages, Consumer<List<DungeonSplitMessages.Notice>> runSummaries) {
         this(() -> System.nanoTime() / 1_000_000L,
             event -> KungDebugRecorder.event("dungeon-splits", event + " " + ServerTpsTracker.INSTANCE.diagnostics()),
-            () -> KungConfig.get().splits, DungeonSplitMessages::send, runSummaries);
+            () -> KungConfig.get().splits, phaseMessages, runSummaries);
     }
 
     DungeonSplitTracker(LongSupplier clock) {
