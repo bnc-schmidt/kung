@@ -92,18 +92,28 @@ public final class HypixelSkyBlockProfileClient {
             .exceptionally(throwable -> ProfileResult.error(shortError(throwable)));
     }
 
+    /** The run's secret tracking needs one of these: your own key, else the Kung server's. */
+    public static boolean secretsSourceAvailable() {
+        return KungConfig.get().misc.directHypixelApiEnabled() || DungeonRoomDataSyncClient.INSTANCE.configured();
+    }
+
     public CompletableFuture<SecretResult> loadTotalSecrets(String username) {
-        String key = KungConfig.get().misc.hypixelApiKey();
         String normalized = username == null ? "" : username.trim();
-        if (!KungConfig.get().misc.hypixelApiEnabled()) {
-            return CompletableFuture.completedFuture(SecretResult.error("Hypixel API is disabled"));
-        }
-        if (key.isBlank()) {
-            return CompletableFuture.completedFuture(SecretResult.error("Hypixel API key is not set"));
+        if (!secretsSourceAvailable()) {
+            return CompletableFuture.completedFuture(SecretResult.error(NO_SOURCE));
         }
         if (!validUsername(normalized)) {
             return CompletableFuture.completedFuture(SecretResult.error("invalid username"));
         }
+        if (!KungConfig.get().misc.directHypixelApiEnabled()) {
+            // The server reads the same lifetime counter with its key: both ends of a run match one source.
+            return resolveUsername(normalized)
+                .thenCompose(profile -> loadKungServerObject(DungeonRoomDataSyncClient.endpoint("hypixel/secrets"), "uuid",
+                        profile.uuid(), KungServerSession.INSTANCE)
+                    .thenApply(root -> SecretResult.ok(profile.name(), (int) number(root, "secrets", -1)))
+                    .exceptionally(throwable -> SecretResult.error(shortError(throwable))));
+        }
+        String key = KungConfig.get().misc.hypixelApiKey();
         return resolveUsername(normalized)
             .thenCompose(profile -> loadHypixelObject(HYPIXEL_PLAYER_API, "uuid", profile.uuid(), key)
                 .thenApply(playerRoot -> SecretResult.ok(profile.name(), totalSecrets(playerRoot)))

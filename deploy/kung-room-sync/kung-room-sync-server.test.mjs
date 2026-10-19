@@ -53,6 +53,11 @@ before(async () => {
     if (uuid === "e".repeat(32)) {
       return response.writeHead(502).end("upstream broke");
     }
+    if (new URL(request.url, "http://fake").pathname === "/v2/player") {
+      const achievements = uuid === fixtureUuid ? { skyblock_treasure_hunter: 4321, other: 1 } : {};
+      return response.writeHead(200, { "content-type": "application/json" })
+        .end(JSON.stringify({ success: true, player: { achievements, displayname: "junk" } }));
+    }
     const body = uuid === fixtureUuid ? withJunk(rawFixture) : { success: true, profiles: null };
     response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
   });
@@ -234,6 +239,18 @@ test("profiles are stripped to what the Java parser reads", async () => {
   const broken = await call(main, "GET", `/hypixel/profiles?uuid=${"e".repeat(32)}`, { token });
   assert.equal(broken.status, 502);
   assert.equal(broken.text, "upstream broke");
+});
+
+test("secrets are the lifetime achievement alone, -1 when the player has none", async () => {
+  const token = (await signIn(main, owner)).body.token;
+  const secrets = await call(main, "GET", `/hypixel/secrets?uuid=${fixtureUuid}`, { token });
+  assert.equal(secrets.status, 200);
+  assert.deepEqual(secrets.body, { success: true, secrets: 4321 });
+  assert.deepEqual((await call(main, "GET", `/hypixel/secrets?uuid=${"0".repeat(32)}`, { token })).body,
+    { success: true, secrets: -1 });
+  assert.equal((await call(main, "GET", `/hypixel/secrets?uuid=${"e".repeat(32)}`, { token })).status, 502);
+  assert.equal((await call(main, "GET", "/hypixel/secrets?uuid=nope", { token })).status, 400);
+  assert.equal((await call(main, "GET", `/hypixel/secrets?uuid=${fixtureUuid}`, {})).status, 401);
 });
 
 test("each profile lookup logs one line, never the raw query", async () => {

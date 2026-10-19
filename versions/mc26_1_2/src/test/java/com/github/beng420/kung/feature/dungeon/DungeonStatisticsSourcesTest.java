@@ -185,7 +185,7 @@ public final class DungeonStatisticsSourcesTest {
 
     @Test public void summaryExplainsMissingPersonalSourcesWithoutInventingZeros() {
         var stats = run();
-        assertEquals("Personal secrets: 0/2 available. Hypixel API is off or has no key.",
+        assertEquals("Personal secrets: 0/2 available. No Hypixel API key or Kung server set.",
             DungeonRunStats.personalSecretAvailability(stats.summaryPlayers(), false));
         stats.playerStats(SELF).setApiRunSecretsFound(0);
         assertEquals("Personal secrets: 1/2 available. Missing player data was not received.",

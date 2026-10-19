@@ -16,6 +16,8 @@ const hypixelApiUrl = process.env.KUNG_HYPIXEL_API_URL || "https://api.hypixel.n
 const profileCacheMillis = Number(process.env.KUNG_PROFILE_CACHE_MS || 120_000);
 // uuid -> { at, result: Promise<{status, body}> }; one Hypixel request per player per cache window.
 const profileCache = new Map();
+const secretsCacheMillis = Number(process.env.KUNG_SECRETS_CACHE_MS || 5_000);
+const secretsCache = new Map();
 
 // Sign-in is the vanilla server-join handshake: we hand out a challenge, the client joins it at
 // Mojang with its own access token, and hasJoined tells us who did. No shared secret in the jar.
@@ -85,32 +87,12 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, liveRunSnapshot(String(url.searchParams.get("runKey") || ""), session.name));
     }
     if (request.method === "GET" && request.url.startsWith("/hypixel/profiles?")) {
-      const uuid = String(new URL(request.url, "http://localhost").searchParams.get("uuid") || "")
-        .replace(/-/g, "").toLowerCase();
-      const validUuid = /^[0-9a-f]{32}$/.test(uuid);
-      // One line per lookup for journalctl -f; only a checked uuid, never a token, key or body.
-      let outcome = "error";
-      try {
-        if (!withinLimit(profileRequests, profileLimit, request)
-          || !withinLimit(profileUserRequests, profileUserLimit, request, session.uuid)) {
-          outcome = "rate limited 429";
-          return json(response, 429, { error: "too many requests" });
-        }
-        if (!validUuid) {
-          outcome = "bad uuid 400";
-          return json(response, 400, { error: "uuid must be 32 hex characters" });
-        }
-        if (!hypixelKey) {
-          outcome = "no key 503";
-          return json(response, 503, { error: "HYPIXEL_API_KEY is not set on the server" });
-        }
-        const result = await cachedProfiles(uuid);
-        outcome = `${result.hit ? "cache hit" : "hypixel"} ${result.status}`;
-        response.writeHead(result.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
-        return response.end(result.body);
-      } finally {
-        console.log(`profiles ${validUuid ? uuid : "?"} for ${session.name}: ${outcome}`);
-      }
+      return hypixelLookup(request, response, session, "profiles", cachedProfiles,
+        [[profileRequests, profileLimit], [profileUserRequests, profileUserLimit]]);
+    }
+    if (request.method === "GET" && request.url.startsWith("/hypixel/secrets?")) {
+      return hypixelLookup(request, response, session, "secrets", cachedSecrets,
+        [[secretsRequests, secretsLimit], [secretsUserRequests, secretsUserLimit]]);
     }
     return json(response, 404, { error: "not found" });
   } catch (error) {
@@ -137,6 +119,11 @@ const profileLimit = Number(process.env.KUNG_PROFILE_LIMIT_PER_5_MIN || 30);
 const profileRequests = new Map();
 const profileUserLimit = Number(process.env.KUNG_PROFILE_USER_LIMIT_PER_5_MIN || 30);
 const profileUserRequests = new Map();
+// A run reads each player's counter twice (start and end), so a party of five uses ten.
+const secretsLimit = Number(process.env.KUNG_SECRETS_LIMIT_PER_5_MIN || 60);
+const secretsRequests = new Map();
+const secretsUserLimit = Number(process.env.KUNG_SECRETS_USER_LIMIT_PER_5_MIN || 30);
+const secretsUserRequests = new Map();
 const liveReportLimit = Number(process.env.KUNG_LIVE_REPORT_LIMIT_PER_5_MIN || 1800);
 const liveReportRequests = new Map();
 const roomReportLimit = Number(process.env.KUNG_ROOM_REPORT_LIMIT_PER_5_MIN || 30);
@@ -235,25 +222,73 @@ function httpError(status, message) {
   return Object.assign(new Error(message), { status });
 }
 
-function cachedProfiles(uuid) {
+// One lookup route for profiles and secrets: checks the limits, the uuid and the key, then answers from the cache.
+async function hypixelLookup(request, response, session, label, cached, limits) {
+  const uuid = String(new URL(request.url, "http://localhost").searchParams.get("uuid") || "")
+    .replace(/-/g, "").toLowerCase();
+  const validUuid = /^[0-9a-f]{32}$/.test(uuid);
+  // One line per lookup for journalctl -f; only a checked uuid, never a token, key or body.
+  let outcome = "error";
+  try {
+    const [[ipRequests, ipLimit], [userRequests, userLimit]] = limits;
+    if (!withinLimit(ipRequests, ipLimit, request) || !withinLimit(userRequests, userLimit, request, session.uuid)) {
+      outcome = "rate limited 429";
+      return json(response, 429, { error: "too many requests" });
+    }
+    if (!validUuid) {
+      outcome = "bad uuid 400";
+      return json(response, 400, { error: "uuid must be 32 hex characters" });
+    }
+    if (!hypixelKey) {
+      outcome = "no key 503";
+      return json(response, 503, { error: "HYPIXEL_API_KEY is not set on the server" });
+    }
+    const result = await cached(uuid);
+    outcome = `${result.hit ? "cache hit" : "hypixel"} ${result.status}`;
+    response.writeHead(result.status, { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" });
+    return response.end(result.body);
+  } finally {
+    console.log(`${label} ${validUuid ? uuid : "?"} for ${session.name}: ${outcome}`);
+  }
+}
+
+const cachedProfiles = (uuid) => cachedLookup(profileCache, profileCacheMillis, uuid, fetchProfiles);
+const cachedSecrets = (uuid) => cachedLookup(secretsCache, secretsCacheMillis, uuid, fetchSecrets);
+
+function cachedLookup(cache, cacheMillis, uuid, fetcher) {
   const now = Date.now();
-  for (const [key, entry] of profileCache) {
-    if (now - entry.at > profileCacheMillis) {
-      profileCache.delete(key);
+  for (const [key, entry] of cache) {
+    if (now - entry.at > cacheMillis) {
+      cache.delete(key);
     }
   }
-  let entry = profileCache.get(uuid);
+  let entry = cache.get(uuid);
   const hit = Boolean(entry);
   if (!entry) {
-    entry = { at: now, result: fetchProfiles(uuid) };
-    profileCache.set(uuid, entry);
+    entry = { at: now, result: fetcher(uuid) };
+    cache.set(uuid, entry);
     // Only successes are cached; a 429 or network error must not stick for the whole window.
     entry.result.then(
-      (result) => result.status === 200 || profileCache.delete(uuid),
-      () => profileCache.delete(uuid),
+      (result) => result.status === 200 || cache.delete(uuid),
+      () => cache.delete(uuid),
     );
   }
   return entry.result.then((result) => ({ ...result, hit }));
+}
+
+// The run's secret deltas need the live lifetime counter (the achievement, as with a client's own key),
+// which a profile only carries after a save. Cached for seconds only, or both ends of a run would match.
+async function fetchSecrets(uuid) {
+  const upstream = await fetch(`${hypixelApiUrl}/v2/player?uuid=${uuid}`, {
+    headers: { "API-Key": hypixelKey, "User-Agent": "Kung-Server" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const body = await upstream.text();
+  if (upstream.status !== 200) {
+    return { status: upstream.status, body };
+  }
+  const secrets = JSON.parse(body)?.player?.achievements?.skyblock_treasure_hunter;
+  return { status: 200, body: `${JSON.stringify({ success: true, secrets: Number.isInteger(secrets) && secrets >= 0 ? secrets : -1 })}\n` };
 }
 
 async function fetchProfiles(uuid) {

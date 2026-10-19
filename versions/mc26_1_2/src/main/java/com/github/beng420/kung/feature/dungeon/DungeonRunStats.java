@@ -27,6 +27,7 @@ import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.util.HypixelSkyBlockProfileClient;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
@@ -252,7 +253,7 @@ public final class DungeonRunStats {
     public boolean prepareRunSecretDeltas(Minecraft client, long nowTick) {
         if (client == null
             || client.player == null
-            || !KungConfig.get().misc.directHypixelApiEnabled()) {
+            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()) {
             return true;
         }
         if (apiEnrichment.finalFetchStarted()) {
@@ -669,7 +670,7 @@ public final class DungeonRunStats {
         int availableSecrets = bestSecretsAvailable(catalogSecretsAvailable(renderPlan));
         int totalFoundSecrets = partySecretsFound(sortedPlayers, availableSecrets);
         KungDebugRecorder.event("run-statistics", "summary partySecrets=" + totalFoundSecrets
-            + " api=" + (KungConfig.get().misc.directHypixelApiEnabled() ? "configured" : "disabled-or-missing-key")
+            + " api=" + (HypixelSkyBlockProfileClient.secretsSourceAvailable() ? "configured" : "disabled-or-missing-key")
             + " players=" + sortedPlayers.stream().map(stats -> stats.name() + ":"
                 + (stats.hasSecretsFound() ? stats.secretsFound() : "?") + ":" + stats.secretsSource()).toList());
 
@@ -687,15 +688,11 @@ public final class DungeonRunStats {
             }
             if (KungConfig.get().dungeon.playerStatsReportEnabled()) {
                 output.accept(KungMessages.info("Player Stats"));
-                String availability = personalSecretAvailability(sortedPlayers, KungConfig.get().misc.directHypixelApiEnabled());
+                String availability = personalSecretAvailability(sortedPlayers, HypixelSkyBlockProfileClient.secretsSourceAvailable());
                 if (!availability.isEmpty()) output.accept(KungMessages.detail(availability));
-                int nameWidth = DungeonRunSummaryLayout.nameColumnWidth(
-                    sortedPlayers.stream().map(DungeonPlayerStats::name).toList(), textWidth);
-                for (DungeonPlayerStats stats : sortedPlayers) {
-                    output.accept(DungeonRunSummaryLayout.playerLine(
-                        stats.name(), dungeonClass(stats.uuid()).argb(),
-                        playerStatsDetails(stats, totalFoundSecrets), nameWidth, textWidth));
-                }
+                DungeonRunSummaryLayout.lines(sortedPlayers.stream().map(stats -> new DungeonRunSummaryLayout.Row(
+                    stats.name(), dungeonClass(stats.uuid()).argb(), playerStatsCells(stats, totalFoundSecrets))).toList(),
+                    textWidth).forEach(output);
             }
         } finally {
             sendingRunSummary = false;
@@ -752,20 +749,32 @@ public final class DungeonRunStats {
         long known = players.stream().filter(DungeonPlayerStats::hasSecretsFound).count();
         if (known == players.size()) return "";
         return "Personal secrets: " + known + "/" + players.size() + " available. "
-            + (apiConfigured ? "Missing player data was not received." : "Hypixel API is off or has no key.");
+            + (apiConfigured ? "Missing player data was not received." : "No Hypixel API key or Kung server set.");
     }
 
     private static String playerStatsDetails(DungeonPlayerStats stats, int totalFoundSecrets) {
-        return (stats.hasSecretsFound() ? Integer.toString(stats.secretsFound()) : "?")
-            + "/" + unknownDash(totalFoundSecrets)
-            + " Secrets"
-            + totalSecretsSummary(stats)
-            + " | " + stats.soloRoomsCleared()
-            + "-" + stats.roomsCleared()
-            + " Rooms | "
-            + stats.deaths()
-            + " Deaths"
-            + (stats.bonusMarkers().isEmpty() ? "" : " | " + stats.bonusMarkers());
+        return playerStatsCells(stats, totalFoundSecrets).stream()
+            .map(DungeonRunSummaryLayout.Cell::text).collect(java.util.stream.Collectors.joining());
+    }
+
+    /** The details line in pieces: every number is a column that the layout right-aligns across the players. */
+    private static List<DungeonRunSummaryLayout.Cell> playerStatsCells(DungeonPlayerStats stats, int totalFoundSecrets) {
+        var cells = new ArrayList<DungeonRunSummaryLayout.Cell>();
+        cells.add(DungeonRunSummaryLayout.Cell.number("secrets", stats.hasSecretsFound() ? Integer.toString(stats.secretsFound()) : "?"));
+        cells.add(DungeonRunSummaryLayout.Cell.text("/" + unknownDash(totalFoundSecrets) + " Secrets"));
+        if (stats.totalSecretsFound() >= 0) {
+            cells.add(DungeonRunSummaryLayout.Cell.text(" | "));
+            cells.add(DungeonRunSummaryLayout.Cell.number("lifetime", INTEGER_FORMAT.format(stats.totalSecretsFound())));
+            cells.add(DungeonRunSummaryLayout.Cell.text(" Total Secrets"));
+        }
+        cells.add(DungeonRunSummaryLayout.Cell.text(" | "));
+        cells.add(DungeonRunSummaryLayout.Cell.number("solo", Integer.toString(stats.soloRoomsCleared())));
+        cells.add(DungeonRunSummaryLayout.Cell.text("-"));
+        cells.add(DungeonRunSummaryLayout.Cell.number("rooms", Integer.toString(stats.roomsCleared())));
+        cells.add(DungeonRunSummaryLayout.Cell.text(" Rooms | "));
+        cells.add(DungeonRunSummaryLayout.Cell.number("deaths", Integer.toString(stats.deaths())));
+        cells.add(DungeonRunSummaryLayout.Cell.text(" Deaths" + (stats.bonusMarkers().isEmpty() ? "" : " | " + stats.bonusMarkers())));
+        return cells;
     }
 
     int partySecretsFound(List<DungeonPlayerStats> summaryPlayers) {
@@ -780,12 +789,6 @@ public final class DungeonRunStats {
             return summaryPlayers.stream().mapToInt(DungeonPlayerStats::secretsFound).sum();
         }
         return -1;
-    }
-
-    private static String totalSecretsSummary(DungeonPlayerStats stats) {
-        return stats.totalSecretsFound() >= 0
-            ? " | " + INTEGER_FORMAT.format(stats.totalSecretsFound()) + " Total Secrets"
-            : "";
     }
 
     public int roomSecretsFound(int roomGridX, int roomGridZ) {
@@ -1578,7 +1581,7 @@ public final class DungeonRunStats {
     private void requestTotalSecrets(Minecraft client, String name) {
         if (client == null
             || client.player == null
-            || !KungConfig.get().misc.directHypixelApiEnabled()
+            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
             || !isPlayerName(name)) {
             return;
         }
@@ -1601,7 +1604,7 @@ public final class DungeonRunStats {
     private void requestRunSecretBaseline(Minecraft client, String name) {
         if (client == null
             || client.player == null
-            || !KungConfig.get().misc.directHypixelApiEnabled()
+            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
             || !isPlayerName(name)) {
             return;
         }
@@ -1627,7 +1630,7 @@ public final class DungeonRunStats {
     private void requestRunSecretFinal(Minecraft client, String name) {
         if (client == null
             || client.player == null
-            || !KungConfig.get().misc.directHypixelApiEnabled()
+            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
             || !isPlayerName(name)) {
             return;
         }
@@ -2403,9 +2406,9 @@ public final class DungeonRunStats {
     public enum DungeonClass {
         UNKNOWN(0xFFE9EDF2),
         ARCHER(0xFFFF2D32),
-        BERSERKER(0xFFFF9829),
+        BERSERKER(0xFFFF8000),
         MAGE(0xFF62DFFF),
-        HEALER(0xFFD68CFF),
+        HEALER(0xFFB040FF),
         TANK(0xFF34A853);
 
         private final int argb;

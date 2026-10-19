@@ -20,6 +20,7 @@ One small Node server (no dependencies, no Docker) for:
 | `GET /runs/live?runKey=…` | live run snapshot from the other clients |
 | `POST /runs/live/report` | report this client's live run state |
 | `GET /hypixel/profiles?uuid=…` | the player's SkyBlock profiles, cut down to what Kung reads (503 without `HYPIXEL_API_KEY`) |
+| `GET /hypixel/secrets?uuid=…` | the player's lifetime secrets, `{"success":true,"secrets":N}` (-1 when unknown), for the run's per-player secret counts |
 | `GET /rooms` | shared room data |
 | `POST /rooms/report` | add a learned room (writers only, see Auth) |
 
@@ -54,6 +55,8 @@ Limits per 5 minutes, per client IP unless noted:
 | `KUNG_AUTH_LIMIT_PER_5_MIN` | 20 | `/auth/challenge`, `/auth/login` |
 | `KUNG_PROFILE_LIMIT_PER_5_MIN` | 30 | `/hypixel/profiles` |
 | `KUNG_PROFILE_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/profiles`, per player |
+| `KUNG_SECRETS_LIMIT_PER_5_MIN` | 60 | `/hypixel/secrets` |
+| `KUNG_SECRETS_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/secrets`, per player |
 | `KUNG_LIVE_REPORT_LIMIT_PER_5_MIN` | 1800 | `POST /runs/live/report`, per player |
 | `KUNG_ROOM_REPORT_LIMIT_PER_5_MIN` | 30 | `POST /rooms/report`, per player |
 

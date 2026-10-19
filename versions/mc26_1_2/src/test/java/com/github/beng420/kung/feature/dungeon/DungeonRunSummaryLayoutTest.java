@@ -53,6 +53,33 @@ public final class DungeonRunSummaryLayoutTest {
     }
 
     @Test
+    public void numbersWithFewerDigitsShiftRightSoEveryColumnLinesUp() {
+        ToIntFunction<String> width = text -> text.chars().map(c -> c == 0xE000 ? 1 : 6).sum();
+        List<DungeonRunSummaryLayout.Row> rows = List.of(
+            row("Alice", "12", "3", "10"), row("Bob", "5", "12", "7"), row("Cy", "?", "0", "100"));
+        List<Component> lines = DungeonRunSummaryLayout.lines(rows, width);
+        for (String marker : List.of(" Secrets", " Rooms", " Deaths")) {
+            int firstX = -1;
+            for (Component line : lines) {
+                String text = line.getString();
+                int x = width.applyAsInt(text.substring(0, text.indexOf(marker)));
+                if (firstX < 0) firstX = x;
+                assertEquals("column " + marker.strip() + " in '" + text + "'", firstX, x);
+            }
+        }
+        // Bob's one-digit secrets sit one digit (6 px) further right than Alice's two digits.
+        String alice = lines.get(0).getString(), bob = lines.get(1).getString();
+        assertEquals(6, width.applyAsInt(bob.substring(0, bob.indexOf('5'))) - width.applyAsInt(alice.substring(0, alice.indexOf("12"))));
+    }
+
+    private static DungeonRunSummaryLayout.Row row(String name, String secrets, String rooms, String deaths) {
+        return new DungeonRunSummaryLayout.Row(name, 0xFFFFFFFF, List.of(
+            DungeonRunSummaryLayout.Cell.number("secrets", secrets), DungeonRunSummaryLayout.Cell.text("/50 Secrets | "),
+            DungeonRunSummaryLayout.Cell.number("rooms", rooms), DungeonRunSummaryLayout.Cell.text(" Rooms | "),
+            DungeonRunSummaryLayout.Cell.number("deaths", deaths), DungeonRunSummaryLayout.Cell.text(" Deaths")));
+    }
+
+    @Test
     public void spacingResourceDefinesTheExactOnePixelAdvance() throws Exception {
         try (var stream = DungeonRunSummaryLayoutTest.class.getResourceAsStream("/assets/kung/font/chat_spacing.json")) {
             assertNotNull(stream);
