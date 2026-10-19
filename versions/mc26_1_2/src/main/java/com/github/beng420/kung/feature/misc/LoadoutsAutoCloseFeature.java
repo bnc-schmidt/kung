@@ -4,6 +4,8 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.mojang.blaze3d.platform.InputConstants;
+import com.mojang.blaze3d.platform.Window;
 import java.util.Locale;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
@@ -16,6 +18,7 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
+import org.lwjgl.glfw.GLFW;
 
 public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConfig> {
     public static final LoadoutsAutoCloseFeature INSTANCE = new LoadoutsAutoCloseFeature();
@@ -597,6 +600,18 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             && parseKeybindPart(keybind, 1, -1) == button;
     }
 
+    /** Whether the key or mouse button is down right now; a key bound by scancode alone never reads as down. */
+    public static boolean keybindHeld(String keybind, Window window) {
+        if (keybind == null) {
+            return false;
+        }
+        int code = parseKeybindPart(keybind, 1, -1);
+        if (keybind.startsWith("mouse:")) {
+            return code >= 0 && GLFW.glfwGetMouseButton(window.handle(), code) == GLFW.GLFW_PRESS;
+        }
+        return keybind.startsWith("key:") && code >= 0 && InputConstants.isKeyDown(window, code);
+    }
+
     private static int parseKeybindPart(String keybind, int part, int fallback) {
         String[] parts = keybind.split(":");
         if (part >= parts.length) {
@@ -609,7 +624,30 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         }
     }
 
+    /**
+     * What this keyboard prints on a character key. GLFW numbers keys by their US position, so on a German layout
+     * the key labelled Y is code 90. Null for keys without a character (and without GLFW, as in tests).
+     */
+    private static String layoutKeyName(int key) {
+        if (key < 39 || key > 96 && key != 161 && key != 162) {
+            return null;
+        }
+        try {
+            String name = GLFW.glfwGetKeyName(key, 0);
+            if (name == null || name.isEmpty()) {
+                return null;
+            }
+            return name.length() == 1 ? String.valueOf(Character.toUpperCase(name.charAt(0))) : name;
+        } catch (Throwable noGlfw) {
+            return null;
+        }
+    }
+
     private static String keyName(int key) {
+        String layoutName = layoutKeyName(key);
+        if (layoutName != null) {
+            return layoutName;
+        }
         if (key >= 65 && key <= 90) {
             return String.valueOf((char) key);
         }

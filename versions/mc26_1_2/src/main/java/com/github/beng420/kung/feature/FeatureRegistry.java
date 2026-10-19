@@ -15,6 +15,7 @@ import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
+import com.github.beng420.kung.feature.misc.PeekChatFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import com.github.beng420.kung.feature.misc.ChatEmotesFeature;
@@ -62,6 +63,7 @@ public final class FeatureRegistry {
         register(FrozenBlazeHudFeature.INSTANCE);
         register(PerformanceHudFeature.INSTANCE);
         register(SackTrackerFeature.INSTANCE);
+        register(PeekChatFeature.INSTANCE);
         register(TarantulaHelperFeature.INSTANCE);
         register(new SafariOverlayFeature());
         register(FeastOverlayFeature.INSTANCE);

@@ -3,6 +3,7 @@ package com.github.beng420.kung.mixin;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.feature.garden.GreenhouseHologramSettings;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.github.beng420.kung.feature.misc.PeekChatFeature;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -34,5 +35,11 @@ public abstract class MouseHandlerMixin {
         if (action == GLFW.GLFW_PRESS && client.player != null && McCompat.screen(client) == null) {
             GreenhouseHologramSettings.onMousePress(info.button());
         }
+    }
+
+    /** With the Peek Chat key held the wheel scrolls the chat, so it must not also move the hotbar. */
+    @Inject(method = "onScroll", at = @At("HEAD"), cancellable = true)
+    private void kung$beforeScroll(long window, double xOffset, double yOffset, CallbackInfo callbackInfo) {
+        if (PeekChatFeature.scroll(yOffset)) callbackInfo.cancel();
     }
 }

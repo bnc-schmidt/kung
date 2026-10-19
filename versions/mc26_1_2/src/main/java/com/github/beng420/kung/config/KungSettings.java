@@ -322,6 +322,19 @@ public final class KungSettings {
                         "Set the Track Key, then press it over an item in a sack.",
                         "Counts follow SkyBlock's [Sacks] messages; keep them on in /settings.",
                         "Move and resize in /kung hud."),
+                new FeatureEntry("Peek Chat", config.misc::peekChatEnabled, config.misc::setPeekChatEnabled, List.of(
+                    SettingEntry.keybind("Peek Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.misc.peekChatKeybind()),
+                        config.misc::peekChatKeybind, config.misc::setPeekChatKeybind),
+                    SettingEntry.toggle("Scroll Chat", config.misc::peekChatScrollEnabled,
+                        config.misc::setPeekChatScrollEnabled)
+                        .withTooltip("Scroll the wheel while holding the key to scroll the chat, not the hotbar.")
+                        .withChildren(List.of(
+                            SettingEntry.slider("Scroll Speed (Lines)", config.misc::peekChatScrollLines,
+                                config.misc::setPeekChatScrollLines, 1, 30, 1)
+                                .withTooltip("Lines per wheel notch. Minecraft's own chat scrolls 7.")
+                        ))
+                )).withTooltip("Hold the key to see the whole chat without opening it.",
+                    "Shows it like the open chat, without the text box. Letting go hides it again."),
                 KungBuild.MODRINTH ? null : new FeatureEntry("Skip NPC Dialogue", config.misc::skipNpcDialogueEnabled,
                     config.misc::setSkipNpcDialogueEnabled, List.of())
                     .withTooltip("Answers NPC dialogue prompts: a single option, or a known choice.",

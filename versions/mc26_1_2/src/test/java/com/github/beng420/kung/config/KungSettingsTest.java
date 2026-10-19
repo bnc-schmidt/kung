@@ -32,7 +32,7 @@ public final class KungSettingsTest {
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 11 : 12, 3, 1, 1, modrinth ? 13 : 14, 3),
+        assertEquals(List.of(modrinth ? 11 : 12, 3, 1, 1, modrinth ? 14 : 15, 3),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -459,6 +459,31 @@ public final class KungSettingsTest {
         assertTrue(restored.dungeon.dragonCorePart(com.github.beng420.kung.config.category.DungeonConfig.DragonPart.NECK));
         assertTrue(restored.dungeon.dragonCorePart(com.github.beng420.kung.config.category.DungeonConfig.DragonPart.BODY));
         assertFalse(restored.dungeon.dragonCorePart(com.github.beng420.kung.config.category.DungeonConfig.DragonPart.HEAD));
+    }
+
+    @Test
+    public void peekChatPeeksOnYAndScrollSpeedStaysInRangeAndPersists() {
+        Path file = temporary.getRoot().toPath().resolve("peek.json");
+        KungConfig config = new KungConfig(file);
+        FeatureEntry peek = feature(KungSettings.categories(config, () -> { }), "Peek Chat");
+        assertFalse(config.misc.peekChatEnabled());
+        assertEquals("key:89:0", setting(peek, "Peek Key").rawKeybindSupplier().get());
+        assertEquals("Y", setting(peek, "Peek Key").textValue());
+
+        SettingEntry scroll = setting(peek, "Scroll Chat");
+        assertTrue("scrolling is on once the feature is", scroll.booleanSupplier().getAsBoolean());
+        SettingEntry lines = scroll.children().getFirst();
+        assertEquals("Minecraft's own chat scrolls 7 lines", 7, lines.intSupplier().getAsInt());
+        lines.intConsumer().accept(99);
+        assertEquals(30, config.misc.peekChatScrollLines());
+        lines.intConsumer().accept(0);
+        assertEquals(1, config.misc.peekChatScrollLines());
+        lines.intConsumer().accept(12);
+
+        KungConfig restored = new KungConfig(file);
+        restored.load();
+        assertEquals(12, restored.misc.peekChatScrollLines());
+        assertEquals("key:89:0", restored.misc.peekChatKeybind());
     }
 
     private static FeatureEntry feature(List<CategoryEntry> categories, String name) {

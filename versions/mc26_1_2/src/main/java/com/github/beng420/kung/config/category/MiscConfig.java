@@ -3,8 +3,11 @@ package com.github.beng420.kung.config.category;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import org.lwjgl.glfw.GLFW;
 
 public final class MiscConfig extends ConfigCategory {
+    private static String layoutPeekChatKeybind;
+
     private boolean lobbyHopHelperEnabled = false;
     private boolean lobbyHopTitleEnabled = true;
     private boolean lobbyHopChatEnabled = true;
@@ -34,6 +37,11 @@ public final class MiscConfig extends ConfigCategory {
     private int sackTrackerY = 240;
     private int sackTrackerScale = 100;
     private List<SackItem> sackTrackerItems = new ArrayList<>();
+    private boolean peekChatEnabled = false;
+    /** Null until the player picks a key, so the default can follow the keyboard layout. */
+    private String peekChatKeybind;
+    private boolean peekChatScrollEnabled = true;
+    private int peekChatScrollLines = 7;
     private String menuFont = "Inter";
     private boolean hypixelApiEnabled = false;
     private String hypixelApiKey = "";
@@ -131,6 +139,14 @@ public final class MiscConfig extends ConfigCategory {
     public int sackTrackerScale() { return sackTrackerScale; }
     public void setSackTrackerScale(int value) { sackTrackerScale = Math.clamp(value, 25, 300); save(); }
     public List<SackItem> sackTrackerItems() { return Collections.unmodifiableList(sackTrackerItems); }
+    public boolean peekChatEnabled() { return peekChatEnabled; }
+    public void setPeekChatEnabled(boolean value) { peekChatEnabled = value; save(); }
+    public String peekChatKeybind() { return peekChatKeybind == null ? defaultPeekChatKeybind() : peekChatKeybind; }
+    public void setPeekChatKeybind(String value) { peekChatKeybind = value == null ? "" : value; save(); }
+    public boolean peekChatScrollEnabled() { return peekChatScrollEnabled; }
+    public void setPeekChatScrollEnabled(boolean value) { peekChatScrollEnabled = value; save(); }
+    public int peekChatScrollLines() { return Math.clamp(peekChatScrollLines, 1, 30); }
+    public void setPeekChatScrollLines(int value) { peekChatScrollLines = Math.clamp(value, 1, 30); save(); }
 
     public SackItem sackTrackerItem(String name) {
         for (SackItem item : sackTrackerItems) if (item.name().equals(name)) return item;
@@ -356,6 +372,18 @@ public final class MiscConfig extends ConfigCategory {
     public void setCustomWitherShieldExpirePitchHundredths(int value) {
         customWitherShieldExpirePitchHundredths = Math.clamp(value, 25, 300);
         save();
+    }
+
+    /** The key labelled Y on this keyboard: GLFW numbers keys by US position, so a German Y is 90 (Z), not 89. */
+    private static String defaultPeekChatKeybind() {
+        if (layoutPeekChatKeybind == null) {
+            try {
+                for (int key = GLFW.GLFW_KEY_A; key <= GLFW.GLFW_KEY_Z && layoutPeekChatKeybind == null; key++) {
+                    if ("y".equals(GLFW.glfwGetKeyName(key, 0))) layoutPeekChatKeybind = "key:" + key + ":0";
+                }
+            } catch (Throwable noGlfw) { /* tests run without GLFW */ }
+        }
+        return layoutPeekChatKeybind == null ? "key:89:0" : layoutPeekChatKeybind;
     }
 
     public static String[] defaultLoadoutKeybinds() {

@@ -32,7 +32,7 @@ public final class KungOneConfigTreeTest {
         assertEquals(expected, tree.map.size());
         assertEquals(6, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
         long keybinds = tree.map.values().stream().filter(node -> node.getMetadata("visualizer") == Visualizer.KeybindVisualizer.class).count();
-        assertEquals(14, keybinds);
+        assertEquals(15, keybinds);
         assertEquals(Property.Display.DISABLED, property(tree, "Crypt Messages", "Enabled").getDisplay());
         assertEquals(false, property(tree, "Colored F7/M7 Pillars", "Enabled").get());
         assertArrayEquals(java.util.Arrays.stream(com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial.choices())
