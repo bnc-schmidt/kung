@@ -26,7 +26,7 @@ final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
             .withTooltip("Press it over an item in a sack to track it, and again to stop."));
         next.add(SettingEntry.toggle("Show In Menus", config::sackTrackerInMenus,
             config::setSackTrackerInMenus)
-            .withTooltip("Also shows the tracker over inventories, chat and other menus."));
+            .withTooltip("Also shows the tracker over inventories, chat and other vanilla menus, not over menus of mods."));
         for (SackItem item : items) {
             next.add(SettingEntry.group(() -> item.name() + ": " + SackTrackerFeature.format(item.amount())
                     + (item.goal() > 0 ? "/" + SackTrackerFeature.format(item.goal()) : ""))

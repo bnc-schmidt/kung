@@ -12,6 +12,12 @@ import org.junit.Test;
 
 public final class SackTrackerFeatureTest {
     @Test
+    public void onlyVanillaScreensShowTheTrackerNotOtherModsMenus() {
+        assertTrue(SackTrackerFeature.vanilla(net.minecraft.client.gui.screens.inventory.AbstractContainerScreen.class));
+        assertFalse(SackTrackerFeature.vanilla(SackTrackerFeatureTest.class)); // stands in for a mod's own screen
+    }
+
+    @Test
     public void sackMenusCountsAndMessagesParse() {
         assertTrue(SackTrackerFeature.isSack("Large Enchanted Agronomy Sack"));
         assertFalse(SackTrackerFeature.isSack("Sack of Sacks"));

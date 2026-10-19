@@ -209,11 +209,12 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             && !McCompat.hudHidden(client) && !KungHudEditorState.externalEditing();
     }
 
-    /** Over a menu the tracker is interactive; Kung's own screens keep their space. */
+    /** Over a menu the tracker is interactive; screens of Kung and of other mods (waypoint editors) keep their space. */
     private boolean overScreen(Screen screen) {
-        return visible() && config().sackTrackerInMenus()
-            && !screen.getClass().getName().startsWith("com.github.beng420.kung");
+        return visible() && config().sackTrackerInMenus() && vanilla(screen.getClass());
     }
+
+    static boolean vanilla(Class<?> screenClass) { return screenClass.getName().startsWith("net.minecraft."); }
 
     private void renderOverScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (!overScreen(screen)) return;
