@@ -83,9 +83,19 @@ public final class RareDungeonRoomCatalogTest {
         assertTrue(room.contains(1, 1));
     }
 
+    // hangingVines.txt, 15:12:02.834: grid 10,4 was an UNKNOWN cell with 1/1 secrets.
     @Test public void october17HangingVinesTraceIsRecognizedFromItsBundledHashes() {
+        assertHangingVinesRecognized(921355714, -345534414);
+    }
+
+    // M5 trace of 2026-10-19 01:18: the only UNKNOWN room cell, grid 6,2 (room 3,1).
+    @Test public void october19HangingVinesTraceIsRecognizedFromItsBundledHashes() {
+        assertHangingVinesRecognized(-483642217, 728588033);
+    }
+
+    private static void assertHangingVinesRecognized(int core, int stable) {
         DungeonKnownRoomCatalog.reload();
-        var hint = DungeonKnownRoomCatalog.knownCoreHint(921355714);
+        var hint = DungeonKnownRoomCatalog.knownCoreHint(core);
         assertNotNull("The friend-identified Hanging Vines needs direct bundled hash evidence", hint);
         assertEquals("Hanging Vines", hint.name());
         assertEquals(RoomType.RARE, hint.type());
@@ -93,9 +103,8 @@ public final class RareDungeonRoomCatalogTest {
         assertEquals(0, hint.crypts());
         var snapshot = new DungeonMapSnapshot();
         snapshot.observeMapVisibleRoom(1, 1);
-        // hangingVines.txt, 15:12:02.834: grid 10,4 was an UNKNOWN cell with 1/1 secrets.
         snapshot.addScan(1, 1792300000000L, 5, 5, List.of(new DungeonScanPoint(2, 2, -153, -153,
-            DungeonScanPointKind.ROOM, true, 921355714, -345534414, 0, DungeonDoorKind.NONE, true)));
+            DungeonScanPointKind.ROOM, true, core, stable, 0, DungeonDoorKind.NONE, true)));
         var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
         assertEquals(1, plan.matches().size());
         assertEquals(RoomType.RARE, plan.roomTypeAt(1, 1));
