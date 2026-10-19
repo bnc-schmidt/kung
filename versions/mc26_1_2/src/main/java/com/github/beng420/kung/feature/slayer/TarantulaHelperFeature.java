@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.runtime.KungFileLayout;
+import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.github.beng420.kung.util.ServerTpsTracker;
 import com.github.beng420.kung.util.LineBoxes;
@@ -51,6 +52,12 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     private static final double SEARCH_RANGE = 30.0;
     private static final double NAME_TO_BODY_RANGE = 4.0;
     private static final double OWNER_SEARCH_RANGE = 5.0;
+    /**
+     * Hypixel dropped the "Spawned by" stand: after our own spawn message the nearest untagged boss in range is ours,
+     * however far it spawned, until the slayer ends. The fight lasts 3 minutes plus the cocoon pauses of the timer.
+     */
+    private static final long SPAWN_ARM_MILLIS = 300_000L;
+    private static final long SIDEBAR_LAG_MILLIS = 10_000L;
     /** A boss's stands share its column; anything further out sideways belongs to another boss. */
     private static final double OWNER_COLUMN_RANGE = 1.5;
     private static final double EGG_SAC_SEARCH_RANGE = 24.0;
@@ -87,8 +94,9 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     private static final double EGG_SAC_BOX_HALF_WIDTH = 0.35;
     private static final int EGG_SAC_BOX_COLOR = 0xFF00FFD2;
     /**
-     * Hypixel keeps the real health in the nametag. Mobs carry "795.1k/1.2M❤", a slayer boss only its
-     * current health, as in "☠ Tarantula Broodfather V 9.4M❤".
+     * Hypixel keeps the real health in the nametag. Mobs carry "795.1k/1.2M❤"; a slayer boss did only its
+     * current health ("☠ Tarantula Broodfather V 9.4M❤") and since 2026-10-18 names the maximum too
+     * ("[Lv396]  Tarantula Broodfather V 10M/10M❤").
      */
     private static final java.util.regex.Pattern NAMETAG_HEALTH =
         java.util.regex.Pattern.compile("(?:([\\d.,]+[kKmMbB]?)/)?([\\d.,]+[kKmMbB]?)❤");
@@ -126,6 +134,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     private final Map<String, Vec3> phaseSacOffsets = new LinkedHashMap<>();
     private float lastBossHealthPercent = Float.NaN;
     private long slayerEndSeenMillis;
+    private long spawnMessageMillis;
     private boolean activeBossWasConjoined;
     /** A slayer nametag names no maximum, so the boss's full health is the highest value seen. */
     private double bossMaxHealth;
@@ -166,6 +175,10 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
         }
 
         String message = clean(rawMessage);
+        if (isBossSpawnMessage(message)) {
+            spawnMessageMillis = System.currentTimeMillis();
+            KungDebugRecorder.event("tarantula", "spawn message");
+        }
         if (isEggSacPhaseStartMessage(message)) {
             // The message also fires when hitting someone else's boss; without a boss of our own that
             // would start a phase nothing can ever end. The id survives his cocoon, the entity does not.
@@ -188,6 +201,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
 
         if (isOwnSlayerEndMessage(message)) {
             slayerEndSeenMillis = System.currentTimeMillis();
+            spawnMessageMillis = 0L;
             if (activeBossId != -1) {
                 finishEggSacPhase(client);
                 debug(client, DebugMessage.SLAYER_DEAD, "slayer dead");
@@ -202,6 +216,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
 
         if (!shouldTrack || client.level == null || client.player == null) {
             clearTrackedBoss();
+            spawnMessageMillis = 0L;
             return;
         }
 
@@ -225,8 +240,9 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
                     return;
                 } else if (!markBossMissing(client)) {
                     return;
-                } else if (eggSacPhaseActive) {
-                    // He sits in his cocoon: no entity to find, but the phase is still running.
+                } else if (eggSacPhaseActive || fightIsOn()) {
+                    // He sits in his cocoon: no entity to find, but the phase or the whole fight is still running.
+                    // Clearing now would forget the phases and could not bind the Conjoined Brood that follows.
                     return;
                 } else {
                     finishEggSacPhase(client);
@@ -411,7 +427,8 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
             if (name.isBlank() || names.length() > 300) continue;
             names.append(names.isEmpty() ? "" : " | ").append(name);
         }
-        KungDebugRecorder.event("tarantula", "no own boss; nearby=[" + names + "]");
+        KungDebugRecorder.event("tarantula", "no own boss; fight=" + fightIsOn() + " sidebarBoss="
+            + sidebarShowsBoss(HypixelInstanceTracker.INSTANCE.sidebarLines()) + " nearby=[" + names + "]");
     }
 
     /** Anchor without ownership proof: only used while a phase already started, so it is our fight. */
@@ -493,9 +510,55 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     }
 
     private boolean isOwnBossNameCarrier(Minecraft client, Entity nameCarrier) {
+        // Until 2026-10-18 every boss carried a "Spawned by" stand and Hypixel may bring it back: when it is there, it
+        // alone decides, as before. Boss tags without it fall back to knowing that our own fight is on.
         String owner = ownerNameFor(client, nameCarrier);
-        String playerName = client.player.getName().getString();
-        return owner != null && owner.equalsIgnoreCase(playerName);
+        if (owner != null) {
+            return owner.equalsIgnoreCase(client.player.getName().getString());
+        }
+        return adoptsUntagged(activeBossId != -1, fightIsOn());
+    }
+
+    private long sinceSpawn() {
+        return spawnMessageMillis == 0L ? -1L : System.currentTimeMillis() - spawnMessageMillis;
+    }
+
+    /** Our boss is alive or about to be, though it may be out of sight (in its cocoon, far away). */
+    private boolean fightIsOn() {
+        return fightIsOn(HypixelInstanceTracker.INSTANCE.sidebarLines(), sinceSpawn());
+    }
+
+    /**
+     * The sidebar says "Slay the boss!" while our boss lives, which no late chat message can undo: a cocooned boss
+     * completes its quest about 6 s after, when the next boss has spawned already. The spawn message bridges the
+     * sidebar's lag, and stands in for it when no sidebar was read at all.
+     */
+    static boolean fightIsOn(List<String> sidebar, long sinceSpawnMillis) {
+        if (sidebar.isEmpty()) {
+            return spawnArmed(sinceSpawnMillis);
+        }
+        return sidebarShowsBoss(sidebar) || (sinceSpawnMillis >= 0L && sinceSpawnMillis <= SIDEBAR_LAG_MILLIS);
+    }
+
+    static boolean sidebarShowsBoss(List<String> sidebar) {
+        return sidebar.stream().anyMatch(line -> line.toLowerCase(Locale.ROOT).contains("slay the boss"));
+    }
+
+    static boolean spawnArmed(long sinceSpawnMillis) {
+        return sinceSpawnMillis >= 0L && sinceSpawnMillis <= SPAWN_ARM_MILLIS;
+    }
+
+    /**
+     * An untagged boss is ours while we fight one (the Conjoined Brood spawns up to ~10 blocks from where the old
+     * body last stood, after his jump) or while our fight is on. Callers only look in range.
+     */
+    static boolean adoptsUntagged(boolean fighting, boolean fightOn) {
+        return fighting || fightOn;
+    }
+
+    /** "slayer boss! the tarantula broodfather v spawned!"; the mini boss line says "slayer miniboss!". */
+    static boolean isBossSpawnMessage(String message) {
+        return message.startsWith("slayer boss!") && message.contains("spawned") && message.contains("brood");
     }
 
     private String ownerNameFor(Minecraft client, Entity nameCarrier) {
