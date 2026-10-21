@@ -258,6 +258,12 @@ public final class KungReleaseNotesPopup {
         for (String raw : body.replace("\r", "").split("\n", -1)) {
             String value = raw.stripTrailing();
             if (value.stripLeading().startsWith("```")) { fenced = !fenced; continue; }
+            // A GitHub alert ("> [!CAUTION]" plus "> text") shows as red bold text without its markers.
+            boolean alert = !fenced && value.stripLeading().startsWith(">");
+            if (alert) {
+                value = value.replaceFirst("^\\s*>\\s?", "");
+                if (value.matches("^\\[![A-Z]+]\\s*$")) continue;
+            }
             boolean heading = !fenced && value.matches("^#{1,6}\\s+.*");
             if (heading) value = value.replaceFirst("^#{1,6}\\s+", "");
             if (!fenced) {
@@ -268,6 +274,7 @@ public final class KungReleaseNotesPopup {
             }
             var component = Component.literal(value);
             if (heading) component.withStyle(ChatFormatting.BOLD);
+            else if (alert) component.withStyle(ChatFormatting.RED, ChatFormatting.BOLD);
             var wrapped = font.split(component, width);
             if (wrapped.isEmpty()) result.add(new Line(FormattedCharSequence.EMPTY, false));
             else for (var line : wrapped) result.add(new Line(line, heading));

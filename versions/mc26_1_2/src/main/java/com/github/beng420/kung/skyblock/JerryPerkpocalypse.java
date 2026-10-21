@@ -45,6 +45,7 @@ public final class JerryPerkpocalypse {
     private static final long PULL_INTERVAL_MILLIS = 5L * 60L * 1000L;
     private static final long UNKNOWN_PULL_INTERVAL_MILLIS = 60L * 1000L;
     private static final long REMINDER_INTERVAL_MILLIS = 5L * 60L * 1000L;
+    private static final long JOIN_WARNING_DELAY_MILLIS = 20L * 1000L;
     /** Time for the server pull to answer before the first reminder of an unknown slot. */
     private static final long REMINDER_GRACE_MILLIS = 30L * 1000L;
     private static final Map<String, String> MAYOR_BY_PERK = new HashMap<>();
@@ -66,6 +67,8 @@ public final class JerryPerkpocalypse {
     private int readMenuId = -1;
     private long nextPullMillis;
     private long unknownSinceMillis;
+    private long skyBlockSinceMillis;
+    private boolean joinWarned;
     private long nextReminderMillis;
     private Reading lastReading;
     private long lastReadAtMillis;
@@ -130,11 +133,17 @@ public final class JerryPerkpocalypse {
     private void tick(Minecraft client) {
         SkyBlockMayorTracker tracker = SkyBlockMayorTracker.INSTANCE;
         long year = tracker.electionYear();
+        long now = System.currentTimeMillis();
+        if (client.player == null) {
+            joinWarned = false;
+            skyBlockSinceMillis = 0;
+        } else {
+            warnOnJoin(client, tracker.jerryInOffice(), now);
+        }
         if (client.player == null || !tracker.jerryInOffice() || year < 0) {
             unknownSinceMillis = 0;
             return;
         }
-        long now = System.currentTimeMillis();
         boolean unknown = copiedMayor(year, now).isEmpty();
         if (!unknown) {
             unknownSinceMillis = 0;
@@ -148,6 +157,31 @@ public final class JerryPerkpocalypse {
         }
         readMenu(client, year, now);
         remind(client, unknown, now);
+    }
+
+    /** Once per connection, a while after joining SkyBlock: Paul's score bonus is only reliable with Jerry sync on. */
+    private void warnOnJoin(Minecraft client, boolean jerryInOffice, long now) {
+        HypixelInstanceTracker instance = HypixelInstanceTracker.INSTANCE;
+        if (!instance.tracking() || instance.location().kind() == HypixelLocation.Kind.UNKNOWN) {
+            skyBlockSinceMillis = 0;
+            return;
+        }
+        if (skyBlockSinceMillis == 0) skyBlockSinceMillis = now;
+        var dungeon = KungConfig.get().dungeon;
+        if (!shouldWarnOnJoin(joinWarned, now - skyBlockSinceMillis, jerryInOffice, instance.catacombs(),
+            dungeon.jerrySyncEnabled(), dungeon.jerryReminderEnabled())) {
+            return;
+        }
+        joinWarned = true;
+        KungMessages.send(client, KungMessages.Type.WARNING, "Jerry",
+            "Jerry is mayor and Jerry Mayor sync is off, so Paul score tracking may be inaccurate. "
+                + "Turn it on under Server Sync in the settings.");
+    }
+
+    static boolean shouldWarnOnJoin(boolean alreadyWarned, long inSkyBlockMillis, boolean jerryInOffice,
+                                    boolean inCatacombs, boolean syncOn, boolean remindersOn) {
+        return !alreadyWarned && inSkyBlockMillis >= JOIN_WARNING_DELAY_MILLIS && jerryInOffice && !inCatacombs
+            && !syncOn && remindersOn;
     }
 
     /** While the copied mayor is unknown, nudge the player every few minutes to open Jerry's menu. */

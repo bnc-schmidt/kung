@@ -88,6 +88,17 @@ public class JerryPerkpocalypseTest {
     }
 
     @Test
+    public void theJoinWarningWaitsTwentySecondsAndNeedsEveryCondition() {
+        assertTrue(JerryPerkpocalypse.shouldWarnOnJoin(false, 20_000, true, false, false, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(false, 19_999, true, false, false, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(true, 60_000, true, false, false, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(false, 60_000, false, false, false, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(false, 60_000, true, true, false, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(false, 60_000, true, false, true, true));
+        assertFalse(JerryPerkpocalypse.shouldWarnOnJoin(false, 60_000, true, false, false, false));
+    }
+
+    @Test
     public void everyServerSyncServiceIsOptIn() {
         var dungeon = new com.github.beng420.kung.config.category.DungeonConfig();
         assertFalse(dungeon.jerrySyncEnabled());

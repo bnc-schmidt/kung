@@ -577,7 +577,9 @@ public final class KungSettings {
                 config.dungeon::setForcePaulScoreEnabled),
             SettingEntry.toggle("Jerry Reminder", config.dungeon::jerryReminderEnabled,
                 config.dungeon::setJerryReminderEnabled)
-                .withTooltip("While Jerry is mayor and the mayor he copies is unknown, remind you every 5 minutes to click Jerry in the Hub."),
+                .withTooltip("While Jerry is mayor: remind you every 5 minutes to click Jerry in the Hub",
+                    "when his copied mayor is unknown, and warn once after joining SkyBlock",
+                    "when Jerry Mayor sync is off."),
             SettingEntry.toggle("Room Debug", config.dungeon::debugRoomMatches,
                 config.dungeon::setDebugRoomMatches),
             SettingEntry.toggle("Room Crypts", config.dungeon::debugRoomCrypts,
