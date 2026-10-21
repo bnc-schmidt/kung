@@ -6,6 +6,7 @@ import com.github.beng420.kung.feature.screen.ScreenTracker;
 import com.github.beng420.kung.skyblock.HypixelGuildTracker;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
+import com.github.beng420.kung.skyblock.JerryPerkpocalypse;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
 import com.github.beng420.kung.util.CatacombsRecentXpTracker;
 
@@ -24,6 +25,7 @@ public final class ServiceRegistry {
         HypixelPartyTracker.initializeClient();
         HypixelGuildTracker.initializeClient();
         SkyBlockMayorTracker.initializeClient();
+        JerryPerkpocalypse.initializeClient();
         CatacombsRecentXpTracker.initializeClient();
         services.dungeonStateTracker().initializeClient();
         ScreenTracker.initializeClient();

@@ -29,6 +29,8 @@ public final class SkyBlockMayorTracker {
         .build();
     private volatile boolean requestInFlight;
     private volatile boolean paulScoreBonusActive;
+    private volatile boolean jerryInOffice;
+    private volatile long electionYear = -1;
     private volatile double catacombsXpMultiplier = 1.0;
     private volatile String catacombsXpBoostLabel = "None";
     private volatile String mayorName = "";
@@ -46,8 +48,22 @@ public final class SkyBlockMayorTracker {
         ClientTickEvents.END_CLIENT_TICK.register(client -> INSTANCE.tick(client));
     }
 
+    /** Elected EZPZ, or Jerry currently copying Paul with all his perks. */
     public boolean paulScoreBonusActive() {
-        return paulScoreBonusActive;
+        return paulScoreBonusActive || "Paul".equals(jerryCopiedMayor());
+    }
+
+    public boolean jerryInOffice() {
+        return jerryInOffice;
+    }
+
+    /** The mayor Jerry copies right now, or "" when Jerry is not in office or the copy is not known yet. */
+    public String jerryCopiedMayor() {
+        return jerryInOffice ? JerryPerkpocalypse.INSTANCE.copiedMayor(electionYear, System.currentTimeMillis()) : "";
+    }
+
+    public long electionYear() {
+        return electionYear;
     }
 
     public double catacombsXpMultiplier() {
@@ -136,6 +152,8 @@ public final class SkyBlockMayorTracker {
         boolean active = parsePaulScoreActive(mayor);
         MayorXpBoost xpBoost = mayorXpBoost(parsedMayorName, parsedMinisterName);
         feastStatus = parseFeastStatus(mayor, System.currentTimeMillis());
+        electionYear = feastStatus.electionYear();
+        jerryInOffice = "jerry".equalsIgnoreCase(parsedMayorName.trim());
 
         mayorName = parsedMayorName;
         ministerName = parsedMinisterName;
@@ -158,6 +176,7 @@ public final class SkyBlockMayorTracker {
             + " mayor=" + blank(mayorName)
             + " minister=" + blank(ministerName)
             + " paulScore=" + paulScoreBonusActive
+            + " jerryCopies=" + blank(jerryCopiedMayor())
             + " cataXp=" + catacombsXpBoostLabel;
         if (!state.equals(lastLoggedState)) {
             lastLoggedState = state;

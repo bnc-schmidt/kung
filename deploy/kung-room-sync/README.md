@@ -21,6 +21,8 @@ One small Node server (no dependencies, no Docker) for:
 | `POST /runs/live/report` | report this client's live run state |
 | `GET /hypixel/profiles?uuid=…` | the player's SkyBlock profiles, cut down to what Kung reads (503 without `HYPIXEL_API_KEY`) |
 | `GET /hypixel/secrets?uuid=…` | the player's lifetime secrets, `{"success":true,"secrets":N}` (-1 when unknown), for the run's per-player secret counts |
+| `POST /jerry/report` | report the mayor Jerry copies, read from his hub menu; answers with the pooled cycle |
+| `GET /jerry?year=…` | Jerry's pooled 6-slot cycle for that election year (`positions` is null where unknown) |
 | `GET /rooms` | shared room data |
 | `POST /rooms/report` | add a learned room (writers only, see Auth) |
 

@@ -27,6 +27,7 @@ final class UserCommandGroup {
                 .then(literal("dump").executes(KungCommandActions::dumpGreenhouse))
                 .then(hologram("blueprint"))
                 .then(hologram("holo")))
+            .then(literal("jerry").executes(KungCommandActions::jerryStatus))
             .then(literal("changelog").executes(KungCommandActions::openChangelog))
             .then(literal("visitors")
                 .then(literal("mute").executes(KungCommandActions::muteVisitorAlarm)))

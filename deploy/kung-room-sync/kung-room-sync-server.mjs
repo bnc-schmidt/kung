@@ -40,6 +40,13 @@ const maxChallenges = 10_000;
 const maxSessions = 10_000;
 const maxTrackedIps = 10_000;
 
+// Jerry's Perkpocalypse of the current term, pooled from the clients' readings of his hub menu: slot k
+// starts at anchor + k * 6 h and holds positions[k % 6]. Kept on disk, rebuilding it takes up to 36 h.
+const jerryFile = dataFile.replace(/(\.json)?$/, ".jerry.json");
+const jerryMayors = new Set(["Aatrox", "Cole", "Diana", "Finnegan", "Marina", "Paul"]);
+const jerrySlotMillis = 6 * 3_600_000;
+let jerry = await readJerry();
+
 const server = http.createServer(async (request, response) => {
   try {
     if (request.method === "GET" && request.url === "/health") {
@@ -86,6 +93,16 @@ const server = http.createServer(async (request, response) => {
       const url = new URL(request.url, "http://localhost");
       return json(response, 200, liveRunSnapshot(String(url.searchParams.get("runKey") || ""), session.name));
     }
+    if (request.method === "POST" && request.url === "/jerry/report") {
+      if (!withinLimit(jerryReportRequests, jerryReportLimit, request, session.uuid)) {
+        return json(response, 429, { error: "too many requests" });
+      }
+      return json(response, 200, await mergeJerryReport(await readJson(request)));
+    }
+    if (request.method === "GET" && request.url.startsWith("/jerry?")) {
+      const year = Number(new URL(request.url, "http://localhost").searchParams.get("year"));
+      return json(response, 200, jerry.year === year ? jerry : emptyJerry(year));
+    }
     if (request.method === "GET" && request.url.startsWith("/hypixel/profiles?")) {
       return hypixelLookup(request, response, session, "profiles", cachedProfiles,
         [[profileRequests, profileLimit], [profileUserRequests, profileUserLimit]]);
@@ -128,6 +145,8 @@ const liveReportLimit = Number(process.env.KUNG_LIVE_REPORT_LIMIT_PER_5_MIN || 1
 const liveReportRequests = new Map();
 const roomReportLimit = Number(process.env.KUNG_ROOM_REPORT_LIMIT_PER_5_MIN || 30);
 const roomReportRequests = new Map();
+const jerryReportLimit = Number(process.env.KUNG_JERRY_REPORT_LIMIT_PER_5_MIN || 60);
+const jerryReportRequests = new Map();
 const authLimit = Number(process.env.KUNG_AUTH_LIMIT_PER_5_MIN || 20);
 const authRequests = new Map();
 
@@ -403,6 +422,45 @@ async function readDatabase() {
 async function writeDatabase(database) {
   await fs.mkdir(path.dirname(dataFile), { recursive: true });
   await fs.writeFile(dataFile, `${JSON.stringify(database, null, 2)}\n`, "utf8");
+}
+
+function emptyJerry(year) {
+  return { year, anchor: 0, positions: Array(6).fill(null) };
+}
+
+async function readJerry() {
+  try {
+    const saved = JSON.parse(await fs.readFile(jerryFile, "utf8"));
+    if (Number.isSafeInteger(saved.year) && Number.isFinite(saved.anchor) && Array.isArray(saved.positions)
+      && saved.positions.length === 6 && saved.positions.every((mayor) => mayor === null || jerryMayors.has(mayor))) {
+      return saved;
+    }
+  } catch {
+    // Missing or damaged: start over, the next menu readings refill it.
+  }
+  return emptyJerry(-1);
+}
+
+// A reading is one mayor and the start of the 6 h slot it was seen in (from a minute-resolution
+// countdown, so it is rounded to the nearest slot). The latest reading wins; a mayor has one position.
+async function mergeJerryReport(report) {
+  const { year, mayor, slotStart } = isObject(report) ? report : {};
+  if (!Number.isSafeInteger(year) || year < 0 || year > 100_000 || !jerryMayors.has(mayor)
+    || !Number.isFinite(slotStart) || Math.abs(slotStart - Date.now()) > 7 * 86_400_000) {
+    throw httpError(400, "invalid report");
+  }
+  if (year < jerry.year) {
+    return jerry; // a client still on the previous term
+  }
+  if (year !== jerry.year || jerry.positions.every((known) => known === null)) {
+    jerry = { ...emptyJerry(year), anchor: slotStart };
+  }
+  const slot = (((Math.round((slotStart - jerry.anchor) / jerrySlotMillis)) % 6) + 6) % 6;
+  jerry.positions = jerry.positions.map((known) => (known === mayor ? null : known));
+  jerry.positions[slot] = mayor;
+  await fs.mkdir(path.dirname(jerryFile), { recursive: true });
+  await fs.writeFile(jerryFile, JSON.stringify(jerry), "utf8");
+  return jerry;
 }
 
 async function mergeRoomReport(report) {

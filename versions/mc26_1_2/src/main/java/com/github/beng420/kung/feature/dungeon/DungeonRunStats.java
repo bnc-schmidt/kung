@@ -474,6 +474,7 @@ public final class DungeonRunStats {
             + " paulMayor=" + mayorTracker.paulScoreBonusActive()
             + " mayor=" + blank(mayorTracker.mayorName())
             + " minister=" + blank(mayorTracker.ministerName())
+            + " jerryCopies=" + blank(mayorTracker.jerryCopiedMayor())
             + " mayorStatus=" + mayorTracker.status()
             + " rooms=completed:" + bestCompleted
             + ",scoreCompleted:" + scoreCompleted

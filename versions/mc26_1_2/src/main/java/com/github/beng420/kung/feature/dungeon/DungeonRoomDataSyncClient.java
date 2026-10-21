@@ -74,7 +74,7 @@ public final class DungeonRoomDataSyncClient {
 
     public void pullAsync(Minecraft client) {
         if (!active()) {
-            send(client, KungMessages.Type.WARNING, "Room Sync is not active. Set a server and enable it.");
+            send(client, KungMessages.Type.WARNING, "Server Sync is not active. Set a server and enable it.");
             return;
         }
 
@@ -122,7 +122,7 @@ public final class DungeonRoomDataSyncClient {
 
     public void pushRoomReportAsync(Minecraft client, String roomReportJson) {
         if (!active()) {
-            send(client, KungMessages.Type.WARNING, "Room Sync is not active. Set a server and enable it.");
+            send(client, KungMessages.Type.WARNING, "Server Sync is not active. Set a server and enable it.");
             return;
         }
 
@@ -501,7 +501,7 @@ public final class DungeonRoomDataSyncClient {
     }
 
     private static void send(Minecraft client, KungMessages.Type type, String message) {
-        KungMessages.send(client, type, "Room Sync", message);
+        KungMessages.send(client, type, "Server Sync", message);
     }
 
     private static String string(JsonObject object, String name, String fallback) {

@@ -21,6 +21,7 @@ import com.github.beng420.kung.feature.garden.GreenhouseHologram;
 import com.github.beng420.kung.feature.garden.GreenhouseScreen;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.JerryPerkpocalypse;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.update.KungUpdater;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -277,7 +278,7 @@ final class KungCommandActions {
         }
 
         DungeonRoomDataSyncClient.INSTANCE.pushRoomReportAsync(client, result.clipboardText());
-        context.getSource().sendFeedback(commandMessage("Room Sync push started: " + input.name()));
+        context.getSource().sendFeedback(commandMessage("Server Sync push started: " + input.name()));
         return 1;
     }
 
@@ -308,11 +309,18 @@ final class KungCommandActions {
         return 1;
     }
 
+    static int jerryStatus(CommandContext<FabricClientCommandSource> context) {
+        for (String line : JerryPerkpocalypse.INSTANCE.statusLines(System.currentTimeMillis())) {
+            context.getSource().sendFeedback(KungMessages.info("Jerry", line));
+        }
+        return 1;
+    }
+
     static int roomSyncStatus(CommandContext<FabricClientCommandSource> context) {
         KungConfig config = KungConfig.get();
         String url = config.dungeon.roomSyncServerUrl().isBlank() ? "none" : config.dungeon.roomSyncServerUrl();
         context.getSource().sendFeedback(commandMessage(
-            "Room Sync: enabled=" + config.dungeon.roomSyncEnabled()
+            "Server Sync: enabled=" + config.dungeon.roomSyncEnabled()
                 + " upload=" + config.dungeon.roomSyncUploadEnabled()
                 + " server=" + url
                 + " status=" + DungeonRoomDataSyncClient.INSTANCE.statusMessage()
@@ -325,7 +333,7 @@ final class KungCommandActions {
         KungConfig.get().dungeon.setRoomSyncEnabled(enabled);
         DungeonKnownRoomCatalog.reload();
         context.getSource().sendFeedback(commandMessage(
-            "Room Sync " + (enabled ? "enabled for this session." : "disabled.")
+            "Server Sync " + (enabled ? "enabled for this session." : "disabled.")
         ));
         return 1;
     }
@@ -334,7 +342,7 @@ final class KungCommandActions {
         boolean enabled = BoolArgumentType.getBool(context, "enabled");
         KungConfig.get().dungeon.setRoomSyncUploadEnabled(enabled);
         context.getSource().sendFeedback(commandMessage(
-            "Room Sync upload " + (enabled ? "enabled for this session." : "disabled.")
+            "Server Sync upload " + (enabled ? "enabled for this session." : "disabled.")
         ));
         return 1;
     }
@@ -342,11 +350,11 @@ final class KungCommandActions {
     static int setRoomSyncServer(CommandContext<FabricClientCommandSource> context) {
         String url = StringArgumentType.getString(context, "url").trim();
         if (url.isEmpty()) {
-            context.getSource().sendFeedback(commandMessage("Room Sync URL cannot be empty."));
+            context.getSource().sendFeedback(commandMessage("Server Sync URL cannot be empty."));
             return 0;
         }
         KungConfig.get().dungeon.setRoomSyncServerUrl(url);
-        context.getSource().sendFeedback(commandMessage("Room Sync server saved."));
+        context.getSource().sendFeedback(commandMessage("Server Sync server saved."));
         return 1;
     }
 

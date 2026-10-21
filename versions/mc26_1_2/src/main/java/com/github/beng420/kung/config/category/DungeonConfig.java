@@ -68,6 +68,7 @@ public final class DungeonConfig extends ConfigCategory {
     private boolean devWishAlertAnyClassEnabled = false;
     private PillarMaterial pillarMaterial = PillarMaterial.WOOL;
     private boolean forcePaulScoreEnabled = false;
+    private boolean jerryReminderEnabled = true;
     private boolean playerTrackingEnabled = false;
     private boolean runStatsReportEnabled = true;
     private boolean playerStatsReportEnabled = true;
@@ -90,6 +91,7 @@ public final class DungeonConfig extends ConfigCategory {
     // Room Sync Settings
     private boolean roomSyncEnabled = false;
     private boolean roomSyncUploadEnabled = false;
+    private boolean jerrySyncEnabled = false;
     // New key when the built-in server arrived: every config had "" or a LAN address written out.
     // Blank still means no server; the old key is dropped on the next save.
     @SerializedName("kungServerUrl")
@@ -228,6 +230,8 @@ public final class DungeonConfig extends ConfigCategory {
     public void setPillarMaterial(PillarMaterial value) { pillarMaterial = value == null ? PillarMaterial.WOOL : value; save(); }
     public boolean forcePaulScoreEnabled() { return forcePaulScoreEnabled; }
     public void setForcePaulScoreEnabled(boolean value) { forcePaulScoreEnabled = value; save(); }
+    public boolean jerryReminderEnabled() { return jerryReminderEnabled; }
+    public void setJerryReminderEnabled(boolean value) { jerryReminderEnabled = value; save(); }
     public boolean playerTrackingEnabled() { return playerTrackingEnabled; }
     public void setPlayerTrackingEnabled(boolean value) { playerTrackingEnabled = value; save(); }
     public boolean runStatsReportEnabled() { return runStatsReportEnabled; }
@@ -269,6 +273,8 @@ public final class DungeonConfig extends ConfigCategory {
     public void setRoomSyncEnabled(boolean value) { roomSyncEnabled = value; save(); }
     public boolean roomSyncUploadEnabled() { return roomSyncUploadEnabled; }
     public void setRoomSyncUploadEnabled(boolean value) { roomSyncUploadEnabled = value; save(); }
+    public boolean jerrySyncEnabled() { return jerrySyncEnabled; }
+    public void setJerrySyncEnabled(boolean value) { jerrySyncEnabled = value; save(); }
     public String roomSyncServerUrl() { return roomSyncServerUrl == null ? "" : roomSyncServerUrl; }
 
     public void setScale(int scale) {

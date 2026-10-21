@@ -465,14 +465,23 @@ public final class KungSettings {
                         ))
                     )
                 ),
-                new FeatureEntry("Room Sync", config.dungeon::roomSyncEnabled,
-                    () -> toggleRoomSync(config),
+                // Every service is its own opt-in; nothing talks to the server until one is switched on.
+                new FeatureEntry("Server Sync", () -> false, (Runnable) null,
                     List.of(
-                        SettingEntry.dynamicLabel(() -> "Status: " + DungeonRoomDataSyncClient.INSTANCE.menuStatus()),
+                        SettingEntry.dynamicLabel(() -> "Live Map status: " + DungeonRoomDataSyncClient.INSTANCE.menuStatus()),
                         SettingEntry.text("Server", config.dungeon::roomSyncServerUrl,
                             config.dungeon::setRoomSyncServerUrl),
+                        SettingEntry.toggle("Live Map & Rooms", config.dungeon::roomSyncEnabled,
+                            enabled -> setRoomSync(config, enabled))
+                            .withTooltip("Share the revealed dungeon map with other Kung users on your server",
+                                "and use the shared room data."),
                         SettingEntry.toggle("Upload", config.dungeon::roomSyncUploadEnabled,
-                            config.dungeon::setRoomSyncUploadEnabled),
+                            config.dungeon::setRoomSyncUploadEnabled)
+                            .withTooltip("Also send your own live map state and learned rooms to the server."),
+                        SettingEntry.toggle("Jerry Mayor", config.dungeon::jerrySyncEnabled,
+                            config.dungeon::setJerrySyncEnabled)
+                            .withTooltip("Share which mayor Jerry copies with other Kung users and get it from them.",
+                                "Only the mayor name and the election year are sent."),
                         SettingEntry.button("Pull", "Rooms",
                             () -> DungeonRoomDataSyncClient.INSTANCE.pullAsync(Minecraft.getInstance())),
                         SettingEntry.button("Ping", "Check",
@@ -566,6 +575,9 @@ public final class KungSettings {
                 config.dungeon::setMimicEspEnabled),
             SettingEntry.toggle("Force Paul", config.dungeon::forcePaulScoreEnabled,
                 config.dungeon::setForcePaulScoreEnabled),
+            SettingEntry.toggle("Jerry Reminder", config.dungeon::jerryReminderEnabled,
+                config.dungeon::setJerryReminderEnabled)
+                .withTooltip("While Jerry is mayor and the mayor he copies is unknown, remind you every 5 minutes to click Jerry in the Hub."),
             SettingEntry.toggle("Room Debug", config.dungeon::debugRoomMatches,
                 config.dungeon::setDebugRoomMatches),
             SettingEntry.toggle("Room Crypts", config.dungeon::debugRoomCrypts,
@@ -691,8 +703,8 @@ public final class KungSettings {
         return List.copyOf(settings);
     }
 
-    private static void toggleRoomSync(KungConfig config) {
-        config.dungeon.setRoomSyncEnabled(!config.dungeon.roomSyncEnabled());
+    private static void setRoomSync(KungConfig config, boolean enabled) {
+        config.dungeon.setRoomSyncEnabled(enabled);
         DungeonKnownRoomCatalog.reload();
     }
 

@@ -179,6 +179,53 @@ test("rate limits are per signed-in player, not per IP", async () => {
   }
 });
 
+test("Jerry's cycle is pooled from readings, kept per term and survives a restart", async () => {
+  const env = { KUNG_ROOM_DATA_PATH: path.join(os.tmpdir(), `kung-jerry-test-${process.pid}.json`) };
+  const jerryFile = env.KUNG_ROOM_DATA_PATH.replace(/\.json$/, ".jerry.json");
+  fs.rmSync(jerryFile, { force: true });
+  const server = await startServer(env);
+  const token = (await signIn(server, owner)).body.token;
+  const hour = 3_600_000;
+  const t0 = Date.now() - 2 * hour;
+  const report = (body) => call(server, "POST", "/jerry/report", { token, body });
+
+  assert.deepEqual((await call(server, "GET", "/jerry?year=520", { token })).body.positions, Array(6).fill(null));
+  const first = await report({ year: 520, mayor: "Diana", slotStart: t0 });
+  assert.equal(first.status, 200);
+  assert.deepEqual(first.body, { year: 520, anchor: t0, positions: ["Diana", null, null, null, null, null] });
+
+  // Another player's reading 4 slots later, one minute off, lands in position 4; Diana moves when seen again.
+  const second = await report({ year: 520, mayor: "Paul", slotStart: t0 + 4 * 6 * hour - 60_000 });
+  assert.deepEqual(second.body.positions, ["Diana", null, null, null, "Paul", null]);
+  const moved = await report({ year: 520, mayor: "Diana", slotStart: t0 + 6 * hour });
+  assert.deepEqual(moved.body.positions, [null, "Diana", null, null, "Paul", null]);
+  assert.deepEqual((await call(server, "GET", "/jerry?year=520", { token })).body, moved.body);
+  assert.deepEqual((await call(server, "GET", "/jerry?year=528", { token })).body.positions, Array(6).fill(null));
+
+  // An older term is ignored, a newer one starts over.
+  assert.deepEqual((await report({ year: 496, mayor: "Cole", slotStart: t0 })).body, moved.body);
+  assert.deepEqual((await report({ year: 528, mayor: "Cole", slotStart: t0 })).body,
+    { year: 528, anchor: t0, positions: ["Cole", null, null, null, null, null] });
+
+  const restarted = await startServer(env);
+  const again = (await signIn(restarted, owner)).body.token;
+  assert.equal((await call(restarted, "GET", "/jerry?year=528", { token: again })).body.positions[0], "Cole");
+  fs.rmSync(jerryFile, { force: true });
+});
+
+test("Jerry reports are validated and need a session", async () => {
+  const token = (await signIn(main, owner)).body.token;
+  const now = Date.now();
+  for (const body of [{}, null, { year: 520, mayor: "Derpy", slotStart: now }, { year: "520", mayor: "Paul", slotStart: now },
+    { year: -1, mayor: "Paul", slotStart: now }, { year: 520, mayor: "Paul" },
+    { year: 520, mayor: "Paul", slotStart: now + 30 * 86_400_000 }]) {
+    assert.equal((await call(main, "POST", "/jerry/report", { token, body })).status, 400, JSON.stringify(body));
+  }
+  for (const [method, route] of [["POST", "/jerry/report"], ["GET", "/jerry?year=520"]]) {
+    assert.equal((await call(main, method, route, { body: method === "POST" ? {} : undefined })).status, 401, route);
+  }
+});
+
 test("signing in again replaces the player's earlier session", async () => {
   const first = (await signIn(main, owner)).body.token;
   const other = (await signIn(main, friend)).body.token;
