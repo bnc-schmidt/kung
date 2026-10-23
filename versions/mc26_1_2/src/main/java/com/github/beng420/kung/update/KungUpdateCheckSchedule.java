@@ -8,8 +8,23 @@ package com.github.beng420.kung.update;
  */
 final class KungUpdateCheckSchedule {
     static final long INTERVAL_MILLIS = 30L * 60L * 1000L;
+    /** The settings button may ask GitHub right away, but not in a row: that is how the hourly limit gets used up. */
+    static final long MANUAL_COOLDOWN_MILLIS = 15_000L;
     private boolean started;
     private long lastStarted;
+    private boolean manualStarted;
+    private long lastManual;
+
+    boolean manualAllowed(long nowMillis) {
+        return !manualStarted || nowMillis - lastManual >= MANUAL_COOLDOWN_MILLIS;
+    }
+
+    /** A manual check counts as the automatic one too: the next poll comes a full interval later. */
+    void manualStarted(long nowMillis) {
+        manualStarted = true;
+        lastManual = nowMillis;
+        started(nowMillis);
+    }
 
     boolean due(long nowMillis) {
         return !started || nowMillis - lastStarted >= INTERVAL_MILLIS;

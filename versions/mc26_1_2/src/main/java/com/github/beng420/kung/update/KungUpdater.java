@@ -180,6 +180,49 @@ public enum KungUpdater {
         });
     }
 
+    /** The settings button: asks GitHub now instead of at the next interval, and says in chat what it found. */
+    public void checkNowAsync(Minecraft client) {
+        if (KungBuild.MODRINTH) return;
+        long now = nowMillis();
+        State previous = state.get();
+        if (installing.get() || previous.status() == Status.DOWNLOADING || previous.status() == Status.INSTALL_READY) {
+            KungMessages.send(client, KungMessages.Type.INFO, "Updater", "An update is already being installed.");
+            return;
+        }
+        if (!checkSchedule.manualAllowed(now) || !checking.compareAndSet(false, true)) {
+            KungMessages.send(client, KungMessages.Type.INFO, "Updater", "Already checking, one moment.");
+            return;
+        }
+        checkSchedule.manualStarted(now);
+        KungDebugRecorder.event("update-check", "manual started current=" + currentVersion());
+        executor.execute(() -> {
+            try {
+                State result = checkForUpdates();
+                state.compareAndSet(previous, result);
+                KungDebugRecorder.event("update-check", "manual finished status=" + result.status()
+                    + " latest=" + result.latestVersion());
+                KungMessages.send(client, result.status() == Status.UPDATE_AVAILABLE ? KungMessages.Type.SUCCESS
+                    : KungMessages.Type.INFO, "Updater", checkResultMessage(result));
+            } catch (Exception exception) {
+                KungMod.LOGGER.warn("Kung manual update check failed.", exception);
+                KungMessages.send(client, KungMessages.Type.ERROR, "Updater",
+                    "Could not reach GitHub. Please try again later.");
+            } finally {
+                checking.set(false);
+            }
+        });
+    }
+
+    private static String checkResultMessage(State result) {
+        return switch (result.status()) {
+            case UPDATE_AVAILABLE -> "Update v" + result.latestVersion() + " is available (installed: v"
+                + result.currentVersion() + "). Install it under Debug > Updates.";
+            case UP_TO_DATE -> "Kung is up to date (v" + result.currentVersion() + ", latest: "
+                + (result.latestVersion().isBlank() ? "none published" : "v" + result.latestVersion()) + ").";
+            default -> "v" + result.latestVersion() + " exists, but " + result.message() + ".";
+        };
+    }
+
     private static long nowMillis() { return System.nanoTime() / 1_000_000L; }
 
     public void initializeInstallation() {
@@ -498,7 +541,7 @@ public enum KungUpdater {
         return trimmed.startsWith("v") || trimmed.startsWith("V") ? trimmed.substring(1) : trimmed;
     }
 
-    private static boolean isNewerVersion(String latestVersion, String currentVersion) {
+    static boolean isNewerVersion(String latestVersion, String currentVersion) {
         List<Integer> latestParts = numericVersionParts(latestVersion);
         List<Integer> currentParts = numericVersionParts(currentVersion);
         int max = Math.max(latestParts.size(), currentParts.size());

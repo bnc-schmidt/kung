@@ -77,6 +77,15 @@ public final class KungReleaseNotesTest {
         assertFalse(Files.exists(file));
     }
 
+    @Test public void aDevBuildNeverOpensTheNotesOnItsOwnButStillOnRequest() throws Exception {
+        var worker = new Worker();
+        var notes = controller("0.6.3-dev", receipt(), worker, version -> Optional.empty());
+        assertFalse(notes.openMenu());
+        assertEquals(0, worker.tasks.size());
+        assertTrue(notes.openMenu(true)); // the Changelogs button
+        assertEquals(1, worker.tasks.size());
+    }
+
     @Test public void shutdownFlushesAnAcknowledgementStillQueuedOnTheWorker() throws Exception {
         Path file = receipt();
         var worker = new Worker();

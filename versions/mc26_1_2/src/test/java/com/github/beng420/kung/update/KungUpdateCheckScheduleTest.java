@@ -32,6 +32,19 @@ public final class KungUpdateCheckScheduleTest {
         assertTrue(schedule.due(4 * INTERVAL));
     }
 
+    @Test public void theButtonChecksAtOnceButNotInARowAndPostponesThePoll() {
+        var schedule = new KungUpdateCheckSchedule();
+        schedule.started(0);
+        assertFalse(schedule.due(1_000)); // the button does not depend on the interval...
+        assertTrue(schedule.manualAllowed(1_000));
+        schedule.manualStarted(1_000);
+        assertFalse(schedule.manualAllowed(1_000 + KungUpdateCheckSchedule.MANUAL_COOLDOWN_MILLIS - 1));
+        assertTrue(schedule.manualAllowed(1_000 + KungUpdateCheckSchedule.MANUAL_COOLDOWN_MILLIS));
+        // ...and the next automatic poll is a full interval after the manual one.
+        assertFalse(schedule.due(1_000 + INTERVAL - 1));
+        assertTrue(schedule.due(1_000 + INTERVAL));
+    }
+
     @Test public void monotonicClockDoesNotRequireAPositiveEpoch() {
         var schedule = new KungUpdateCheckSchedule();
         assertTrue(schedule.due(-2 * INTERVAL));

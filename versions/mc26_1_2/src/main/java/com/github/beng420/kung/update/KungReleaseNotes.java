@@ -64,6 +64,8 @@ public final class KungReleaseNotes {
     public boolean openMenu() { return openMenu(false); }
 
     public synchronized boolean openMenu(boolean force) {
+        // A dev build (version 0.6.3-dev) has no release, hence no notes: never offer them on their own.
+        if (!force && version.endsWith("-dev")) return false;
         loadReceipt();
         if ((acknowledged || dismissed) && !force) return false;
         request();
