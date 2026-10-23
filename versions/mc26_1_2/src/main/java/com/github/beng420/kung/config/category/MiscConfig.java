@@ -66,6 +66,21 @@ public final class MiscConfig extends ConfigCategory {
     private boolean tpsGuildCommandsEnabled = true;
     private boolean tpsAllChatCommandsEnabled = false;
     private boolean tpsPrivateCommandsEnabled = false;
+    private boolean jerryChatCommandEnabled = true;
+    private boolean jerryPartyCommandsEnabled = true;
+    private boolean jerryGuildCommandsEnabled = true;
+    private boolean jerryAllChatCommandsEnabled = false;
+    private boolean jerryPrivateCommandsEnabled = false;
+    private boolean scorpChatCommandEnabled = true;
+    private boolean scorpPartyCommandsEnabled = true;
+    private boolean scorpGuildCommandsEnabled = true;
+    private boolean scorpAllChatCommandsEnabled = false;
+    private boolean scorpPrivateCommandsEnabled = false;
+    private boolean derpyChatCommandEnabled = true;
+    private boolean derpyPartyCommandsEnabled = true;
+    private boolean derpyGuildCommandsEnabled = true;
+    private boolean derpyAllChatCommandsEnabled = false;
+    private boolean derpyPrivateCommandsEnabled = false;
 
     // Loadouts & Superpairs
     private boolean loadoutsAutoCloseEnabled = false;
@@ -336,6 +351,36 @@ public final class MiscConfig extends ConfigCategory {
     public void setTpsAllChatCommandsEnabled(boolean value) { tpsAllChatCommandsEnabled = value; save(); }
     public boolean tpsPrivateCommandsEnabled() { return tpsPrivateCommandsEnabled; }
     public void setTpsPrivateCommandsEnabled(boolean value) { tpsPrivateCommandsEnabled = value; save(); }
+    public boolean jerryChatCommandEnabled() { return jerryChatCommandEnabled; }
+    public void setJerryChatCommandEnabled(boolean value) { jerryChatCommandEnabled = value; save(); }
+    public boolean jerryPartyCommandsEnabled() { return jerryPartyCommandsEnabled; }
+    public void setJerryPartyCommandsEnabled(boolean value) { jerryPartyCommandsEnabled = value; save(); }
+    public boolean jerryGuildCommandsEnabled() { return jerryGuildCommandsEnabled; }
+    public void setJerryGuildCommandsEnabled(boolean value) { jerryGuildCommandsEnabled = value; save(); }
+    public boolean jerryAllChatCommandsEnabled() { return jerryAllChatCommandsEnabled; }
+    public void setJerryAllChatCommandsEnabled(boolean value) { jerryAllChatCommandsEnabled = value; save(); }
+    public boolean jerryPrivateCommandsEnabled() { return jerryPrivateCommandsEnabled; }
+    public void setJerryPrivateCommandsEnabled(boolean value) { jerryPrivateCommandsEnabled = value; save(); }
+    public boolean scorpChatCommandEnabled() { return scorpChatCommandEnabled; }
+    public void setScorpChatCommandEnabled(boolean value) { scorpChatCommandEnabled = value; save(); }
+    public boolean scorpPartyCommandsEnabled() { return scorpPartyCommandsEnabled; }
+    public void setScorpPartyCommandsEnabled(boolean value) { scorpPartyCommandsEnabled = value; save(); }
+    public boolean scorpGuildCommandsEnabled() { return scorpGuildCommandsEnabled; }
+    public void setScorpGuildCommandsEnabled(boolean value) { scorpGuildCommandsEnabled = value; save(); }
+    public boolean scorpAllChatCommandsEnabled() { return scorpAllChatCommandsEnabled; }
+    public void setScorpAllChatCommandsEnabled(boolean value) { scorpAllChatCommandsEnabled = value; save(); }
+    public boolean scorpPrivateCommandsEnabled() { return scorpPrivateCommandsEnabled; }
+    public void setScorpPrivateCommandsEnabled(boolean value) { scorpPrivateCommandsEnabled = value; save(); }
+    public boolean derpyChatCommandEnabled() { return derpyChatCommandEnabled; }
+    public void setDerpyChatCommandEnabled(boolean value) { derpyChatCommandEnabled = value; save(); }
+    public boolean derpyPartyCommandsEnabled() { return derpyPartyCommandsEnabled; }
+    public void setDerpyPartyCommandsEnabled(boolean value) { derpyPartyCommandsEnabled = value; save(); }
+    public boolean derpyGuildCommandsEnabled() { return derpyGuildCommandsEnabled; }
+    public void setDerpyGuildCommandsEnabled(boolean value) { derpyGuildCommandsEnabled = value; save(); }
+    public boolean derpyAllChatCommandsEnabled() { return derpyAllChatCommandsEnabled; }
+    public void setDerpyAllChatCommandsEnabled(boolean value) { derpyAllChatCommandsEnabled = value; save(); }
+    public boolean derpyPrivateCommandsEnabled() { return derpyPrivateCommandsEnabled; }
+    public void setDerpyPrivateCommandsEnabled(boolean value) { derpyPrivateCommandsEnabled = value; save(); }
     public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
     public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled && ca50PartyCommandsEnabled; }
     public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled && ca50GuildCommandsEnabled; }

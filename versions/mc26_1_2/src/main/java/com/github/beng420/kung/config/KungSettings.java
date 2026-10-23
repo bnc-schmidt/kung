@@ -361,6 +361,8 @@ public final class KungSettings {
                         "3. The count is read from the sack when you open it, then follows",
                         "   SkyBlock's [Sacks] messages; keep them on in /settings.",
                         "   Tracked outside the sack it shows ? until you open the sack.",
+                        "   ~ in front of a count: after a world change Hypixel forgets finds it had",
+                        "   not reported yet, so it may be short. Opening the sack makes it exact.",
                         "   Gemstones: without a filter the whole gem counts, in Rough gems (the",
                         "   Stored total); with a filter button set, only that quality.",
                         "4. Over inventories (Show In Menus), hover a tracker line: click",
@@ -434,6 +436,46 @@ public final class KungSettings {
                                 config.misc::setTpsAllChatCommandsEnabled),
                             SettingEntry.toggle("DMs", config.misc::tpsPrivateCommandsEnabled,
                                 config.misc::setTpsPrivateCommandsEnabled)
+                        )),
+                        SettingEntry.toggle("!jerry", config.misc::jerryChatCommandEnabled,
+                            config.misc::setJerryChatCommandEnabled)
+                            .withTooltip("Not in office: when Jerry is elected next. In office: his mayor rotation.",
+                                "Special mayors have a switch each: !jerry, !scorp (!scorpius) and !derpy.")
+                            .withChildren(List.of(
+                            SettingEntry.toggle("Party", config.misc::jerryPartyCommandsEnabled,
+                                config.misc::setJerryPartyCommandsEnabled),
+                            SettingEntry.toggle("Guild", config.misc::jerryGuildCommandsEnabled,
+                                config.misc::setJerryGuildCommandsEnabled),
+                            SettingEntry.toggle("All Chat", config.misc::jerryAllChatCommandsEnabled,
+                                config.misc::setJerryAllChatCommandsEnabled),
+                            SettingEntry.toggle("DMs", config.misc::jerryPrivateCommandsEnabled,
+                                config.misc::setJerryPrivateCommandsEnabled)
+                        )),
+                        SettingEntry.toggle("!scorp", config.misc::scorpChatCommandEnabled,
+                            config.misc::setScorpChatCommandEnabled)
+                            .withTooltip("Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves.")
+                            .withChildren(List.of(
+                            SettingEntry.toggle("Party", config.misc::scorpPartyCommandsEnabled,
+                                config.misc::setScorpPartyCommandsEnabled),
+                            SettingEntry.toggle("Guild", config.misc::scorpGuildCommandsEnabled,
+                                config.misc::setScorpGuildCommandsEnabled),
+                            SettingEntry.toggle("All Chat", config.misc::scorpAllChatCommandsEnabled,
+                                config.misc::setScorpAllChatCommandsEnabled),
+                            SettingEntry.toggle("DMs", config.misc::scorpPrivateCommandsEnabled,
+                                config.misc::setScorpPrivateCommandsEnabled)
+                        )),
+                        SettingEntry.toggle("!derpy", config.misc::derpyChatCommandEnabled,
+                            config.misc::setDerpyChatCommandEnabled)
+                            .withTooltip("Not in office: when Derpy is elected next; in office: when he leaves.")
+                            .withChildren(List.of(
+                            SettingEntry.toggle("Party", config.misc::derpyPartyCommandsEnabled,
+                                config.misc::setDerpyPartyCommandsEnabled),
+                            SettingEntry.toggle("Guild", config.misc::derpyGuildCommandsEnabled,
+                                config.misc::setDerpyGuildCommandsEnabled),
+                            SettingEntry.toggle("All Chat", config.misc::derpyAllChatCommandsEnabled,
+                                config.misc::setDerpyAllChatCommandsEnabled),
+                            SettingEntry.toggle("DMs", config.misc::derpyPrivateCommandsEnabled,
+                                config.misc::setDerpyPrivateCommandsEnabled)
                         ))
                     )
                 ),
@@ -478,7 +520,12 @@ public final class KungSettings {
                     present(
                         SettingEntry.dynamicLabel(() -> "Installed: v" + KungUpdater.currentVersion()),
                         KungBuild.MODRINTH ? null : SettingEntry.dynamicLabel(KungUpdater.INSTANCE::latestVersionLabel),
+                        KungBuild.MODRINTH ? null : SettingEntry.button("Check For Updates", "Check",
+                                () -> KungUpdater.INSTANCE.checkNowAsync(Minecraft.getInstance()))
+                            .withTooltip("Asks GitHub right now instead of waiting for the next automatic check",
+                                "(every 30 minutes). The result shows in chat."),
                         SettingEntry.button("Changelogs", "Open", openChangelog)
+                            .withTooltip("The notes of the version you have installed.")
                     )
                 ).pinnedOpen().withTooltip(KungBuild.MODRINTH
                     ? new String[] {"Updates come through the Modrinth App."}
@@ -510,7 +557,7 @@ public final class KungSettings {
                         ))
                     )
                 ),
-                // Every service is its own opt-in; nothing talks to the server until one is switched on.
+                // Every service has its own switch. Live Map & Rooms and Upload start off; Jerry Mayor starts on.
                 new FeatureEntry("Server Sync", () -> false, (Runnable) null,
                     List.of(
                         SettingEntry.dynamicLabel(() -> "Live Map status: " + DungeonRoomDataSyncClient.INSTANCE.menuStatus()),
@@ -526,7 +573,7 @@ public final class KungSettings {
                         SettingEntry.toggle("Jerry Mayor", config.dungeon::jerrySyncEnabled,
                             config.dungeon::setJerrySyncEnabled)
                             .withTooltip("Share which mayor Jerry copies with other Kung users and get it from them.",
-                                "Only the mayor name and the election year are sent."),
+                                "On by default. Only the mayor name and the election year are sent."),
                         SettingEntry.button("Pull", "Rooms",
                             () -> DungeonRoomDataSyncClient.INSTANCE.pullAsync(Minecraft.getInstance())),
                         SettingEntry.button("Ping", "Check",

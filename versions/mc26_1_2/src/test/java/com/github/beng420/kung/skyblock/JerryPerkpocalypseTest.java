@@ -99,21 +99,11 @@ public class JerryPerkpocalypseTest {
     }
 
     @Test
-    public void everyServerSyncServiceIsOptIn() {
+    public void roomSyncStaysOptInWhileJerrySyncStartsOn() {
         var dungeon = new com.github.beng420.kung.config.category.DungeonConfig();
-        assertFalse(dungeon.jerrySyncEnabled());
+        assertTrue(dungeon.jerrySyncEnabled());
         assertFalse(dungeon.roomSyncEnabled());
         assertFalse(dungeon.roomSyncUploadEnabled());
-    }
-
-    @Test
-    public void statusShowsTheNextSwitchAndTheCycleStartingNow() {
-        Schedule schedule = Schedule.NONE.observe(520, "Diana", T0).observe(520, "Paul", T0 + 12 * HOUR);
-        assertEquals(T0 + 6 * HOUR, schedule.nextSwitchMillis(T0 + HOUR));
-        assertEquals(T0 + 42 * HOUR, schedule.nextSwitchMillis(T0 + 37 * HOUR));
-        assertEquals(List.of("Diana", "?", "Paul", "?", "?", "?"), schedule.cycleFrom(T0 + HOUR));
-        assertEquals(List.of("Paul", "?", "?", "?", "Diana", "?"), schedule.cycleFrom(T0 + 13 * HOUR));
-        assertEquals(List.of("?", "?", "?", "?", "?", "?"), Schedule.NONE.cycleFrom(T0));
     }
 
     @Test

@@ -14,6 +14,7 @@ import com.google.gson.JsonParser;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -22,6 +23,7 @@ import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.component.DataComponents;
@@ -70,8 +72,8 @@ public final class JerryPerkpocalypse {
     private long skyBlockSinceMillis;
     private boolean joinWarned;
     private long nextReminderMillis;
-    private Reading lastReading;
-    private long lastReadAtMillis;
+    private int lastSlotIndex = -1;
+    private long lastSlotYear = -1;
     private volatile String syncStatus = "no contact yet";
 
     private JerryPerkpocalypse() {
@@ -79,6 +81,20 @@ public final class JerryPerkpocalypse {
 
     public static void initializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(client -> INSTANCE.tick(client));
+        // Other Kung users' !jerry replies: the mayors in them get hover texts from our own schedule.
+        ClientReceiveMessageEvents.MODIFY_GAME.register((message, overlay) -> overlay ? message : INSTANCE.decorate(message));
+    }
+
+    private Component decorate(Component message) {
+        if (!message.getString().contains(JerryMessages.ROTATION_MARKER)) return message;
+        SkyBlockMayorTracker tracker = SkyBlockMayorTracker.INSTANCE;
+        if (!tracker.jerryInOffice()) return message;
+        return JerryMessages.decorateRotation(message, timeline(tracker.electionYear()), System.currentTimeMillis(), ZoneId.systemDefault());
+    }
+
+    /** The reply to !jerry while he is in office: the rotation as plain chat text. */
+    public String rotationText(long electionYear, long nowMillis) {
+        return JerryMessages.rotationText(timeline(electionYear), nowMillis);
     }
 
     /** The mayor Jerry copies right now, or "" when it is not known (yet). */
@@ -142,6 +158,7 @@ public final class JerryPerkpocalypse {
         }
         if (client.player == null || !tracker.jerryInOffice() || year < 0) {
             unknownSinceMillis = 0;
+            lastSlotIndex = -1;
             return;
         }
         boolean unknown = copiedMayor(year, now).isEmpty();
@@ -156,7 +173,28 @@ public final class JerryPerkpocalypse {
             send(HttpRequest.newBuilder(DungeonRoomDataSyncClient.endpoint("jerry?year=" + year)).GET(), year);
         }
         readMenu(client, year, now);
+        announceSwitch(client, year, now);
         remind(client, unknown, now);
+    }
+
+    /** One chat message when the copied mayor changes while you play; "?" for a mayor the schedule does not know yet. */
+    private void announceSwitch(Minecraft client, long year, long now) {
+        List<JerryTimeline.Slot> slots = timeline(year);
+        int index = JerryTimeline.indexAt(slots, now);
+        if (index < 0) {
+            lastSlotIndex = -1;
+            return;
+        }
+        if (lastSlotYear == year && lastSlotIndex >= 0 && index > lastSlotIndex) {
+            KungMessages.send(client, JerryMessages.switched(slots.get(index - 1).mayor(), slots.get(index).mayor(),
+                slots, now, ZoneId.systemDefault()));
+        }
+        lastSlotIndex = index;
+        lastSlotYear = year;
+    }
+
+    private synchronized List<JerryTimeline.Slot> timeline(long year) {
+        return JerryTimeline.slots(schedule, year);
     }
 
     /** Once per connection, a while after joining SkyBlock: Paul's score bonus is only reliable with Jerry sync on. */
@@ -196,27 +234,12 @@ public final class JerryPerkpocalypse {
             "Kung does not know which mayor Jerry copies right now. Click Jerry in the Hub once.");
     }
 
-    /** The lines of /kung jerry: what Kung believes, next to what the menu said, to compare by eye. */
-    public synchronized List<String> statusLines(long now) {
+    /** The lines of /kung jerry: what Kung believes about the copied mayor and the rotation to come. */
+    public List<Component> statusMessages(long now) {
         SkyBlockMayorTracker tracker = SkyBlockMayorTracker.INSTANCE;
-        List<String> lines = new ArrayList<>();
-        if (!tracker.jerryInOffice()) {
-            lines.add("Jerry is not in office (mayor: " + (tracker.mayorName().isBlank() ? "unknown" : tracker.mayorName()) + ").");
-            return lines;
-        }
         long year = tracker.electionYear();
-        String copied = copiedMayor(year, now);
-        lines.add("Jerry is in office (election year " + year + "). Copying now: "
-            + (copied.isEmpty() ? "unknown, click Jerry in the Hub"
-                : copied + ", switches in " + duration(schedule.nextSwitchMillis(now) - now)) + ".");
-        lines.add("Cycle from now (" + schedule.known() + "/" + SLOTS + " known): "
-            + String.join(" > ", schedule.cycleFrom(now)));
-        lines.add(lastReading == null ? "Menu reading: none this session."
-            : "Menu reading " + duration(now - lastReadAtMillis) + " ago: " + lastReading.mayor()
-                + ", next set of perks in " + duration(lastReading.switchAtMillis() - lastReadAtMillis) + ".");
-        lines.add("Server: " + (syncActive() ? syncStatus : "off (turn on Jerry Mayor under Server Sync in the settings)")
-            + ". Paul score bonus: " + (tracker.paulScoreBonusActive() ? "yes" : "no") + ".");
-        return lines;
+        return JerryMessages.status(tracker.jerryInOffice(), tracker.mayorName(), year, timeline(year), now,
+            syncActive() ? syncStatus : "off (turn on Jerry Mayor under Server Sync in the settings)", ZoneId.systemDefault());
     }
 
     /** "4h 22m"; under a minute "<1m". */
@@ -263,11 +286,11 @@ public final class JerryPerkpocalypse {
     private void observe(long year, Reading reading) {
         long slotStart = reading.switchAtMillis() - SLOT_MILLIS;
         synchronized (this) {
-            lastReading = reading;
-            lastReadAtMillis = System.currentTimeMillis();
             schedule = schedule.observe(year, reading.mayor(), slotStart);
+            // The slot grid should start with the term: an offset far from 0 means the assumption is wrong.
+            long gridOffsetMinutes = Math.floorMod(slotStart - JerryTimeline.termStartMillis(year), SLOT_MILLIS) / 60_000L;
             KungDebugRecorder.event("mayor", "jerry copies=" + reading.mayor() + " switchAt=" + reading.switchAtMillis()
-                + " year=" + year + " known=" + schedule.known());
+                + " year=" + year + " known=" + schedule.known() + " gridOffsetMin=" + gridOffsetMinutes);
         }
         if (syncActive()) {
             JsonObject body = new JsonObject();
@@ -334,22 +357,6 @@ public final class JerryPerkpocalypse {
         String mayorAt(long nowMillis) {
             if (known() == 0) return null;
             return positions.get((int) Math.floorMod(Math.floorDiv(nowMillis - anchorMillis, SLOT_MILLIS), (long) SLOTS));
-        }
-
-        /** Start of the next slot, i.e. when the copied mayor changes. */
-        long nextSwitchMillis(long nowMillis) {
-            return anchorMillis + (Math.floorDiv(nowMillis - anchorMillis, SLOT_MILLIS) + 1) * SLOT_MILLIS;
-        }
-
-        /** The positions in the order they come up, starting with the slot running at nowMillis; "?" when unknown. */
-        List<String> cycleFrom(long nowMillis) {
-            int current = (int) Math.floorMod(Math.floorDiv(nowMillis - anchorMillis, SLOT_MILLIS), (long) SLOTS);
-            List<String> order = new ArrayList<>();
-            for (int step = 0; step < SLOTS; step++) {
-                String mayor = positions.get((current + step) % SLOTS);
-                order.add(mayor == null ? "?" : mayor);
-            }
-            return order;
         }
 
         int known() {

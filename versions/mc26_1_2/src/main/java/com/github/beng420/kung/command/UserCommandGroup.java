@@ -34,6 +34,8 @@ final class UserCommandGroup {
             .then(literal("preview")
                 .then(literal("updates").executes(KungCommandActions::previewUpdateNotification)))
             .then(literal("hud").executes(context -> KungCommandActions.openHudEditor(context, tracker)));
+        // More names for a command: /kung pbs and /kung personalbests open the same screen as /kung splits.
+        CommandAliases.add(root, "splits", "pbs", "personalbests");
     }
 
     /** The greenhouse hologram commands; "holo" is a second name for "blueprint". */

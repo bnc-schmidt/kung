@@ -97,7 +97,9 @@ public final class DungeonConfig extends ConfigCategory {
     // Room Sync Settings
     private boolean roomSyncEnabled = false;
     private boolean roomSyncUploadEnabled = false;
-    private boolean jerrySyncEnabled = false;
+    private boolean jerrySyncEnabled = true;
+    /** Set once the switch has been turned on for existing configs (it was off by default until 0.6.3). */
+    private boolean jerrySyncDefaultedOn = false;
     // New key when the built-in server arrived: every config had "" or a LAN address written out.
     // Blank still means no server; the old key is dropped on the next save.
     @SerializedName("kungServerUrl")
@@ -311,6 +313,17 @@ public final class DungeonConfig extends ConfigCategory {
     public void setRoomSyncEnabled(boolean value) { roomSyncEnabled = value; save(); }
     public boolean roomSyncUploadEnabled() { return roomSyncUploadEnabled; }
     public void setRoomSyncUploadEnabled(boolean value) { roomSyncUploadEnabled = value; save(); }
+    /**
+     * Jerry Mayor sync became opt-out in 0.6.3: a config written before it, which holds the old default (off), gets it
+     * switched on once. Whoever turns it off afterwards keeps it off. Returns true when it changed something to save.
+     */
+    public boolean migrateJerrySyncDefault() {
+        if (jerrySyncDefaultedOn) return false;
+        jerrySyncDefaultedOn = true;
+        jerrySyncEnabled = true;
+        return true;
+    }
+
     public boolean jerrySyncEnabled() { return jerrySyncEnabled; }
     public void setJerrySyncEnabled(boolean value) { jerrySyncEnabled = value; save(); }
     public String roomSyncServerUrl() { return roomSyncServerUrl == null ? "" : roomSyncServerUrl; }

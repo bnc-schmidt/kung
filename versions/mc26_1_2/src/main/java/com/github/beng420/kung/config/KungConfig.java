@@ -63,6 +63,9 @@ public final class KungConfig {
         return INSTANCE;
     }
 
+    /** A migration changed the loaded config: write it back once loading is over. */
+    private transient boolean pendingSave;
+
     public void load() {
         Path file = configFile();
         boolean migrateLegacy = false;
@@ -78,6 +81,7 @@ public final class KungConfig {
             if (exists) {
                 try (Reader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
                     KungConfig loaded = read(reader);
+                    pendingSave |= loaded.pendingSave; // read() already migrated the loaded copy
                     dungeon = loaded.dungeon;
                     bloodRush = loaded.bloodRush;
                     chatFilter = loaded.chatFilter;
@@ -101,7 +105,8 @@ public final class KungConfig {
             bindCategories();
             loading = false;
         }
-        if (loadedSuccessfully && (!exists || migrateLegacy)) {
+        if (loadedSuccessfully && (!exists || migrateLegacy || pendingSave)) {
+            pendingSave = false;
             save();
         }
     }
@@ -174,6 +179,7 @@ public final class KungConfig {
 
     private void normalize() {
         ensureCategories();
+        if (dungeon.migrateJerrySyncDefault()) pendingSave = true;
         dungeon.setScale(dungeon.scale());
         dungeon.setTextScale(dungeon.textScale());
         dungeon.setUnopenedRoomAlpha(dungeon.unopenedRoomAlpha());

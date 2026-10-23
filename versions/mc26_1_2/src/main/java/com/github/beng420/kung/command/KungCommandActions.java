@@ -310,8 +310,8 @@ final class KungCommandActions {
     }
 
     static int jerryStatus(CommandContext<FabricClientCommandSource> context) {
-        for (String line : JerryPerkpocalypse.INSTANCE.statusLines(System.currentTimeMillis())) {
-            context.getSource().sendFeedback(KungMessages.info("Jerry", line));
+        for (var line : JerryPerkpocalypse.INSTANCE.statusMessages(System.currentTimeMillis())) {
+            context.getSource().sendFeedback(line);
         }
         return 1;
     }
