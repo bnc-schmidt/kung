@@ -58,9 +58,41 @@ public final class FrozenBlazeHudFeatureTest {
         int afk = FrozenBlazeHudFeature.AFK_TICKS, timeout = FrozenBlazeHudFeature.PULSE_TIMEOUT;
         assertTrue(FrozenBlazeHudFeature.auraOn(-1, afk - 1)); // no pulse yet: estimate says on
         assertFalse(FrozenBlazeHudFeature.auraOn(-1, afk)); // and off at 30 s idle
-        assertTrue(FrozenBlazeHudFeature.auraOn(0, afk)); // a pulse wins over the estimate
-        assertTrue(FrozenBlazeHudFeature.auraOn(timeout, 0)); // the capture's longest gap is 40 ticks
-        assertFalse(FrozenBlazeHudFeature.auraOn(timeout + 1, 0)); // silence means off, even while moving
+        assertTrue(FrozenBlazeHudFeature.auraOn(0, afk)); // a fresh pulse wins over the estimate
+        assertTrue(FrozenBlazeHudFeature.auraOn(timeout, afk)); // for a few seconds
+        assertFalse(FrozenBlazeHudFeature.auraOn(timeout + 1, afk)); // then the idle estimate is back in charge
+        // Silence is not off: the aura pulses only now and then (gaps of 1060 ticks in a capture while it was on).
+        assertTrue(FrozenBlazeHudFeature.auraOn(1060, 0));
+        assertTrue(FrozenBlazeHudFeature.auraOn(timeout + 1, afk - 1));
+    }
+
+    @Test
+    public void aFlickerDoesNotSetOffTheAlarmButARealRunOutDoes() {
+        int min = FrozenBlazeHudFeature.ALARM_MIN_ON_TICKS;
+        assertFalse(FrozenBlazeHudFeature.shouldAlarm(true, false, min - 1)); // on for a moment only
+        assertTrue(FrozenBlazeHudFeature.shouldAlarm(true, false, min));
+        assertFalse(FrozenBlazeHudFeature.shouldAlarm(true, true, 1000)); // still on
+        assertFalse(FrozenBlazeHudFeature.shouldAlarm(false, false, 1000)); // already off
+    }
+
+    @Test
+    public void aWalkingPlayerStillMatchesItsPulseWhichTheServerPlacesOneRoundTripBehind() {
+        // Sprinting at 0.28 blocks per tick for 30 ticks; the trail keeps the last 20 positions.
+        double[] trail = new double[0];
+        for (int tick = 0; tick < 30; tick++) {
+            trail = FrozenBlazeHudFeature.pushed(trail, tick * 0.28, 64, 0, FrozenBlazeHudFeature.TRAIL_TICKS);
+        }
+        assertEquals(FrozenBlazeHudFeature.TRAIL_TICKS * 3, trail.length);
+        double nowX = 29 * 0.28;
+        // 156 ms ping is about 3 ticks of walking: 0.84 blocks behind, outside the standing-still match.
+        assertFalse(FrozenBlazeHudFeature.atPlayer(-0.84, 1, 0));
+        assertTrue(FrozenBlazeHudFeature.atPlayerRecently(trail, nowX - 0.84, 65, 0));
+        assertTrue(FrozenBlazeHudFeature.atPlayerRecently(trail, nowX, 65.4, 0.3)); // jumping a little
+        // Positions older than the trail, other players and flame trails stay out.
+        assertFalse(FrozenBlazeHudFeature.atPlayerRecently(trail, 0, 65, 0));
+        assertFalse(FrozenBlazeHudFeature.atPlayerRecently(trail, nowX + 3, 65, 0));
+        assertFalse(FrozenBlazeHudFeature.atPlayerRecently(trail, nowX, 72, 0));
+        assertFalse(FrozenBlazeHudFeature.atPlayerRecently(new double[0], 0, 1, 0));
     }
 
     @Test

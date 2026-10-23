@@ -46,8 +46,12 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     public static final FrozenBlazeHudFeature INSTANCE = new FrozenBlazeHudFeature();
     /** Wiki: the aura stops after 30 seconds without the player moving their mouse and player; it needs both. */
     static final int AFK_TICKS = 30 * 20;
-    /** The aura pulses about once a second (40 ticks apart at most in the capture), so 3 s of silence means off. */
+    /** A pulse keeps the aura "on" past the idle estimate for this long; silence alone never means off (see auraOn). */
     static final int PULSE_TIMEOUT = 60;
+    /** The off alarm needs the aura to have been on this long: a signal that keeps flickering must not nag every second. */
+    static final int ALARM_MIN_ON_TICKS = 60;
+    /** How far back the own positions reach: the server places the pulse where we were one round trip ago. */
+    static final int TRAIL_TICKS = 20;
     private static final String HINT = "Walk + look to reactivate";
     private static final int WIDTH = 136;
     private static final int HEIGHT = 26;
@@ -55,9 +59,12 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     private Vec3 lastPos;
     private float lastYaw, lastPitch;
     private int moveIdle, lookIdle;
-    /** Ticks since the last own aura pulse, -1 until one arrives (then the idle estimate decides). */
+    /** Ticks since the last own aura pulse, -1 until one arrives. A pulse can only prove the aura is on. */
     private int sincePulse = -1;
+    private int onTicks;
     private boolean wasOn;
+    /** The own positions of the last ticks as x, y, z triples; read by the network thread, so it is replaced, never edited. */
+    private volatile double[] trail = new double[0];
     /** Candidate signals of the current second: key -> {packets, summed count, nearest distance}; see trace. */
     private final Map<String, double[]> seen = new TreeMap<>();
     private int traceTicks;
@@ -91,7 +98,7 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
             onReset();
             return;
         }
-        // The idle counters only time the countdown; the server's own pulse (see observeParticles) decides on/off.
+        // The idle counters decide on/off (see auraOn); an own pulse (see observeParticles) can keep it on past them.
         boolean first = lastPos == null;
         moveIdle = advance(moveIdle, first || !player.position().equals(lastPos));
         lookIdle = advance(lookIdle, first || player.getYRot() != lastYaw || player.getXRot() != lastPitch);
@@ -99,8 +106,10 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
         lastYaw = player.getYRot();
         lastPitch = player.getXRot();
         if (sincePulse >= 0) sincePulse = Math.min(sincePulse + 1, PULSE_TIMEOUT + 1);
+        trail = pushed(trail, player.getX(), player.getY(), player.getZ(), TRAIL_TICKS);
         boolean on = auraOn(sincePulse, idleTicks(moveIdle, lookIdle));
-        if (config().frozenBlazeAlarmEnabled() && wentOff(wasOn, on)) alarm(client, set);
+        if (config().frozenBlazeAlarmEnabled() && shouldAlarm(wasOn, on, onTicks)) alarm(client, set);
+        onTicks = on ? onTicks + 1 : 0;
         wasOn = on;
         if (++traceTicks % 20 == 0) trace(player);
     }
@@ -134,7 +143,8 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     public void observeParticles(ClientboundLevelParticlesPacket packet) {
         var player = Minecraft.getInstance().player;
         if (set != null && player != null && packet.getParticle().getType() == ParticleTypes.FLAME && packet.getCount() == 8
-            && atPlayer(packet.getX() - player.getX(), packet.getY() - player.getY(), packet.getZ() - player.getZ()))
+            && (atPlayer(packet.getX() - player.getX(), packet.getY() - player.getY(), packet.getZ() - player.getZ())
+                || atPlayerRecently(trail, packet.getX(), packet.getY(), packet.getZ())))
             sincePulse = 0;
         near("particle " + BuiltInRegistries.PARTICLE_TYPE.getKey(packet.getParticle().getType()), packet.getCount(),
             packet.getX(), packet.getY(), packet.getZ());
@@ -177,14 +187,45 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
     /** The aura just ran out; fires once until it comes back on. */
     static boolean wentOff(boolean before, boolean now) { return before && !now; }
 
-    /** Pulses decide once one was seen; before that (and for sets that may not pulse) the idle estimate does. */
-    static boolean auraOn(int sincePulse, int idleTicks) {
-        return sincePulse < 0 ? idleTicks < AFK_TICKS : sincePulse <= PULSE_TIMEOUT;
+    /** The off alarm: the aura just ran out after being on for a while, not after a flicker. */
+    static boolean shouldAlarm(boolean before, boolean now, int onTicks) {
+        return wentOff(before, now) && onTicks >= ALARM_MIN_ON_TICKS;
     }
 
-    /** The own pulse is a flame burst at the player's chest (capture: offset 0.00 / +1.00 / 0.00); other players' auras send none. */
+    /**
+     * The idle estimate decides: 30 s without walking and looking ends the aura. A recent own pulse overrules it, since
+     * that is the server saying the aura works. The reverse does not hold: the aura sends a pulse only now and then
+     * (the 2026-10-22 capture has gaps of 164, 475 and 1060 ticks while the player was active), so silence means nothing.
+     */
+    static boolean auraOn(int sincePulse, int idleTicks) {
+        return idleTicks < AFK_TICKS || sincePulse >= 0 && sincePulse <= PULSE_TIMEOUT;
+    }
+
+    /** The own pulse is a flame burst at the player's chest (capture, standing still: 0.00 / +1.00 / 0.00); other players' auras send none. */
     static boolean atPlayer(double dx, double dy, double dz) {
         return Math.abs(dx) < 0.5 && Math.abs(dz) < 0.5 && Math.abs(dy - 1) < 0.5;
+    }
+
+    /**
+     * A pulse is sent where the server has the player, which is behind the client while walking: about one round trip
+     * of movement, over a block when sprinting at a high ping. So it counts when it sits at any recent own position.
+     */
+    static boolean atPlayerRecently(double[] trail, double x, double y, double z) {
+        for (int i = 0; i + 2 < trail.length; i += 3) {
+            if (atPlayer(x - trail[i], y - trail[i + 1], z - trail[i + 2])) return true;
+        }
+        return false;
+    }
+
+    /** The trail with one more position, the oldest ones dropped beyond the limit. */
+    static double[] pushed(double[] trail, double x, double y, double z, int limit) {
+        int keep = Math.min(trail.length / 3, limit - 1) * 3;
+        double[] next = new double[keep + 3];
+        System.arraycopy(trail, trail.length - keep, next, 0, keep);
+        next[keep] = x;
+        next[keep + 1] = y;
+        next[keep + 2] = z;
+        return next;
     }
 
     private static void alarm(Minecraft client, String set) {
@@ -218,6 +259,8 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
         lastPos = null;
         moveIdle = lookIdle = 0;
         sincePulse = -1;
+        onTicks = 0;
+        trail = new double[0];
         wasOn = false;
         seen.clear();
         traceTicks = 0;
