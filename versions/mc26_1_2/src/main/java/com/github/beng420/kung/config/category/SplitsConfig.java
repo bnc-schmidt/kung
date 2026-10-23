@@ -14,6 +14,7 @@ public final class SplitsConfig extends ConfigCategory {
     private TimeFormat format = TimeFormat.MINUTES;
     private boolean timeLost = true;
     private boolean runEndChat = false;
+    private boolean pbTitle = false;
     private boolean timePrediction = true;
     private PredictionMode predictionMode = PredictionMode.PHASE_END;
     private PredictionSource predictionSource = PredictionSource.PB;
@@ -21,6 +22,9 @@ public final class SplitsConfig extends ConfigCategory {
     private Map<String, Map<String, Long>> personalBests = new TreeMap<>();
     /** Oldest to newest confirmed runs, using the same floor keys and real milliseconds as PBs. */
     private Map<String, List<Map<String, Long>>> recentRuns = new TreeMap<>();
+    /** Whole-run record times in milliseconds by floor key: seeded once from the API, then from Hypixel's NEW RECORD lines. */
+    private Map<String, Long> floorRecords = new TreeMap<>();
+    private boolean floorRecordsSeeded = false;
     private transient long predictionRevision;
 
     public boolean enabled() {
@@ -82,6 +86,38 @@ public final class SplitsConfig extends ConfigCategory {
 
     public void setRunEndChat(boolean runEndChat) {
         this.runEndChat = runEndChat;
+        save();
+    }
+
+    public boolean pbTitle() { return pbTitle; }
+
+    public void setPbTitle(boolean pbTitle) {
+        this.pbTitle = pbTitle;
+        save();
+    }
+
+    /** The floor's record time in milliseconds, -1 when unknown. */
+    public long floorRecordMillis(int floor, boolean masterMode) {
+        String key = floorKey(floor, masterMode);
+        Long record = key == null || floorRecords == null ? null : floorRecords.get(key);
+        return record != null && record > 0L ? record : -1L;
+    }
+
+    /** Remembers a record time; a slower time never replaces a faster one (the API tiers S and S+ differ). */
+    public void recordFloorTime(int floor, boolean masterMode, long millis) {
+        String key = floorKey(floor, masterMode);
+        if (key == null || millis <= 0L) return;
+        long known = floorRecordMillis(floor, masterMode);
+        if (known > 0L && known <= millis) return;
+        if (floorRecords == null) floorRecords = new TreeMap<>();
+        floorRecords.put(key, millis);
+        save();
+    }
+
+    public boolean floorRecordsSeeded() { return floorRecordsSeeded; }
+
+    public void setFloorRecordsSeeded(boolean seeded) {
+        this.floorRecordsSeeded = seeded;
         save();
     }
 

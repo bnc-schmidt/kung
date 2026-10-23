@@ -8,6 +8,7 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.MiscConfig.SackItem;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.skyblock.SkyblockItemId;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiTooltip;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -23,6 +24,7 @@ import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
+import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -64,6 +66,9 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private static final UiTheme THEME = UiTheme.settings();
     private static final Component RESET = Component.literal("[Reset Display]").withColor(0xFF5555);
     private static final String GOAL_HINT = "Type a number to set a target amount (Backspace deletes, Ctrl+Backspace clears)";
+    /** The amount of an item tracked outside its sack: unknown until the sack is opened once. */
+    private static final long UNKNOWN_AMOUNT = -1;
+    private final HoveredTooltip<ItemStack> tooltip = new HoveredTooltip<>(ItemStack::isSameItemSameComponents);
     private int ticksUntilSync;
 
     private SackTrackerFeature() { super(config -> config.misc); }
@@ -74,16 +79,23 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (!overlay) observeMessage(message);
         });
         ClientTickEvents.END_CLIENT_TICK.register(this::syncOpenSack);
+        // Every mod that shows an item (inventory, REI, JEI, ...) builds its tooltip through this event.
+        ItemTooltipCallback.EVENT.register((stack, context, flag, lines) -> {
+            if (isEnabled()) tooltip.observe(stack);
+        });
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST,
             Identifier.fromNamespaceAndPath(KungMod.MOD_ID, "sack_tracker"), (graphics, delta) -> {
                 if (McCompat.screen(Minecraft.getInstance()) == null) render(graphics);
             });
         // Menus draw over the HUD, so the tracker draws again on top of them - there it also takes clicks.
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
+            ScreenEvents.beforeExtract(screen).register((current, graphics, mouseX, mouseY, delta) -> tooltip.beginFrame());
             ScreenEvents.afterExtract(screen).register(this::renderOverScreen);
-            ScreenMouseEvents.allowMouseClick(screen).register((current, event) -> !click(current, event));
+            ScreenMouseEvents.allowMouseClick(screen).register((current, event) ->
+                !click(current, event) && !trackHovered(current, event.button()));
             // Runs before the screen's own keyPressed, so a digit over a row never swaps the slot below with the hotbar.
-            ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) -> !typeGoal(current, event));
+            ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) ->
+                !typeGoal(current, event) && !trackHovered(current, event));
         });
     }
 
@@ -105,6 +117,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private boolean toggle(AbstractContainerScreen<?> screen, Slot hovered) {
         if (hovered == null || !isSack(plain(screen.getTitle()))) return false;
         ItemStack stack = hovered.getItem();
+        if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) return toggleGemstone(screen, stack);
         Long stored = stored(lore(stack));
         if (stored == null) return false;
         String name = plain(stack.getHoverName());
@@ -114,11 +127,89 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return true;
     }
 
+    /**
+     * A gem item holds every quality. Without a filter the whole item is tracked, by its total in Rough gems (the
+     * "Stored:" line); with one, the quality it shows is tracked as a row of its own.
+     */
+    private boolean toggleGemstone(AbstractContainerScreen<?> screen, ItemStack stack) {
+        var gem = SackGemstones.parseName(plain(stack.getHoverName()));
+        if (gem == null) return false;
+        String filter = SackGemstones.filterQuality(sackLore(screen));
+        if (gem.quality() == null && filter == null) {
+            Long total = wholeGemTotal(stack);
+            if (total == null) return false;
+            String name = plain(stack.getHoverName());
+            boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), total);
+            KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
+                (tracked ? "Tracking " : "Stopped tracking ") + name + " (all qualities, in Rough gems)");
+            return true;
+        }
+        String quality = SackGemstones.trackedQuality(gem, filter);
+        Long amount = SackGemstones.amounts(lore(stack), filter).get(quality);
+        if (amount == null) {
+            KungDebugRecorder.event("sack-tracker", "gemstone unreadable name=" + plain(stack.getHoverName())
+                + " filter=" + filter + " lore=" + KungDebugRecorder.compact(String.join(" | ", lore(stack))));
+            return false;
+        }
+        String name = gem.trackedName(quality);
+        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), amount);
+        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
+            (tracked ? "Tracking " : "Stopped tracking ") + name);
+        return true;
+    }
+
+    /** The item's total in Rough gems: its "Stored:" line, else the sum of the listed qualities. */
+    private static Long wholeGemTotal(ItemStack stack) {
+        Long stored = stored(lore(stack));
+        if (stored != null) return stored;
+        var amounts = SackGemstones.amounts(lore(stack), null);
+        return amounts.isEmpty() ? null : SackGemstones.roughTotal(amounts);
+    }
+
+    /** All lore lines of an open sack's items, where the gemstone filter button is among them. */
+    private static List<String> sackLore(AbstractContainerScreen<?> screen) {
+        List<String> lines = new ArrayList<>();
+        for (Slot slot : screen.getMenu().slots) lines.addAll(lore(slot.getItem()));
+        return lines;
+    }
+
+    private boolean trackHovered(Screen screen, KeyEvent event) {
+        return isEnabled() && LoadoutsAutoCloseFeature.keybindMatchesKey(config().sackTrackerKeybind(), event)
+            && trackOutsideSack(screen);
+    }
+
+    private boolean trackHovered(Screen screen, int mouseButton) {
+        return isEnabled() && LoadoutsAutoCloseFeature.keybindMatchesMouse(config().sackTrackerKeybind(), mouseButton)
+            && trackOutsideSack(screen);
+    }
+
+    /**
+     * The track key over a sack item anywhere but a sack menu (those read the amount from the lore): in the
+     * inventory, in item lists of other mods, in any menu. Only sack items qualify, by SkyBlock id, so a crafting
+     * table does nothing. The amount is unknown until the sack is opened once.
+     */
+    private boolean trackOutsideSack(Screen screen) {
+        if (screen.getFocused() instanceof EditBox
+            || screen instanceof AbstractContainerScreen<?> container && isSack(plain(container.getTitle()))) return false;
+        ItemStack stack = tooltip.hovered();
+        if (stack == null || stack.isEmpty()) return false;
+        String name = plain(stack.getHoverName());
+        if (config().sackTrackerItem(name) == null && !SackItems.contains(SkyblockItemId.of(stack))) return false;
+        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), UNKNOWN_AMOUNT);
+        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
+            tracked ? "Tracking " + name + ", open its sack once to read the amount" : "Stopped tracking " + name);
+        return true;
+    }
+
     private void syncOpenSack(Minecraft client) {
         if (--ticksUntilSync > 0) return;
         ticksUntilSync = SYNC_TICKS;
         if (!isEnabled() || config().sackTrackerItems().isEmpty()
             || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen) || !isSack(plain(screen.getTitle()))) return;
+        if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) {
+            syncGemstoneSack(screen);
+            return;
+        }
         for (Slot slot : screen.getMenu().slots) {
             ItemStack stack = slot.getItem();
             SackItem item = stack.isEmpty() ? null : config().sackTrackerItem(plain(stack.getHoverName()));
@@ -127,6 +218,31 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (item.amount() != stored) KungDebugRecorder.event("sack-tracker",
                 "sack shows " + item.name() + " " + stored + " (tracked " + item.amount() + ")");
             config().setSackTrackerAmount(item, stored);
+        }
+    }
+
+    /** A tracked whole gem takes the item's total; a tracked quality takes the count its line lists. */
+    private void syncGemstoneSack(AbstractContainerScreen<?> screen) {
+        String filter = SackGemstones.filterQuality(sackLore(screen));
+        for (Slot slot : screen.getMenu().slots) {
+            ItemStack stack = slot.getItem();
+            var gem = stack.isEmpty() ? null : SackGemstones.parseName(plain(stack.getHoverName()));
+            if (gem == null) continue;
+            SackItem whole = filter == null && gem.quality() == null ? config().sackTrackerItem(plain(stack.getHoverName())) : null;
+            Long total = whole == null ? null : wholeGemTotal(stack);
+            if (whole != null && total != null) {
+                if (whole.amount() != total) KungDebugRecorder.event("sack-tracker",
+                    "sack shows " + whole.name() + " " + total + " (tracked " + whole.amount() + ")");
+                config().setSackTrackerAmount(whole, total);
+            }
+            SackGemstones.amounts(lore(stack), filter).forEach((quality, amount) -> {
+                // A filtered item names its quality itself; the amount line then belongs to that quality.
+                String shown = gem.quality() != null ? gem.quality() : quality;
+                SackItem item = config().sackTrackerItem(gem.trackedName(shown));
+                if (item == null || item.amount() == amount) return;
+                KungDebugRecorder.event("sack-tracker", "sack shows " + item.name() + " " + amount + " (tracked " + item.amount() + ")");
+                config().setSackTrackerAmount(item, amount);
+            });
         }
     }
 
@@ -143,12 +259,21 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         // Every message counts. A message can overlap what an open sack already showed, which counts that
         // part twice; opening the sack sets the count right again.
         changes(hovers).forEach((name, delta) -> {
-            SackItem item = config().sackTrackerItem(name);
-            if (item == null) return;
-            KungDebugRecorder.event("sack-tracker", "message " + name + " " + (delta > 0 ? "+" : "") + delta
-                + " -> " + (item.amount() + delta));
-            config().setSackTrackerAmount(item, item.amount() + delta);
+            applyChange(name, delta);
+            // A tracked whole gem ("Onyx Gemstones") counts every quality in Rough gems.
+            var gem = SackGemstones.parseName(name);
+            if (gem != null && gem.quality() != null) {
+                applyChange(gem.gem() + " Gemstones", delta * SackGemstones.multiplier(gem.quality()));
+            }
         });
+    }
+
+    private void applyChange(String name, long delta) {
+        SackItem item = config().sackTrackerItem(name);
+        if (item == null || item.amount() < 0) return; // nothing to add to until the sack shows the amount
+        KungDebugRecorder.event("sack-tracker", "message " + name + " " + (delta > 0 ? "+" : "") + delta
+            + " -> " + (item.amount() + delta));
+        config().setSackTrackerAmount(item, item.amount() + delta);
     }
 
     /** Net change per item across the hover lists: "+1,280 Wheat (Agronomy Sack)". */
@@ -292,9 +417,10 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         for (SackItem item : items) {
             MutableComponent line = Component.literal(item.name()).withColor(item.color())
                 .append(Component.literal(": ").withColor(0xFFFFFF));
-            if (item.goal() <= 0) line.append(Component.literal(format(item.amount())).withColor(0xFFFF55));
-            else line.append(Component.literal(format(item.amount())).withColor(item.amount() >= item.goal() ? 0x55FF55 : 0xFF5555))
-                .append(Component.literal("/" + format(item.goal())).withColor(0xFFFFFF));
+            int amountColor = item.goal() <= 0 || item.amount() < 0 ? 0xFFFF55
+                : item.amount() >= item.goal() ? 0x55FF55 : 0xFF5555;
+            line.append(Component.literal(amountText(item.amount())).withColor(amountColor));
+            if (item.goal() > 0) line.append(Component.literal("/" + format(item.goal())).withColor(0xFFFFFF));
             lines.add(line);
         }
         if (interactive) lines.add(RESET);
@@ -302,6 +428,9 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     public static String format(long amount) { return String.format(Locale.ROOT, "%,d", amount); }
+
+    /** The count of a tracked item; "?" for one tracked outside its sack that has not been read yet. */
+    public static String amountText(long amount) { return amount < 0 ? "?" : format(amount); }
 
     private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, List<Component> lines) {
         var font = Minecraft.getInstance().font;

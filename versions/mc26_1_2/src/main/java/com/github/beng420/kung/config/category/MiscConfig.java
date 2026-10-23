@@ -149,8 +149,14 @@ public final class MiscConfig extends ConfigCategory {
     public void setPeekChatScrollLines(int value) { peekChatScrollLines = Math.clamp(value, 1, 30); save(); }
 
     public SackItem sackTrackerItem(String name) {
-        for (SackItem item : sackTrackerItems) if (item.name().equals(name)) return item;
+        String key = sackKey(name);
+        for (SackItem item : sackTrackerItems) if (sackKey(item.name()).equals(key)) return item;
         return null;
+    }
+
+    /** An item's name without the symbol some names start with (a gemstone's "☠ Onyx"): menus and chat disagree on it. */
+    public static String sackKey(String name) {
+        return name == null ? "" : name.strip().replaceFirst("^[^\\p{L}\\p{N}]+", "");
     }
 
     /** Tracks the item, or stops tracking it when it already is; true when it is tracked now. */

@@ -23,12 +23,14 @@ final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
         var next = new ArrayList<SettingEntry>();
         next.add(SettingEntry.keybind("Track Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.sackTrackerKeybind()),
             config::sackTrackerKeybind, config::setSackTrackerKeybind)
-            .withTooltip("Press it over an item in a sack to track it, and again to stop."));
+            .withTooltip("Hover a sack item and press it: the item is tracked. Press it again to stop.",
+                "Works in an open sack, in your inventory and in item lists of other mods.",
+                "Outside a sack the count shows ? until you open that sack once."));
         next.add(SettingEntry.toggle("Show In Menus", config::sackTrackerInMenus,
             config::setSackTrackerInMenus)
             .withTooltip("Also shows the tracker over inventories, chat and other vanilla menus, not over menus of mods."));
         for (SackItem item : items) {
-            next.add(SettingEntry.group(() -> item.name() + ": " + SackTrackerFeature.format(item.amount())
+            next.add(SettingEntry.group(() -> item.name() + ": " + SackTrackerFeature.amountText(item.amount())
                     + (item.goal() > 0 ? "/" + SackTrackerFeature.format(item.goal()) : ""))
                 .withChildren(List.of(
                     SettingEntry.text("Goal", () -> item.goal() > 0 ? String.valueOf(item.goal()) : "", value -> {

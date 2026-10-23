@@ -87,6 +87,12 @@ public final class DungeonConfig extends ConfigCategory {
     private String fiveCryptPartyMessage = "We got all 5 crypts (✿◠‿◠)";
     private boolean cryptProgressPartyMessageEnabled = false;
     private boolean fiveCryptTitleEnabled = false;
+    private boolean quizReminderEnabled = false;
+    private String quizReminderMessage = DEFAULT_QUIZ_REMINDER_MESSAGE;
+    private int quizReminderDelaySeconds = 10;
+    private boolean quizReminderRepeatEnabled = false;
+    private int quizReminderRepeatSeconds = 0;
+    private boolean quizReminderPartyEnabled = false;
 
     // Room Sync Settings
     private boolean roomSyncEnabled = false;
@@ -267,6 +273,38 @@ public final class DungeonConfig extends ConfigCategory {
     public void setFiveCryptPartyMessageEnabled(boolean value) { fiveCryptPartyMessageEnabled = value; save(); }
     public boolean cryptProgressPartyMessageEnabled() { return cryptProgressPartyMessageEnabled; }
     public void setCryptProgressPartyMessageEnabled(boolean value) { cryptProgressPartyMessageEnabled = value; save(); }
+    public static final String DEFAULT_QUIZ_REMINDER_MESSAGE = "Quiz is waiting for an answer!";
+    public static final int QUIZ_REMINDER_MIN_SECONDS = 5;
+    public static final int QUIZ_REMINDER_MAX_SECONDS = 60;
+    private static final int QUIZ_REMINDER_MAX_LENGTH = 200;
+
+    public boolean quizReminderEnabled() { return quizReminderEnabled; }
+    public void setQuizReminderEnabled(boolean value) { quizReminderEnabled = value; save(); }
+    public String quizReminderMessage() {
+        String message = quizReminderMessage == null ? "" : quizReminderMessage.strip();
+        if (message.startsWith("[Kung]")) message = message.substring("[Kung]".length()).strip();
+        if (message.length() > QUIZ_REMINDER_MAX_LENGTH) message = message.substring(0, QUIZ_REMINDER_MAX_LENGTH).strip();
+        return message.isBlank() ? DEFAULT_QUIZ_REMINDER_MESSAGE : message;
+    }
+    public void setQuizReminderMessage(String value) { quizReminderMessage = value == null ? "" : value; save(); }
+    /** Seconds a question may stay unanswered before the reminder. */
+    public int quizReminderDelaySeconds() {
+        return Math.clamp(quizReminderDelaySeconds, QUIZ_REMINDER_MIN_SECONDS, QUIZ_REMINDER_MAX_SECONDS);
+    }
+    public void setQuizReminderDelaySeconds(int value) { quizReminderDelaySeconds = value; save(); }
+    public boolean quizReminderRepeatEnabled() { return quizReminderRepeatEnabled; }
+    public void setQuizReminderRepeatEnabled(boolean value) { quizReminderRepeatEnabled = value; save(); }
+    /** Seconds between repeats; 0 (the default) repeats at the delay. */
+    public int quizReminderRepeatSeconds() {
+        return quizReminderRepeatSeconds <= 0 ? quizReminderDelaySeconds()
+            : Math.clamp(quizReminderRepeatSeconds, QUIZ_REMINDER_MIN_SECONDS, QUIZ_REMINDER_MAX_SECONDS);
+    }
+    /** The raw slider value: 0 means "same as the delay". */
+    public int quizReminderRepeatSetting() { return quizReminderRepeatSeconds <= 0 ? 0 : quizReminderRepeatSeconds(); }
+    public void setQuizReminderRepeatSeconds(int value) { quizReminderRepeatSeconds = value; save(); }
+    public boolean quizReminderPartyEnabled() { return quizReminderPartyEnabled; }
+    public void setQuizReminderPartyEnabled(boolean value) { quizReminderPartyEnabled = value; save(); }
+
     public boolean fiveCryptTitleEnabled() { return fiveCryptTitleEnabled; }
     public void setFiveCryptTitleEnabled(boolean value) { fiveCryptTitleEnabled = value; save(); }
     public boolean roomSyncEnabled() { return roomSyncEnabled; }

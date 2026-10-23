@@ -7,6 +7,8 @@ import com.github.beng420.kung.feature.dungeon.DungeonDebuffFeature;
 import com.github.beng420.kung.feature.dungeon.M7DragonFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonMapFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonMimicEspFeature;
+import com.github.beng420.kung.feature.dungeon.DungeonPbTitleFeature;
+import com.github.beng420.kung.feature.dungeon.DungeonQuizReminderFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitsOverlayFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
@@ -49,6 +51,8 @@ public final class FeatureRegistry {
         register(new DungeonChatFilterFeature(tracker));
         register(new DungeonSplitsOverlayFeature(tracker));
         register(DungeonDebuffFeature.INSTANCE);
+        register(DungeonQuizReminderFeature.INSTANCE);
+        register(DungeonPbTitleFeature.INSTANCE);
         register(ColoredPillarsFeature.INSTANCE);
         register(M7DragonFeature.INSTANCE);
         register(ChatCommandsFeature.INSTANCE);

@@ -7,6 +7,11 @@ public final class DungeonLifecycleSignals {
     private static final Pattern RUN_FINISHED = Pattern.compile(
         "^\\s*(?:\\S\\s+)?Defeated\\s+(.+?)\\s+in\\s+0?([\\dhms ]+?)\\s*(?:\\(NEW RECORD!\\))?$"
     );
+    // Same line as RUN_FINISHED, with the record marker kept: "☠ Defeated Necron in 06m 13s (NEW RECORD!)"
+    private static final Pattern FLOOR_FINISH = Pattern.compile(
+        "^\\s*(?:\\S\\s+)?Defeated\\s+(.+?)\\s+in\\s+0?([\\dhms ]+?)\\s*(\\(NEW RECORD!\\))?$"
+    );
+    private static final Pattern TIME_PART = Pattern.compile("(\\d+)([hms])");
     private static final Pattern TEAM_SCORE = Pattern.compile("^Team Score: \\d{1,3} \\([SABCDUF][+]?\\)$");
 
     private DungeonLifecycleSignals() {
@@ -40,6 +45,26 @@ public final class DungeonLifecycleSignals {
                 : boss.equals("Necron") || boss.equals("Maxor, Storm, Goldor, and Necron");
             default -> false;
         };
+    }
+
+    public record FloorFinish(String boss, long millis, boolean newRecord) { }
+
+    /** The boss and run time of a "Defeated ... in ..." line, or null for any other line. */
+    public static FloorFinish parseFloorFinish(String message) {
+        var finish = FLOOR_FINISH.matcher(clean(message));
+        if (!finish.matches()) return null;
+        long millis = 0L;
+        boolean any = false;
+        var parts = TIME_PART.matcher(finish.group(2));
+        while (parts.find()) {
+            any = true;
+            millis += Long.parseLong(parts.group(1)) * switch (parts.group(2)) {
+                case "h" -> 3_600_000L;
+                case "m" -> 60_000L;
+                default -> 1_000L;
+            };
+        }
+        return any ? new FloorFinish(finish.group(1), millis, finish.group(3) != null) : null;
     }
 
     public static String clean(String message) {

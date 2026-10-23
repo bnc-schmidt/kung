@@ -247,6 +247,8 @@ public final class DungeonSplitTracker {
     public boolean observeMessage(String message, long nowTick) {
         if (message == null || message.isBlank()) return false;
         String clean = DungeonLifecycleSignals.clean(message);
+        // The record line comes after the score banner has ended the run, so it is read before the running check.
+        DungeonPbTitle.floorFinish(clean, hasKnownFloor() ? floor : -1, masterMode, config.get());
         if (DungeonLifecycleSignals.isRunStart(clean)
             || clean.equals(TIMER_START)) {
             diagnostics.accept("start-candidate message=\"" + clean + "\" running=" + running
@@ -463,9 +465,14 @@ public final class DungeonSplitTracker {
         if (!manualRun && config.get().enabled() && duration > 0L) {
             personalBestCandidates.merge(currentSplitName, duration, Math::min);
             runMeasurements.put(currentSplitName, duration);
-            if (confirmed) phaseMessages.accept(notice);
+            if (confirmed) announce(notice);
         }
         tracePhase("phase-end", split, boundary);
+    }
+
+    private void announce(PhaseMessage notice) {
+        DungeonPbTitle.phase(notice, config.get());
+        phaseMessages.accept(notice);
     }
 
     private PhaseMessage phaseMessage(CompletedSplit split) {
@@ -524,7 +531,7 @@ public final class DungeonSplitTracker {
             personalBestCandidates.put(pending.split().name(), pending.split().splitDurationMillis());
         }
         saveMeasurements(true);
-        if (pending.bestEligible()) phaseMessages.accept(notice);
+        if (pending.bestEligible()) announce(notice);
         // Confirm the existing score-boundary sample; never append a split or resume either clock.
         predictedFinishMillis = stoppedElapsedMillis;
         traceStopped("run-victory-confirmed", message);

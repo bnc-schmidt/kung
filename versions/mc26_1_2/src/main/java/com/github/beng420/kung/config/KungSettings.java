@@ -2,6 +2,7 @@ package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonAimMode;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonDebuffScope;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonMarkerMode;
@@ -14,6 +15,7 @@ import com.github.beng420.kung.config.category.SplitsConfig.PredictionMode;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionSource;
 import com.github.beng420.kung.config.category.SplitsConfig.TimeFormat;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog;
+import com.github.beng420.kung.feature.dungeon.DungeonQuizReminderFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomClassifier;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomDataSyncClient;
 import com.github.beng420.kung.feature.misc.CustomSoundsFeature;
@@ -146,6 +148,32 @@ public final class KungSettings {
                             config.dungeon::setFiveCryptPartyMessage)
                     )
                 ),
+                new FeatureEntry("Quiz Reminder", config.dungeon::quizReminderEnabled,
+                    config.dungeon::setQuizReminderEnabled,
+                    List.of(
+                        SettingEntry.slider("Delay (s)", config.dungeon::quizReminderDelaySeconds,
+                            config.dungeon::setQuizReminderDelaySeconds,
+                            DungeonConfig.QUIZ_REMINDER_MIN_SECONDS, DungeonConfig.QUIZ_REMINDER_MAX_SECONDS, 1)
+                            .withTooltip("Seconds a Quiz question may stay unanswered before the reminder.",
+                                "Every new question starts the countdown over."),
+                        SettingEntry.text("Message", config.dungeon::quizReminderMessage,
+                            config.dungeon::setQuizReminderMessage),
+                        SettingEntry.toggle("Repeat", config.dungeon::quizReminderRepeatEnabled,
+                            config.dungeon::setQuizReminderRepeatEnabled)
+                            .withTooltip("Remind again and again until the question is answered."),
+                        SettingEntry.slider("Repeat Every (s)", config.dungeon::quizReminderRepeatSetting,
+                            config.dungeon::setQuizReminderRepeatSeconds, 0, DungeonConfig.QUIZ_REMINDER_MAX_SECONDS, 1)
+                            .withTooltip("0 repeats at the Delay.",
+                                "Below " + DungeonConfig.QUIZ_REMINDER_MIN_SECONDS + " seconds counts as "
+                                    + DungeonConfig.QUIZ_REMINDER_MIN_SECONDS + "."),
+                        SettingEntry.toggle("Party Chat", config.dungeon::quizReminderPartyEnabled,
+                            config.dungeon::setQuizReminderPartyEnabled)
+                            .withTooltip("Also tell the party, once per question.",
+                                "The reminder always shows in your own chat."),
+                        SettingEntry.button("Test", "Show",
+                            () -> DungeonQuizReminderFeature.INSTANCE.sendTest(Minecraft.getInstance()))
+                    )
+                ),
                 KungBuild.MODRINTH ? null : new FeatureEntry("Blood rush helper", config.bloodRush::enabled,
                     config.bloodRush::setEnabled,
                     List.of(
@@ -206,7 +234,13 @@ public final class KungSettings {
                             config.splits::setTimeLost),
                         SettingEntry.toggle("Paste In Chat", config.splits::runEndChat,
                             config.splits::setRunEndChat)
-                            .withTooltip("Print all splits in your local chat when the run ends.")
+                            .withTooltip("Print all splits in your local chat when the run ends."),
+                        SettingEntry.toggle("PB Title", config.splits::pbTitle,
+                            config.splits::setPbTitle)
+                            .withTooltip("Shows a PERSONAL BEST! title when a split beats its best",
+                                "and when Hypixel reports a new record for the whole floor.",
+                                "Run records are read once from the Hypixel API (your key, else the",
+                                "Kung server), then kept up to date from Hypixel's chat lines.")
                     )
                 )
             )),
@@ -319,8 +353,19 @@ public final class KungSettings {
                 new FeatureEntry("Sack Tracker", config.misc::sackTrackerEnabled,
                     config.misc::setSackTrackerEnabled, new SackTrackerSettings(config.misc))
                     .withTooltip("Tracks sack items and how many are left to a goal.",
-                        "Set the Track Key, then press it over an item in a sack.",
-                        "Counts follow SkyBlock's [Sacks] messages; keep them on in /settings.",
+                        "1. Set the Track Key below (it is unbound at first).",
+                        "2. Hover a sack item and press the key to track it: in an open",
+                        "   sack, in your inventory or in the item list of another mod",
+                        "   (REI, JEI, ...). Press it again over the item to stop.",
+                        "   Items that fit in no sack, like a crafting table, are ignored.",
+                        "3. The count is read from the sack when you open it, then follows",
+                        "   SkyBlock's [Sacks] messages; keep them on in /settings.",
+                        "   Tracked outside the sack it shows ? until you open the sack.",
+                        "   Gemstones: without a filter the whole gem counts, in Rough gems (the",
+                        "   Stored total); with a filter button set, only that quality.",
+                        "4. Over inventories (Show In Menus), hover a tracker line: click",
+                        "   removes it, digits set a goal, Backspace deletes a digit,",
+                        "   Ctrl+Backspace clears the goal.",
                         "Move and resize in /kung hud."),
                 new FeatureEntry("Peek Chat", config.misc::peekChatEnabled, config.misc::setPeekChatEnabled, List.of(
                     SettingEntry.keybind("Peek Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.misc.peekChatKeybind()),
