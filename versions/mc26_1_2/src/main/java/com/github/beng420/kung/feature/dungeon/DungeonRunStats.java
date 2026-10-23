@@ -1480,8 +1480,10 @@ public final class DungeonRunStats {
         }
         registerPlayerName(name, playerUuid);
         rememberDungeonPlayerOrder(playerUuid);
-        requestTotalSecrets(client, name);
-        requestRunSecretBaseline(client, name);
+        // The baseline already is the lifetime total, so asking for both doubled the lookups of every run (15 instead
+        // of the 10 the server limit is sized for). After the finish no baseline is taken; the total alone is enough.
+        if (apiEnrichment.finalFetchStarted()) requestTotalSecrets(client, name);
+        else requestRunSecretBaseline(client, name);
         return playerUuid;
     }
 

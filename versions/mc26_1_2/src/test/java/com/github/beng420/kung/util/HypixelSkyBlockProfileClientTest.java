@@ -27,9 +27,9 @@ import org.junit.BeforeClass;
 import org.junit.Test;
 
 public final class HypixelSkyBlockProfileClientTest {
-    @Test public void providersKeepTheirHeadersAndRefreshTimestampsAcrossRateLimitAndServerRetries() throws Exception {
+    @Test public void providersKeepTheirHeadersAndRefreshTimestampsAcrossServerRetries() throws Exception {
         for (String provider : PROVIDERS) {
-            try (var server = new Server(new int[] {429, 503, 200}, "{\"success\":true}")) {
+            try (var server = new Server(new int[] {502, 503, 200}, "{\"success\":true}")) {
                 assertTrue(load(provider, server.uri()).get(10, TimeUnit.SECONDS).get("success").getAsBoolean());
                 assertEquals(3, server.requests.size());
                 long previousTimestamp = 0;
@@ -62,7 +62,8 @@ public final class HypixelSkyBlockProfileClientTest {
     @Test public void retryableFailuresStopAtThreeWhileClientErrorsAndInvalidBodiesFailImmediately() throws Exception {
         for (String provider : PROVIDERS) {
             String service = provider.equals("Hypixel") ? "Hypixel" : "Kung server";
-            for (int status : new int[] {500, 400}) {
+            // A 429 is not retried: the retries only burn the rate limit that caused it.
+            for (int status : new int[] {500, 400, 429}) {
                 try (var server = new Server(new int[] {status}, "{}")) {
                     var failure = assertThrows(ExecutionException.class, () -> load(provider, server.uri()).get(10, TimeUnit.SECONDS));
                     assertEquals(service + " returned HTTP " + status, failure.getCause().getMessage());

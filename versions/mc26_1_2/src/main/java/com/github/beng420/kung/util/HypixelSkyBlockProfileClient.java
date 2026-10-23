@@ -257,8 +257,12 @@ public final class HypixelSkyBlockProfileClient {
             .thenCompose(ignored -> loadObject(service, send, previousAttempt + 1));
     }
 
+    /**
+     * Server errors may pass in a moment. A 429 will not: retrying it 300 and 600 ms later only spends the per-player
+     * budget of the Kung server (every attempt counts) and the Hypixel quota, so one limited lookup became three.
+     */
     private static boolean shouldRetry(int statusCode) {
-        return statusCode == 429 || statusCode >= 500;
+        return statusCode >= 500;
     }
 
     private ProfileResult parse(MinecraftProfile minecraftProfile, JsonObject playerRoot, JsonObject profilesRoot) {
