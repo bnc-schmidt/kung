@@ -55,6 +55,7 @@ public final class KungConfigScreen extends Screen {
     private static final int CHOICE_LIST_ROWS = 8;
     private static final int SEARCH_BOTTOM = 80;
     private static final int SETTING_CONTROL_WIDTH = 52;
+    private static final int CHOICE_BUTTON_MAXIMUM = 96;
     private static final int SETTING_ARROW_HITBOX_WIDTH = 12;
     private static final int SCROLL_STEP = 42;
     private static final int CATEGORY_SCROLL_STEP = SETTING_HEIGHT * 3;
@@ -597,7 +598,17 @@ public final class KungConfigScreen extends Screen {
         if (setting.kind() == SettingKind.LABEL) {
             return Math.max(SETTING_HEIGHT, labelLines(setting).size() * (menuFont.lineHeight + 1) + 5);
         }
-        return setting.kind() == SettingKind.SLIDER || setting.kind() == SettingKind.TEXT ? TWO_LINE_HEIGHT : SETTING_HEIGHT;
+        return setting.kind() == SettingKind.SLIDER || setting.kind() == SettingKind.TEXT || wideChoice(setting)
+            ? TWO_LINE_HEIGHT : SETTING_HEIGHT;
+    }
+
+    /**
+     * A choice whose options do not fit the small button on the right (time zones): it gets a row of its own, like
+     * a slider, with the label above and the value across the whole width below.
+     */
+    private boolean wideChoice(SettingEntry setting) {
+        return setting.kind() == SettingKind.CHOICE
+            && setting.choices().stream().mapToInt(menuFont::width).max().orElse(0) + 10 > CHOICE_BUTTON_MAXIMUM;
     }
 
     /** A status line carries the reason something failed, so it wraps instead of ending in "...". */
@@ -611,7 +622,7 @@ public final class KungConfigScreen extends Screen {
             case GROUP -> 16;
             case TOGGLE -> 24;
             case CHOICE -> Math.clamp(Math.max(menuFont.width(setting.choiceSupplier().get()),
-                setting.choices().stream().mapToInt(menuFont::width).max().orElse(0)) + 10, 24, 96);
+                setting.choices().stream().mapToInt(menuFont::width).max().orElse(0)) + 10, 24, CHOICE_BUTTON_MAXIMUM);
             case BUTTON -> Math.clamp(menuFont.width(setting.choiceSupplier().get()) + 10, 16, 64);
             case KEYBIND -> Math.clamp(Math.max(menuFont.width(setting.textValue()), menuFont.width("Press...")) + 10, 24, 72);
             case COLOR -> Math.clamp(menuFont.width("#FFFFFF") + 10, 24, 72);

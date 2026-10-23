@@ -24,6 +24,8 @@ import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.ui.KungFonts;
 import com.github.beng420.kung.update.KungUpdater;
 import com.github.beng420.kung.util.HypixelSkyBlockProfileClient;
+import com.github.beng420.kung.util.KeyboardLayout;
+import com.github.beng420.kung.util.KungTime;
 import java.io.StringReader;
 import java.net.URI;
 import java.util.ArrayList;
@@ -531,6 +533,16 @@ public final class KungSettings {
                     ? new String[] {"Updates come through the Modrinth App."}
                     : new String[] {"Download and verify the latest compatible update from GitHub.",
                         "Close Minecraft to apply it automatically, then start the game again."}),
+                new FeatureEntry("Region", () -> false, (Runnable) null, List.of(
+                    SettingEntry.choice("Time Zone", KungTime::options, KungTime::selected,
+                        choice -> config.debug.setTimeZone(KungTime.idOf(choice)))
+                        .withTooltip("The zone of the times Kung shows (Jerry's terms, election dates).",
+                            "Auto uses what your system reports; pick one if that is wrong."),
+                    SettingEntry.choice("Keyboard Layout", KeyboardLayout.values(), config.debug::keyboardLayout,
+                        config.debug::setKeyboardLayout, KeyboardLayout::label)
+                        .withTooltip("How keys are labelled in Kung's menus, and which key the Peek Key starts on (Y).",
+                            "Auto asks your system; pick a layout if the labels are wrong. Keybinds keep working.")
+                )).withTooltip("Fixes for when Kung cannot detect your time zone or keyboard layout."),
                 new FeatureEntry("Debug Messages", config.debug::enabled,
                     config.debug::setEnabled,
                     List.of(

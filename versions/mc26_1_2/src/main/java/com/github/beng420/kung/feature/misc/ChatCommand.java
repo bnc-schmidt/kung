@@ -7,8 +7,8 @@ import com.github.beng420.kung.skyblock.SpecialMayors;
 import com.github.beng420.kung.util.CatacombsAverageCalculator;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.Goal;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungTime;
 import com.github.beng420.kung.util.ServerTpsTracker;
-import java.time.ZoneId;
 import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
@@ -91,7 +91,7 @@ enum ChatCommand {
             return;
         }
         if (isMayorCommand()) {
-            responseConsumer.accept(SpecialMayors.answer(special(), System.currentTimeMillis(), ZoneId.systemDefault()));
+            responseConsumer.accept(SpecialMayors.answer(special(), System.currentTimeMillis(), KungTime.zone()));
             return;
         }
         CALCULATOR.calculateAsync(targetName, goal, false).whenComplete((result, throwable) -> client.execute(() -> {

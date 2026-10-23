@@ -629,8 +629,16 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
      * the key labelled Y is code 90. Null for keys without a character (and without GLFW, as in tests).
      */
     private static String layoutKeyName(int key) {
+        String picked = com.github.beng420.kung.util.KeyboardLayout.current().letterOn(key);
+        if (picked != null) {
+            return picked;
+        }
         if (key < 39 || key > 96 && key != 161 && key != 162) {
             return null;
+        }
+        if (com.github.beng420.kung.util.KeyboardLayout.current() != com.github.beng420.kung.util.KeyboardLayout.AUTO
+            && key >= 65 && key <= 90) {
+            return String.valueOf((char) key); // a picked layout answers for the letters, not the system
         }
         try {
             String name = GLFW.glfwGetKeyName(key, 0);

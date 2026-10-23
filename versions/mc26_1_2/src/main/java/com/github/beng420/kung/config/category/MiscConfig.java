@@ -1,5 +1,6 @@
 package com.github.beng420.kung.config.category;
 
+import com.github.beng420.kung.util.KeyboardLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -427,6 +428,8 @@ public final class MiscConfig extends ConfigCategory {
 
     /** The key labelled Y on this keyboard: GLFW numbers keys by US position, so a German Y is 90 (Z), not 89. */
     private static String defaultPeekChatKeybind() {
+        int picked = KeyboardLayout.current().keyLabelled("Y");
+        if (picked >= 0) return "key:" + picked + ":0";
         if (layoutPeekChatKeybind == null) {
             try {
                 for (int key = GLFW.GLFW_KEY_A; key <= GLFW.GLFW_KEY_Z && layoutPeekChatKeybind == null; key++) {
@@ -435,6 +438,11 @@ public final class MiscConfig extends ConfigCategory {
             } catch (Throwable noGlfw) { /* tests run without GLFW */ }
         }
         return layoutPeekChatKeybind == null ? "key:89:0" : layoutPeekChatKeybind;
+    }
+
+    /** A newly picked keyboard layout changes which key is labelled Y. */
+    public static void forgetLayoutKeybind() {
+        layoutPeekChatKeybind = null;
     }
 
     public static String[] defaultLoadoutKeybinds() {

@@ -7,6 +7,7 @@ import com.github.beng420.kung.feature.dungeon.KungServerSession;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungTime;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -14,7 +15,6 @@ import com.google.gson.JsonParser;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
-import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -89,7 +89,7 @@ public final class JerryPerkpocalypse {
         if (!message.getString().contains(JerryMessages.ROTATION_MARKER)) return message;
         SkyBlockMayorTracker tracker = SkyBlockMayorTracker.INSTANCE;
         if (!tracker.jerryInOffice()) return message;
-        return JerryMessages.decorateRotation(message, timeline(tracker.electionYear()), System.currentTimeMillis(), ZoneId.systemDefault());
+        return JerryMessages.decorateRotation(message, timeline(tracker.electionYear()), System.currentTimeMillis(), KungTime.zone());
     }
 
     /** The reply to !jerry while he is in office: the rotation as plain chat text. */
@@ -187,7 +187,7 @@ public final class JerryPerkpocalypse {
         }
         if (lastSlotYear == year && lastSlotIndex >= 0 && index > lastSlotIndex) {
             KungMessages.send(client, JerryMessages.switched(slots.get(index - 1).mayor(), slots.get(index).mayor(),
-                slots, now, ZoneId.systemDefault()));
+                slots, now, KungTime.zone()));
         }
         lastSlotIndex = index;
         lastSlotYear = year;
@@ -239,7 +239,7 @@ public final class JerryPerkpocalypse {
         SkyBlockMayorTracker tracker = SkyBlockMayorTracker.INSTANCE;
         long year = tracker.electionYear();
         return JerryMessages.status(tracker.jerryInOffice(), tracker.mayorName(), year, timeline(year), now,
-            syncActive() ? syncStatus : "off (turn on Jerry Mayor under Server Sync in the settings)", ZoneId.systemDefault());
+            syncActive() ? syncStatus : "off (turn on Jerry Mayor under Server Sync in the settings)", KungTime.zone());
     }
 
     /** "4h 22m"; under a minute "<1m". */
