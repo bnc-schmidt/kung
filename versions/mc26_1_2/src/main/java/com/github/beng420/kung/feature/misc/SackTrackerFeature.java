@@ -8,6 +8,7 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.MiscConfig.SackItem;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiTooltip;
@@ -57,6 +58,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     public static final SackTrackerFeature INSTANCE = new SackTrackerFeature();
     private static final Pattern FORMATTING = Pattern.compile("§.");
     private static final Pattern STORED = Pattern.compile("^Stored: ([\\d.,]+[kKmMbB]?)/");
+    private static final Pattern LAST = Pattern.compile("\\(Last (?:(\\d+)m\\s*)?(\\d+)s\\.\\)");
     private static final Pattern CHANGE = Pattern.compile("^([+-][\\d,]+) (.+) \\((.+)\\)$");
     private static final int SYNC_TICKS = 10;
     private static final int LINE_HEIGHT = 11;
@@ -69,6 +71,14 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     /** The amount of an item tracked outside its sack: unknown until the sack is opened once. */
     private static final long UNKNOWN_AMOUNT = -1;
     private final HoveredTooltip<ItemStack> tooltip = new HoveredTooltip<>(ItemStack::isSameItemSameComponents);
+    /** When an open sack last set each row: the [Sacks] message that covers that moment holds items the sack showed already. */
+    private final Map<SackItem, Long> syncedAt = new java.util.IdentityHashMap<>();
+    /**
+     * Rows that may be too low: after a world change Hypixel drops the pick-ups it had not reported yet, so the
+     * count stays short until a sack is read again (seen in a trace: 74 Flawed gems found just before a warp).
+     */
+    private final Set<SackItem> approximate = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    private long seenEpoch = Long.MIN_VALUE;
     private int ticksUntilSync;
 
     private SackTrackerFeature() { super(config -> config.misc); }
@@ -201,7 +211,33 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return true;
     }
 
+    /** A world change warns when some row holds a real count and none is marked yet: the first one since a sack was read. */
+    static boolean shouldWarnAfterWorldChange(List<SackItem> items, Set<SackItem> approximate) {
+        return items.stream().anyMatch(item -> item.amount() >= 0) && items.stream().noneMatch(approximate::contains);
+    }
+
+    /** True while the row may be short of what the sack holds (after a world change, until a sack was read). */
+    public boolean approximate(SackItem item) { return approximate.contains(item); }
+
+    private void markSynced(SackItem item) {
+        syncedAt.put(item, System.currentTimeMillis());
+        approximate.remove(item);
+    }
+
     private void syncOpenSack(Minecraft client) {
+        long epoch = HypixelInstanceTracker.INSTANCE.instanceEpoch();
+        if (epoch != seenEpoch) {
+            boolean first = seenEpoch == Long.MIN_VALUE;
+            seenEpoch = epoch;
+            if (!first && isEnabled()) {
+                // One notice per stretch without a sack read, not one per world change (every dungeon run is one).
+                boolean notify = shouldWarnAfterWorldChange(config().sackTrackerItems(), approximate);
+                approximate.addAll(config().sackTrackerItems());
+                if (notify) KungMessages.send(client, KungMessages.Type.WARNING, "Sack Tracker",
+                    "Counts may be off after a world change (marked ~): Hypixel drops finds it had not reported yet. "
+                        + "Open the sack for exact values.");
+            }
+        }
         if (--ticksUntilSync > 0) return;
         ticksUntilSync = SYNC_TICKS;
         if (!isEnabled() || config().sackTrackerItems().isEmpty()
@@ -218,6 +254,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (item.amount() != stored) KungDebugRecorder.event("sack-tracker",
                 "sack shows " + item.name() + " " + stored + " (tracked " + item.amount() + ")");
             config().setSackTrackerAmount(item, stored);
+            markSynced(item);
         }
     }
 
@@ -234,12 +271,15 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
                 if (whole.amount() != total) KungDebugRecorder.event("sack-tracker",
                     "sack shows " + whole.name() + " " + total + " (tracked " + whole.amount() + ")");
                 config().setSackTrackerAmount(whole, total);
+                markSynced(whole);
             }
             SackGemstones.amounts(lore(stack), filter).forEach((quality, amount) -> {
                 // A filtered item names its quality itself; the amount line then belongs to that quality.
                 String shown = gem.quality() != null ? gem.quality() : quality;
                 SackItem item = config().sackTrackerItem(gem.trackedName(shown));
-                if (item == null || item.amount() == amount) return;
+                if (item == null) return;
+                markSynced(item);
+                if (item.amount() == amount) return;
                 KungDebugRecorder.event("sack-tracker", "sack shows " + item.name() + " " + amount + " (tracked " + item.amount() + ")");
                 config().setSackTrackerAmount(item, amount);
             });
@@ -256,24 +296,46 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (style.getHoverEvent() instanceof HoverEvent.ShowText(Component value)) hovers.add(plain(value));
             return Optional.<Void>empty();
         }, Style.EMPTY);
-        // Every message counts. A message can overlap what an open sack already showed, which counts that
-        // part twice; opening the sack sets the count right again.
+        // Hypixel sums the pick-ups of the last ~30 s into one message, so the count trails what the sack holds. A
+        // message that covers the moment a sack was opened holds items that sack showed already: only the part
+        // after that moment counts (items arrive about evenly, so by time).
+        int seconds = coveredSeconds(text);
         changes(hovers).forEach((name, delta) -> {
-            applyChange(name, delta);
+            applyChange(name, delta, seconds);
             // A tracked whole gem ("Onyx Gemstones") counts every quality in Rough gems.
             var gem = SackGemstones.parseName(name);
             if (gem != null && gem.quality() != null) {
-                applyChange(gem.gem() + " Gemstones", delta * SackGemstones.multiplier(gem.quality()));
+                applyChange(gem.gem() + " Gemstones", delta * SackGemstones.multiplier(gem.quality()), seconds);
             }
         });
     }
 
-    private void applyChange(String name, long delta) {
+    private void applyChange(String name, long delta, int seconds) {
         SackItem item = config().sackTrackerItem(name);
         if (item == null || item.amount() < 0) return; // nothing to add to until the sack shows the amount
+        long now = System.currentTimeMillis();
+        long counted = countedShare(delta, now, seconds, syncedAt.getOrDefault(item, Long.MIN_VALUE));
         KungDebugRecorder.event("sack-tracker", "message " + name + " " + (delta > 0 ? "+" : "") + delta
-            + " -> " + (item.amount() + delta));
-        config().setSackTrackerAmount(item, item.amount() + delta);
+            + (counted != delta ? " counted " + counted : "") + " -> " + (item.amount() + counted));
+        config().setSackTrackerAmount(item, item.amount() + counted);
+    }
+
+    /** "(Last 26s.)" or "(Last 1m 5s.)" of a [Sacks] message: how long the pick-ups it sums took; 0 when it says nothing. */
+    static int coveredSeconds(String text) {
+        Matcher matcher = LAST.matcher(text);
+        if (!matcher.find()) return 0;
+        return (matcher.group(1) == null ? 0 : Integer.parseInt(matcher.group(1)) * 60) + Integer.parseInt(matcher.group(2));
+    }
+
+    /**
+     * The part of a message's change that the sack did not show yet: the message covers the {@code seconds} before
+     * now, a sack read at {@code syncedMillis} already holds everything up to then.
+     */
+    static long countedShare(long delta, long nowMillis, int seconds, long syncedMillis) {
+        long span = seconds * 1000L;
+        if (span <= 0 || syncedMillis <= nowMillis - span) return delta;
+        if (syncedMillis >= nowMillis) return 0;
+        return Math.round(delta * ((nowMillis - syncedMillis) / (double) span));
     }
 
     /** Net change per item across the hover lists: "+1,280 Wheat (Agronomy Sack)". */
@@ -324,7 +386,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private void render(GuiGraphicsExtractor graphics) {
-        if (visible() && McCompat.screen(Minecraft.getInstance()) == null) draw(graphics, config(), lines(config().sackTrackerItems(), false));
+        if (visible() && McCompat.screen(Minecraft.getInstance()) == null) draw(graphics, config(), lines(config().sackTrackerItems(), false, approximate));
     }
 
     /** In a world only: menus over the title screen or while joining have no game to track. */
@@ -344,7 +406,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private void renderOverScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (!overScreen(screen)) return;
         graphics.nextStratum();
-        draw(graphics, config(), lines(config().sackTrackerItems(), true));
+        draw(graphics, config(), lines(config().sackTrackerItems(), true, approximate));
         int line = lineAt(mouseX, mouseY);
         if (line >= 1 && line <= config().sackTrackerItems().size()) {
             List<String> tooltip = typesGoals(screen)
@@ -389,7 +451,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     /** Which drawn line the cursor is on: 1..items is an item, one past them is Reset Display, -1 is none. */
     private int lineAt(double mouseX, double mouseY) {
         var font = Minecraft.getInstance().font;
-        List<Component> lines = lines(config().sackTrackerItems(), true);
+        List<Component> lines = lines(config().sackTrackerItems(), true, approximate);
         float scale = config().sackTrackerScale() / 100F;
         for (int index = 1; index < lines.size(); index++) {
             float left = config().sackTrackerX() + 8 * scale;
@@ -412,6 +474,11 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
 
     /** "Enchanted Wheat: 1,234/10,000" - red until the goal, green from it; no goal shows the count alone. */
     static List<Component> lines(List<SackItem> items, boolean interactive) {
+        return lines(items, interactive, Set.of());
+    }
+
+    /** Rows in {@code approximate} get a "~" in front of the count. */
+    static List<Component> lines(List<SackItem> items, boolean interactive, Set<SackItem> approximate) {
         List<Component> lines = new ArrayList<>();
         lines.add(Component.literal("Sack Tracker").withColor(0xFFFF55).withStyle(ChatFormatting.BOLD));
         for (SackItem item : items) {
@@ -419,7 +486,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
                 .append(Component.literal(": ").withColor(0xFFFFFF));
             int amountColor = item.goal() <= 0 || item.amount() < 0 ? 0xFFFF55
                 : item.amount() >= item.goal() ? 0x55FF55 : 0xFF5555;
-            line.append(Component.literal(amountText(item.amount())).withColor(amountColor));
+            line.append(Component.literal((approximate.contains(item) && item.amount() >= 0 ? "~" : "")
+                + amountText(item.amount())).withColor(amountColor));
             if (item.goal() > 0) line.append(Component.literal("/" + format(item.goal())).withColor(0xFFFFFF));
             lines.add(line);
         }

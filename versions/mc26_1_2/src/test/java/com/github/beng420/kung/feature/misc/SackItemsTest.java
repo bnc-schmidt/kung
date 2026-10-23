@@ -97,6 +97,53 @@ public class SackItemsTest {
     }
 
     @Test
+    public void rowsThatMayBeShortAfterAWorldChangeShowATilde() {
+        var wheat = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Wheat", 0xFFFFFF, 1_234, 0);
+        var cactus = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Cactus", 0xFFFFFF, 50, 100);
+        var unread = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Carrot", 0xFFFFFF, -1, 0);
+        var items = List.of(wheat, cactus, unread);
+        var text = SackTrackerFeature.lines(items, false, java.util.Set.of(wheat, unread)).stream().map(l -> l.getString()).toList();
+        // An unread row stays "?", never "~?".
+        assertEquals(List.of("Sack Tracker", "Wheat: ~1,234", "Cactus: 50/100", "Carrot: ?"), text);
+        assertEquals(List.of("Sack Tracker", "Wheat: 1,234", "Cactus: 50/100", "Carrot: ?"),
+            SackTrackerFeature.lines(items, false).stream().map(l -> l.getString()).toList());
+    }
+
+    @Test
+    public void aWorldChangeWarnsOncePerStretchWithoutASackRead() {
+        var wheat = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Wheat", 0xFFFFFF, 1_234, 0);
+        var unread = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Carrot", 0xFFFFFF, -1, 0);
+        var marked = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<com.github.beng420.kung.config.category.MiscConfig.SackItem, Boolean>());
+        assertTrue(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat, unread), marked)); // first change: warn
+        marked.add(wheat);
+        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat, unread), marked)); // already marked: quiet
+        marked.remove(wheat); // a sack read cleared it: the next change warns again
+        assertTrue(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat), marked));
+        // Nothing tracked, or only rows without a count: nothing to warn about.
+        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(), marked));
+        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(unread), marked));
+    }
+
+    @Test
+    public void aMessageOnlyCountsWhatTheSackDidNotShowAlready() {
+        assertEquals(26, SackTrackerFeature.coveredSeconds("[Sacks] +3,278 items. (Last 26s.)"));
+        assertEquals(65, SackTrackerFeature.coveredSeconds("[Sacks] +9 items. (Last 1m 5s.)"));
+        assertEquals(0, SackTrackerFeature.coveredSeconds("[Sacks] +3,278 items."));
+        long now = 1_000_000L;
+        // The message sums the last 26 s. A sack read before that, or none, leaves the whole change to count.
+        assertEquals(33_920L, SackTrackerFeature.countedShare(33_920L, now, 26, Long.MIN_VALUE));
+        assertEquals(33_920L, SackTrackerFeature.countedShare(33_920L, now, 26, now - 26_000L));
+        assertEquals(33_920L, SackTrackerFeature.countedShare(33_920L, now, 0, now - 5_000L)); // no interval known
+        // A sack read 6.5 s ago already holds the last quarter of it.
+        assertEquals(25_440L, SackTrackerFeature.countedShare(33_920L, now, 26, now - 19_500L));
+        assertEquals(8_480L, SackTrackerFeature.countedShare(33_920L, now, 26, now - 6_500L));
+        // Read at the very moment of the message, or later: all of it was in the sack.
+        assertEquals(0L, SackTrackerFeature.countedShare(33_920L, now, 26, now));
+        // Removals scale the same way.
+        assertEquals(-5L, SackTrackerFeature.countedShare(-10L, now, 20, now - 10_000L));
+    }
+
+    @Test
     public void aTrackedRowIsFoundWithOrWithoutTheSymbolOfItsName() {
         var config = new com.github.beng420.kung.config.category.MiscConfig();
         assertTrue(config.toggleSackTrackerItem("Flawed Onyx Gemstone", 0xFFFFFF, 604));

@@ -30,7 +30,8 @@ final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
             config::setSackTrackerInMenus)
             .withTooltip("Also shows the tracker over inventories, chat and other vanilla menus, not over menus of mods."));
         for (SackItem item : items) {
-            next.add(SettingEntry.group(() -> item.name() + ": " + SackTrackerFeature.amountText(item.amount())
+            next.add(SettingEntry.group(() -> item.name() + ": " + (SackTrackerFeature.INSTANCE.approximate(item) && item.amount() >= 0 ? "~" : "")
+                        + SackTrackerFeature.amountText(item.amount())
                     + (item.goal() > 0 ? "/" + SackTrackerFeature.format(item.goal()) : ""))
                 .withChildren(List.of(
                     SettingEntry.text("Goal", () -> item.goal() > 0 ? String.valueOf(item.goal()) : "", value -> {
