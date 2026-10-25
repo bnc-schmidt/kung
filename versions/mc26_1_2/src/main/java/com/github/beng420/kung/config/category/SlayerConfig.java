@@ -8,6 +8,8 @@ public final class SlayerConfig extends ConfigCategory {
     private int eggSacCountdownX = 6;
     private int eggSacCountdownY = 90;
     private int eggSacCountdownScale = 100;
+    private boolean blazeAttunementEnabled = false;
+    private int blazeAttunementScale = 100;
     private boolean tarantulaDebugSlayerSpawned = true;
     private boolean tarantulaDebugSlayerPosition = true;
     private boolean tarantulaDebugSlayerPhaseChange = true;
@@ -30,6 +32,10 @@ public final class SlayerConfig extends ConfigCategory {
     public void setEggSacCountdownY(int value) { eggSacCountdownY = value; save(); }
     public int eggSacCountdownScale() { return eggSacCountdownScale; }
     public void setEggSacCountdownScale(int value) { eggSacCountdownScale = Math.clamp(value, 25, 300); save(); }
+    public boolean blazeAttunementEnabled() { return blazeAttunementEnabled; }
+    public void setBlazeAttunementEnabled(boolean value) { blazeAttunementEnabled = value; save(); }
+    public int blazeAttunementScale() { return blazeAttunementScale; }
+    public void setBlazeAttunementScale(int value) { blazeAttunementScale = Math.clamp(value, 50, 300); save(); }
     public boolean tarantulaDebugSlayerSpawned() { return tarantulaDebugSlayerSpawned; }
     public void setTarantulaDebugSlayerSpawned(boolean value) { tarantulaDebugSlayerSpawned = value; save(); }
     public boolean tarantulaDebugSlayerPosition() { return tarantulaDebugSlayerPosition; }

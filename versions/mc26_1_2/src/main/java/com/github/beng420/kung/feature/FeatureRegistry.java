@@ -27,6 +27,7 @@ import com.github.beng420.kung.feature.misc.LobbyHopHelperFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueSkipFeature;
 import com.github.beng420.kung.feature.misc.HitboxesFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
+import com.github.beng420.kung.feature.slayer.BlazeSlayerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
 import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
 import com.github.beng420.kung.runtime.AppServices;
@@ -69,6 +70,7 @@ public final class FeatureRegistry {
         register(SackTrackerFeature.INSTANCE);
         register(PeekChatFeature.INSTANCE);
         register(TarantulaHelperFeature.INSTANCE);
+        register(BlazeSlayerFeature.INSTANCE);
         register(new SafariOverlayFeature());
         register(FeastOverlayFeature.INSTANCE);
         register(VisitorAlarmFeature.INSTANCE);

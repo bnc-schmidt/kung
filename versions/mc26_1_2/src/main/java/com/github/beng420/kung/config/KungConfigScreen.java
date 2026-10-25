@@ -56,6 +56,8 @@ public final class KungConfigScreen extends Screen {
     private static final int SEARCH_BOTTOM = 80;
     private static final int SETTING_CONTROL_WIDTH = 52;
     private static final int CHOICE_BUTTON_MAXIMUM = 96;
+    /** How far a child row is indented from its parent. */
+    private static final int SETTING_INDENT = 12;
     private static final int SETTING_ARROW_HITBOX_WIDTH = 12;
     private static final int SCROLL_STEP = 42;
     private static final int CATEGORY_SCROLL_STEP = SETTING_HEIGHT * 3;
@@ -66,7 +68,7 @@ public final class KungConfigScreen extends Screen {
     private final List<ClickRegion> clickRegions = new ArrayList<>();
     private final Map<String, Integer> categoryScrolls = new HashMap<>();
     private final Set<FeatureEntry> expandedFeatures = Collections.newSetFromMap(new IdentityHashMap<>());
-    private SettingEntry expandedSetting;
+    private final ExpandedPath<SettingEntry> expanded = new ExpandedPath<>();
     private TextEditorOverlay textEditor;
     private SettingEntry capturingSetting;
     private ChoiceDropdown dropdown;
@@ -401,20 +403,7 @@ public final class KungConfigScreen extends Screen {
 
             if (isFeatureExpanded(feature)) {
                 for (SettingEntry setting : feature.settings()) {
-                    if (!setting.visible()) continue;
-                    if (rowFullyVisible(rowY, rowHeight(setting), viewportTop, panelBottom)) {
-                        drawSettingRow(graphics, setting, x, rowY, panelBottom, mouseX, mouseY, 0);
-                    }
-                    rowY += rowHeight(setting);
-                    if (setting == expandedSetting) {
-                        for (SettingEntry child : setting.children()) {
-                            if (!child.visible()) continue;
-                            if (rowFullyVisible(rowY, rowHeight(child), viewportTop, panelBottom)) {
-                                drawSettingRow(graphics, child, x, rowY, panelBottom, mouseX, mouseY, 12);
-                            }
-                            rowY += rowHeight(child);
-                        }
-                    }
+                    rowY = drawSettingTree(graphics, setting, x, rowY, viewportTop, panelBottom, mouseX, mouseY, 0);
                 }
                 if (rowY > viewportTop && rowY < panelBottom) {
                     graphics.fill(x + 5, rowY - 1, x + COLUMN_WIDTH - 5, rowY, THEME.border());
@@ -472,6 +461,35 @@ public final class KungConfigScreen extends Screen {
         return rowY >= viewportTop && rowY + rowHeight <= viewportBottom;
     }
 
+    /** A setting row and, while it is open, its children below it, each level indented one step further. */
+    private int drawSettingTree(GuiGraphicsExtractor graphics, SettingEntry setting, int x, int rowY, int viewportTop,
+                                int panelBottom, int mouseX, int mouseY, int depth) {
+        if (!setting.visible()) return rowY;
+        if (rowFullyVisible(rowY, rowHeight(setting), viewportTop, panelBottom)) {
+            drawSettingRow(graphics, setting, x, rowY, panelBottom, mouseX, mouseY, depth * SETTING_INDENT);
+        }
+        rowY += rowHeight(setting);
+        if (isExpanded(setting, depth)) {
+            for (SettingEntry child : setting.children()) {
+                rowY = drawSettingTree(graphics, child, x, rowY, viewportTop, panelBottom, mouseX, mouseY, depth + 1);
+            }
+        }
+        return rowY;
+    }
+
+    private int settingTreeHeight(SettingEntry setting, int depth) {
+        if (!setting.visible()) return 0;
+        int total = rowHeight(setting);
+        if (isExpanded(setting, depth)) {
+            for (SettingEntry child : setting.children()) total += settingTreeHeight(child, depth + 1);
+        }
+        return total;
+    }
+
+    private boolean isExpanded(SettingEntry setting, int depth) {
+        return expanded.isExpanded(setting, depth);
+    }
+
     private void drawSettingRow(
         GuiGraphicsExtractor graphics,
         SettingEntry setting,
@@ -487,7 +505,7 @@ public final class KungConfigScreen extends Screen {
         UiShapes.rounded(graphics, x, rowY, COLUMN_WIDTH, height, 0,
             rowY + height == panelBottom ? PANEL_RADIUS : 0, hovered ? THEME.panelSoft() : THEME.control());
         if (setting.expandable()) {
-            graphics.text(menuFont, setting == expandedSetting ? "v" : ">", x + 5 + indent, rowY + 4, THEME.text(), true);
+            graphics.text(menuFont, isExpanded(setting, indent / SETTING_INDENT) ? "v" : ">", x + 5 + indent, rowY + 4, THEME.text(), true);
         }
         int labelX = x + 5 + indent + (setting.expandable() ? 11 : 0);
         if (setting.kind() == SettingKind.LABEL) {
@@ -514,16 +532,17 @@ public final class KungConfigScreen extends Screen {
         setting.draw(graphics, menuFont, THEME, controlX, controlY, controlWidth, SETTING_HEIGHT,
             setting == capturingSetting);
         if (setting.developerOnly()) drawDeveloperStar(graphics, x + COLUMN_WIDTH, rowY);
+        int depth = indent / SETTING_INDENT;
         addClickRegion(x, rowY, COLUMN_WIDTH, height, (clickX, clickY, button) ->
-            clickSetting(setting, clickX, button, controlX, controlY, controlWidth)
+            clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth)
         );
         if (setting.expandable()) {
             addClickRegion(x + 2 + indent, rowY, SETTING_ARROW_HITBOX_WIDTH, height, (clickX, clickY, button) -> {
                 if (button == 0) {
-                    toggleSettingExpansion(setting);
+                    toggleSettingExpansion(setting, depth);
                     return true;
                 }
-                return clickSetting(setting, clickX, button, controlX, controlY, controlWidth);
+                return clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth);
             });
         }
     }
@@ -691,14 +710,14 @@ public final class KungConfigScreen extends Screen {
     }
 
     private boolean clickSetting(SettingEntry setting, int mouseX, int button, int controlX, int controlY,
-                                 int controlWidth) {
+                                 int controlWidth, int depth) {
         if (button == 1 && setting.expandable()) {
-            toggleSettingExpansion(setting);
+            toggleSettingExpansion(setting, depth);
             return true;
         }
         if (button == 0) {
             if (setting.kind() == SettingKind.GROUP && setting.expandable()) {
-                toggleSettingExpansion(setting);
+                toggleSettingExpansion(setting, depth);
                 return true;
             }
             if (setting.kind() == SettingKind.TEXT) {
@@ -727,8 +746,8 @@ public final class KungConfigScreen extends Screen {
         return true;
     }
 
-    private void toggleSettingExpansion(SettingEntry setting) {
-        expandedSetting = expandedSetting == setting ? null : setting;
+    private void toggleSettingExpansion(SettingEntry setting, int depth) {
+        expanded.toggle(setting, depth);
     }
 
     private void openTextEditor(SettingEntry setting) {
@@ -812,11 +831,7 @@ public final class KungConfigScreen extends Screen {
             total += ROW_HEIGHT;
             if (isFeatureExpanded(feature)) {
                 for (SettingEntry setting : feature.settings()) {
-                    if (!setting.visible()) continue;
-                    total += rowHeight(setting);
-                    if (setting == expandedSetting) {
-                        for (SettingEntry child : setting.children()) if (child.visible()) total += rowHeight(child);
-                    }
+                    total += settingTreeHeight(setting, 0);
                 }
             }
         }

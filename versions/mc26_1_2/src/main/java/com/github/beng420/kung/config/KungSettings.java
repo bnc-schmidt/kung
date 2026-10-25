@@ -300,7 +300,15 @@ public final class KungSettings {
                             .withTooltip("Counts down to the sacs from the moment the phase starts,",
                                 "then counts up while they are overdue. Move it in /kung hud.")
                     )
-                )
+                ),
+                new FeatureEntry("Blaze Attunement", config.slayer::blazeAttunementEnabled,
+                    config.slayer::setBlazeAttunementEnabled,
+                    List.of(
+                        SettingEntry.slider("Text Size (%)", config.slayer::blazeAttunementScale,
+                            config.slayer::setBlazeAttunementScale, 50, 300, 10)
+                    )
+                ).withTooltip("Writes the Hellion Shield attunement and the dagger hits left on your",
+                    "Inferno Demonlord and its demons, right on their bodies.")
             )),
             new CategoryEntry("Util", present(
                 new FeatureEntry("Bow Draw Indicator", config.misc::bowDrawIndicatorEnabled,
@@ -439,45 +447,91 @@ public final class KungSettings {
                             SettingEntry.toggle("DMs", config.misc::tpsPrivateCommandsEnabled,
                                 config.misc::setTpsPrivateCommandsEnabled)
                         )),
-                        SettingEntry.toggle("!jerry", config.misc::jerryChatCommandEnabled,
-                            config.misc::setJerryChatCommandEnabled)
-                            .withTooltip("Not in office: when Jerry is elected next. In office: his mayor rotation.",
-                                "Special mayors have a switch each: !jerry, !scorp (!scorpius) and !derpy.")
+                        SettingEntry.group("Special Mayors")
+                            .withTooltip("Chat commands for the special mayors Jerry, Scorpius and Derpy.")
                             .withChildren(List.of(
-                            SettingEntry.toggle("Party", config.misc::jerryPartyCommandsEnabled,
-                                config.misc::setJerryPartyCommandsEnabled),
-                            SettingEntry.toggle("Guild", config.misc::jerryGuildCommandsEnabled,
-                                config.misc::setJerryGuildCommandsEnabled),
-                            SettingEntry.toggle("All Chat", config.misc::jerryAllChatCommandsEnabled,
-                                config.misc::setJerryAllChatCommandsEnabled),
-                            SettingEntry.toggle("DMs", config.misc::jerryPrivateCommandsEnabled,
-                                config.misc::setJerryPrivateCommandsEnabled)
+                            SettingEntry.toggle("!jerry", config.misc::jerryChatCommandEnabled,
+                                config.misc::setJerryChatCommandEnabled)
+                                .withTooltip("Not in office: when Jerry is elected next. In office: his mayor rotation.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::jerryPartyCommandsEnabled,
+                                    config.misc::setJerryPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::jerryGuildCommandsEnabled,
+                                    config.misc::setJerryGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::jerryAllChatCommandsEnabled,
+                                    config.misc::setJerryAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::jerryPrivateCommandsEnabled,
+                                    config.misc::setJerryPrivateCommandsEnabled)
+                            )),
+                            SettingEntry.toggle("!scorp", config.misc::scorpChatCommandEnabled,
+                                config.misc::setScorpChatCommandEnabled)
+                                .withTooltip("Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::scorpPartyCommandsEnabled,
+                                    config.misc::setScorpPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::scorpGuildCommandsEnabled,
+                                    config.misc::setScorpGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::scorpAllChatCommandsEnabled,
+                                    config.misc::setScorpAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::scorpPrivateCommandsEnabled,
+                                    config.misc::setScorpPrivateCommandsEnabled)
+                            )),
+                            SettingEntry.toggle("!derpy", config.misc::derpyChatCommandEnabled,
+                                config.misc::setDerpyChatCommandEnabled)
+                                .withTooltip("Not in office: when Derpy is elected next; in office: when he leaves.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::derpyPartyCommandsEnabled,
+                                    config.misc::setDerpyPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::derpyGuildCommandsEnabled,
+                                    config.misc::setDerpyGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::derpyAllChatCommandsEnabled,
+                                    config.misc::setDerpyAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::derpyPrivateCommandsEnabled,
+                                    config.misc::setDerpyPrivateCommandsEnabled)
+                            ))
                         )),
-                        SettingEntry.toggle("!scorp", config.misc::scorpChatCommandEnabled,
-                            config.misc::setScorpChatCommandEnabled)
-                            .withTooltip("Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves.")
+                        SettingEntry.group("Yearly Events")
+                            .withTooltip("Chat commands for the zodiac events: Year of the Pig, Witch and Seal.")
                             .withChildren(List.of(
-                            SettingEntry.toggle("Party", config.misc::scorpPartyCommandsEnabled,
-                                config.misc::setScorpPartyCommandsEnabled),
-                            SettingEntry.toggle("Guild", config.misc::scorpGuildCommandsEnabled,
-                                config.misc::setScorpGuildCommandsEnabled),
-                            SettingEntry.toggle("All Chat", config.misc::scorpAllChatCommandsEnabled,
-                                config.misc::setScorpAllChatCommandsEnabled),
-                            SettingEntry.toggle("DMs", config.misc::scorpPrivateCommandsEnabled,
-                                config.misc::setScorpPrivateCommandsEnabled)
-                        )),
-                        SettingEntry.toggle("!derpy", config.misc::derpyChatCommandEnabled,
-                            config.misc::setDerpyChatCommandEnabled)
-                            .withTooltip("Not in office: when Derpy is elected next; in office: when he leaves.")
-                            .withChildren(List.of(
-                            SettingEntry.toggle("Party", config.misc::derpyPartyCommandsEnabled,
-                                config.misc::setDerpyPartyCommandsEnabled),
-                            SettingEntry.toggle("Guild", config.misc::derpyGuildCommandsEnabled,
-                                config.misc::setDerpyGuildCommandsEnabled),
-                            SettingEntry.toggle("All Chat", config.misc::derpyAllChatCommandsEnabled,
-                                config.misc::setDerpyAllChatCommandsEnabled),
-                            SettingEntry.toggle("DMs", config.misc::derpyPrivateCommandsEnabled,
-                                config.misc::setDerpyPrivateCommandsEnabled)
+                            SettingEntry.toggle("!yotp", config.misc::yotpChatCommandEnabled,
+                                config.misc::setYotpChatCommandEnabled)
+                                .withTooltip("Year of the Pig: when it is active, or when it starts next.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::yotpPartyCommandsEnabled,
+                                    config.misc::setYotpPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::yotpGuildCommandsEnabled,
+                                    config.misc::setYotpGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::yotpAllChatCommandsEnabled,
+                                    config.misc::setYotpAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::yotpPrivateCommandsEnabled,
+                                    config.misc::setYotpPrivateCommandsEnabled)
+                            )),
+                            SettingEntry.toggle("!yotw", config.misc::yotwChatCommandEnabled,
+                                config.misc::setYotwChatCommandEnabled)
+                                .withTooltip("Year of the Witch: when it is active, or when it starts next.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::yotwPartyCommandsEnabled,
+                                    config.misc::setYotwPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::yotwGuildCommandsEnabled,
+                                    config.misc::setYotwGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::yotwAllChatCommandsEnabled,
+                                    config.misc::setYotwAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::yotwPrivateCommandsEnabled,
+                                    config.misc::setYotwPrivateCommandsEnabled)
+                            )),
+                            SettingEntry.toggle("!yots", config.misc::yotsChatCommandEnabled,
+                                config.misc::setYotsChatCommandEnabled)
+                                .withTooltip("Year of the Seal: when it is active, or when it starts next.")
+                                .withChildren(List.of(
+                                SettingEntry.toggle("Party", config.misc::yotsPartyCommandsEnabled,
+                                    config.misc::setYotsPartyCommandsEnabled),
+                                SettingEntry.toggle("Guild", config.misc::yotsGuildCommandsEnabled,
+                                    config.misc::setYotsGuildCommandsEnabled),
+                                SettingEntry.toggle("All Chat", config.misc::yotsAllChatCommandsEnabled,
+                                    config.misc::setYotsAllChatCommandsEnabled),
+                                SettingEntry.toggle("DMs", config.misc::yotsPrivateCommandsEnabled,
+                                    config.misc::setYotsPrivateCommandsEnabled)
+                            ))
                         ))
                     )
                 ),
