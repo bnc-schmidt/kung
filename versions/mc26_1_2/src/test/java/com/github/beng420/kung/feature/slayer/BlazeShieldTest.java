@@ -36,10 +36,6 @@ public final class BlazeShieldTest {
         assertEquals("typhoeus", BlazeShield.slotOf("[Lv999] ⓉⓎⓅⒽⓄⒺⓊⓈ 10M/10M❤"));
         assertNull(BlazeShield.kindOf("[Lv201]  Smoldering Blaze 1.8M/2M❤"));
         assertNull(BlazeShield.kindOf("Flare Demon 5k❤"));
-        assertEquals("Beng420", BlazeShield.ownerOf("Spawned by: Beng420"));
-        assertNull(BlazeShield.ownerOf("☠ Inferno Demonlord IV 13M❤"));
-        assertTrue(BlazeShield.isSpawnMessage("slayer boss! inferno demonlord iv spawned!"));
-        assertFalse(BlazeShield.isSpawnMessage("slayer miniboss! the flare demon spawned!"));
     }
 
     @Test

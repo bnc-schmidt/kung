@@ -307,8 +307,8 @@ public final class KungSettings {
                         SettingEntry.slider("Text Size (%)", config.slayer::blazeAttunementScale,
                             config.slayer::setBlazeAttunementScale, 50, 300, 10)
                     )
-                ).withTooltip("Writes the Hellion Shield attunement and the dagger hits left on your",
-                    "Inferno Demonlord and its demons, right on their bodies.")
+                ).withTooltip("Writes the Hellion Shield attunement and the dagger hits left on every",
+                    "Inferno Demonlord and its demons within 10 blocks, right on their bodies.")
             )),
             new CategoryEntry("Util", present(
                 new FeatureEntry("Bow Draw Indicator", config.misc::bowDrawIndicatorEnabled,

@@ -4,7 +4,6 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
-import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -42,10 +41,14 @@ import org.joml.Vector3f;
 import org.joml.Vector4f;
 
 /**
- * The Hellion Shield of the Inferno Demonlord and its demons (Quazii, Typhoeus) as text on the bodies themselves:
- * the attunement and the dagger hits left. Hypixel writes both on a stand beside each body. The text reads that stand
- * and takes the body's interpolated position when the frame is extracted, so it neither lags nor stutters behind
- * a stand that only moves with the server's ticks.
+ * The Hellion Shield of every Inferno Demonlord and its demons (Quazii, Typhoeus) near the player as text on the bodies
+ * themselves: the attunement and the dagger hits left. Hypixel writes both on a stand beside each body. The text reads
+ * that stand and takes the body's interpolated position when the frame is extracted, so it neither lags nor stutters
+ * behind a stand that only moves with the server's ticks.
+ *
+ * <p>Whose boss it is does not matter: since Hypixel dropped the "Spawned by" stand there is no telling, and a boss
+ * next to ours is as good to read. Bosses and demons are tracked well beyond the text's range, so a demon phase is seen
+ * from its first demon to its last.
  *
  * <p>It is drawn in the HUD at the projected position of the body. Text in the world is sorted among the entities,
  * so particles, fire and water drawn after it painted over parts of it; the HUD comes last, nothing covers it.
@@ -54,18 +57,23 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     public static final BlazeSlayerFeature INSTANCE = new BlazeSlayerFeature();
 
     private static final RenderStateDataKey<List<Label>> LABELS = RenderStateDataKey.create(() -> "kung:blaze-attunement");
+    /** Mobs are tracked out to here. */
     private static final double SEARCH_RANGE = 48.0;
+    /** The text is drawn only on mobs this close to the player. */
+    private static final double LABEL_RANGE = 10.0;
     /** A body's stands hover in its column; the stand may trail a teleport by a tick, so the column is generous. */
     private static final double COLUMN_RANGE = 2.5;
     private static final double STAND_BELOW = 1.5;
     private static final double STAND_ABOVE = 5.0;
-    /** Demons spawn where the boss stood; anything further from its last spot and from us is another fight. */
-    private static final double DEMON_RANGE = 40.0;
     /**
      * The stand that names a body is spawned right after it, so its id lies next to the body's. A plain Blaze beside
      * the boss can have the boss's stand in its column, but never in its id range.
      */
     private static final int MAX_NAME_STAND_GAP = 40;
+    /** Demons spawn where the boss stood; they belong to the fight whose boss was last seen closest. */
+    private static final double DEMON_RANGE = 40.0;
+    /** What a boss held before its demons is kept this long after it was last seen. */
+    private static final long FIGHT_MEMORY_MILLIS = 120_000L;
     /** A stand that blinks away for a tick (the body teleported) must not blink the text. */
     private static final long TAG_GRACE_MILLIS = 500L;
     /** Share of the body's height the text sits at. */
@@ -78,18 +86,12 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     private static final long FRAME_MAX_AGE_NANOS = 150_000_000L;
 
     private final Map<Integer, Actor> actors = new HashMap<>();
+    /** One per boss body: what the boss held before its demons came, and where its demons are in the fight. */
+    private final Map<Integer, Fight> fights = new HashMap<>();
     /** Bosses we cocooned: the body can outlive the fight, and the next boss spawns beside it. */
     private final Set<Integer> cocooned = new HashSet<>();
-    private final Set<String> skipLogged = new HashSet<>();
     private final Map<Integer, BlazeShield.Kind> claimed = new HashMap<>();
-    private BlazeShield.Reading bossMemory;
-    /** The boss's body: it returns from the demon phase under the same id, possibly before its name stand does. */
-    private int bossBodyId = -1;
-    private Vec3 anchor;
-    private boolean demonsSeen;
-    private boolean returnPending;
     private boolean projectionChecked;
-    private long spawnMessageMillis;
     private Frame frame = Frame.EMPTY;
 
     private BlazeSlayerFeature() {
@@ -114,64 +116,64 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     }
 
     private void observeMessage(String rawMessage) {
-        if (!isEnabled()) {
+        Minecraft client = Minecraft.getInstance();
+        if (!isEnabled() || client.player == null) {
             return;
         }
 
         String message = clean(rawMessage);
-        if (BlazeShield.isSpawnMessage(message)) {
-            forget();
-            spawnMessageMillis = System.currentTimeMillis();
-            KungDebugRecorder.event("blaze", "spawn message");
-        } else if (message.contains("cocooned your slayer boss")) {
+        if (message.contains("cocooned your slayer boss")) {
             // The cocoon ends the fight like a kill, but its body can linger beside the boss that spawns next.
-            cocooned.addAll(actors.keySet());
-            forget();
-            spawnMessageMillis = 0L;
-            KungDebugRecorder.event("blaze", "cocooned");
-        } else if (isEndMessage(message)) {
-            // A cocooned boss completes its quest only after the next boss spawned; the sidebar keeps the fight on.
-            forget();
-            spawnMessageMillis = 0L;
-        } else {
-            BlazeShield.Attunement required = BlazeShield.strikeRequirement(message);
-            for (Actor actor : actors.values()) {
-                if (required != null && actor.returning != null) {
-                    actor.returning.strike(required);
-                    KungDebugRecorder.event("blaze", "strike wants " + required + " while holding");
-                }
+            Actor boss = nearestBoss(client, false);
+            if (boss != null) {
+                cocooned.add(boss.bodyId);
+                actors.remove(boss.bodyId);
+                fights.remove(boss.bodyId);
             }
+            KungDebugRecorder.event("blaze", "cocooned");
+            return;
+        }
+
+        BlazeShield.Attunement required = BlazeShield.strikeRequirement(message);
+        Actor boss = required == null ? null : nearestBoss(client, true);
+        if (boss != null) {
+            boss.returning.strike(required);
+            KungDebugRecorder.event("blaze", "strike wants " + required + " while holding");
         }
     }
 
-    private static boolean isEndMessage(String message) {
-        return message.contains("slayer quest complete")
-            || message.contains("slayer quest failed")
-            || message.contains("slayer boss slain")
-            || message.contains("boss slain")
-            || message.contains("nice! slayer boss");
+    /** The boss in text range closest to the player; with {@code returningOnly} only one that is back from its demons. */
+    private Actor nearestBoss(Minecraft client, boolean returningOnly) {
+        Actor best = null;
+        double bestDistance = LABEL_RANGE * LABEL_RANGE;
+        for (Actor actor : actors.values()) {
+            Entity body = client.level.getEntity(actor.bodyId);
+            if (actor.kind != BlazeShield.Kind.BOSS || body == null || (returningOnly && actor.returning == null)) {
+                continue;
+            }
+            double distance = client.player.distanceToSqr(body);
+            if (distance <= bestDistance) {
+                best = actor;
+                bestDistance = distance;
+            }
+        }
+        return best;
     }
 
-    private void forget() {
+    private void clear() {
         actors.clear();
+        fights.clear();
+        cocooned.clear();
         claimed.clear();
-        skipLogged.clear();
-        bossBodyId = -1;
-        bossMemory = null;
-        anchor = null;
-        demonsSeen = false;
-        returnPending = false;
         projectionChecked = false;
+        frame = Frame.EMPTY;
     }
 
     private void tick(Minecraft client) {
         if (!isEnabled() || client.level == null || client.player == null) {
-            if (!actors.isEmpty() || bossMemory != null) {
-                forget();
+            if (!actors.isEmpty() || !fights.isEmpty()) {
+                clear();
             }
-            cocooned.clear();
-            spawnMessageMillis = 0L;
-            frame = Frame.EMPTY;
             return;
         }
 
@@ -179,6 +181,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         actors.values().removeIf(actor -> bodyOf(client, actor) == null);
         cocooned.removeIf(id -> client.level.getEntity(id) == null);
         claimed.keySet().removeIf(id -> client.level.getEntity(id) == null);
+        fights.values().removeIf(fight -> now - fight.lastSeenMillis > FIGHT_MEMORY_MILLIS);
 
         List<ArmorStand> stands = new ArrayList<>();
         List<Entity> bodies = new ArrayList<>();
@@ -192,87 +195,59 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
                 bodies.add(entity);
             }
         }
+        bind(bodies, stands, now);
 
-        // Once our boss was seen the fight is on, whatever the sidebar says while the demons are out.
-        boolean fight = anchor != null
-            || TarantulaHelperFeature.fightIsOn(HypixelInstanceTracker.INSTANCE.sidebarLines(), sinceSpawn(now));
-        bind(client, bodies, stands, fight, now);
-
-        int demons = 0;
-        Actor boss = null;
+        for (Fight fight : fights.values()) {
+            fight.demons = 0;
+        }
         for (Actor actor : actors.values()) {
             Entity body = bodyOf(client, actor);
             if (body == null) {
                 continue;
             }
             pickCarrier(client, actor, body, stands, now);
-            if (actor.kind == BlazeShield.Kind.DEMON) {
-                demons++;
+            if (actor.fight == null) {
+                continue;
+            }
+            if (actor.kind == BlazeShield.Kind.BOSS) {
+                actor.fight.lastPos = body.position();
+                actor.fight.lastSeenMillis = now;
             } else {
-                boss = actor;
-                anchor = body.position();
+                actor.fight.demons++;
             }
         }
 
-        trackDemonPhase(boss, demons, now);
-        remember(client, boss, demons);
+        for (Fight fight : fights.values()) {
+            trackDemonPhase(fight, now);
+        }
+        for (Actor actor : actors.values()) {
+            remember(client.level, actor);
+        }
     }
 
-    private void bind(Minecraft client, List<Entity> bodies, List<ArmorStand> stands, boolean fight, long now) {
-        String me = client.player.getName().getString();
-        Vec3 around = anchor != null ? anchor : client.player.position();
-        Map<String, Candidate> untagged = new HashMap<>();
+    private void bind(List<Entity> bodies, List<ArmorStand> stands, long now) {
         for (Entity body : bodies) {
             if (actors.containsKey(body.getId()) || cocooned.contains(body.getId())) {
                 continue;
             }
             Candidate candidate = analyse(body, stands);
-            if (candidate == null || hasActor(candidate.slot())) {
-                continue;
+            if (candidate != null) {
+                add(candidate, now);
             }
-
-            if (candidate.owner() != null) {
-                if (candidate.owner().equalsIgnoreCase(me)) {
-                    add(candidate, "tagged", now);
-                } else {
-                    skip(candidate, "owned by " + candidate.owner());
-                }
-                continue;
-            }
-            // Hypixel dropped the "Spawned by" stand: while our fight is on, the nearest untagged boss is ours.
-            double distance = body.position().distanceToSqr(around);
-            double nearUs = client.player.distanceToSqr(body);
-            if (!fight) {
-                skip(candidate, "no fight of ours");
-            } else if (candidate.kind() == BlazeShield.Kind.DEMON
-                && Math.min(distance, nearUs) > DEMON_RANGE * DEMON_RANGE) {
-                skip(candidate, "too far from the boss and from us");
-            } else {
-                Candidate rival = untagged.get(candidate.slot());
-                if (rival == null || distance < rival.body().position().distanceToSqr(around)) {
-                    untagged.put(candidate.slot(), candidate);
-                }
-            }
-        }
-
-        for (Candidate candidate : untagged.values()) {
-            add(candidate, "adopted", now);
         }
     }
 
     /**
      * What the stands around a body say it is. The stand that names it wins by the id nearest to the body: stands
      * of one mob are spawned together, while the leftovers of the demons that just died sit in the same column.
-     * The boss is a Blaze and the demons are not, which keeps every other Blaze out. The boss we already had may
+     * The boss is a Blaze and the demons are not, which keeps every other Blaze out. A boss we already knew may
      * come back before its name stand does, and then its shield stand is proof enough.
      */
     private Candidate analyse(Entity body, List<ArmorStand> stands) {
         BlazeShield.Kind kind = null;
         String namedText = null;
-        String owner = null;
         boolean shield = false;
         int namedGap = MAX_NAME_STAND_GAP + 1;
-        int ownerGap = MAX_NAME_STAND_GAP + 1;
         List<String> names = new ArrayList<>();
         for (ArmorStand stand : stands) {
             if (!inColumn(stand, body)) {
@@ -286,46 +261,56 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
                 kind = BlazeShield.kindOf(text);
                 namedText = text;
             }
-            if (BlazeShield.ownerOf(text) != null && gap < ownerGap) {
-                ownerGap = gap;
-                owner = BlazeShield.ownerOf(text);
-            }
             shield |= BlazeShield.parse(text) != null;
         }
 
         String slot;
         if (kind != null && (kind == BlazeShield.Kind.BOSS) == body instanceof Blaze) {
             slot = kind == BlazeShield.Kind.BOSS ? "boss" : BlazeShield.slotOf(namedText);
-        } else if (shield && body.getId() == bossBodyId) {
+        } else if (shield && fights.containsKey(body.getId())) {
             kind = BlazeShield.Kind.BOSS;
             slot = "boss";
         } else {
             return null;
         }
-        return new Candidate(body, kind, slot, owner, names.size() > 6 ? names.subList(0, 6) : names);
+        return new Candidate(body, kind, slot, names.size() > 6 ? names.subList(0, 6) : names);
     }
 
-    private void add(Candidate candidate, String how, long now) {
+    private void add(Candidate candidate, long now) {
         Entity body = candidate.body();
         Actor actor = new Actor(body.getId(), candidate.kind(), candidate.slot());
-        actors.put(body.getId(), actor);
         if (actor.kind == BlazeShield.Kind.BOSS) {
-            bossBodyId = body.getId();
+            Fight fight = fights.computeIfAbsent(body.getId(), Fight::new);
+            fight.lastPos = body.position();
+            fight.lastSeenMillis = now;
+            actor.fight = fight;
+            if (fight.memory != null && (fight.demonsSeen || fight.returnPending)) {
+                actor.returning = new BlazeShield.Return(fight.memory, now);
+                fight.returnPending = false;
+            }
+        } else {
+            actor.fight = nearestFight(body.position());
+            if (actor.fight != null) {
+                actor.fight.demonsSeen = true;
+            }
         }
-        if (actor.kind == BlazeShield.Kind.BOSS && bossMemory != null && (demonsSeen || returnPending)) {
-            actor.returning = new BlazeShield.Return(bossMemory, now);
-            returnPending = false;
-        }
-        KungDebugRecorder.event("blaze", "bound " + candidate.slot() + " id=" + body.getId() + " " + how + " type="
+        actors.put(body.getId(), actor);
+        KungDebugRecorder.event("blaze", "bound " + candidate.slot() + " id=" + body.getId() + " type="
             + body.getType().toShortString() + " stands=" + candidate.names()
-            + (actor.returning != null ? " holding " + bossMemory : ""));
+            + (actor.returning != null ? " holding " + actor.fight.memory : ""));
     }
 
-    private void skip(Candidate candidate, String reason) {
-        if (skipLogged.add(candidate.body().getId() + reason)) {
-            KungDebugRecorder.event("blaze", "skipped " + candidate.slot() + " id=" + candidate.body().getId() + ": "
-                + reason + " stands=" + candidate.names());
+    private Fight nearestFight(Vec3 at) {
+        Fight best = null;
+        double bestDistance = DEMON_RANGE * DEMON_RANGE;
+        for (Fight fight : fights.values()) {
+            double distance = fight.lastPos == null ? Double.MAX_VALUE : fight.lastPos.distanceToSqr(at);
+            if (distance <= bestDistance) {
+                best = fight;
+                bestDistance = distance;
+            }
         }
+        return best;
     }
 
     /**
@@ -336,10 +321,6 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     private boolean claimedByOther(ArmorStand stand, Actor actor) {
         BlazeShield.Kind owner = claimed.get(stand.getId());
         return owner != null && owner != actor.kind;
-    }
-
-    private boolean hasActor(String slot) {
-        return actors.values().stream().anyMatch(actor -> actor.slot.equals(slot));
     }
 
     /**
@@ -377,36 +358,36 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         }
     }
 
-    private void trackDemonPhase(Actor boss, int demons, long now) {
-        if (demons > 0) {
-            demonsSeen = true;
-        } else if (demonsSeen) {
-            demonsSeen = false;
-            returnPending = true;
-            KungDebugRecorder.event("blaze", "demons gone, boss memory=" + bossMemory);
+    private void trackDemonPhase(Fight fight, long now) {
+        Actor boss = actors.get(fight.bossId);
+        if (fight.demons > 0) {
+            fight.demonsSeen = true;
+        } else if (fight.demonsSeen) {
+            fight.demonsSeen = false;
+            fight.returnPending = true;
+            KungDebugRecorder.event("blaze", "demons gone, boss memory=" + fight.memory);
         }
 
         if (boss != null && boss.returning != null && boss.returning.released()) {
             boss.returning = null;
             KungDebugRecorder.event("blaze", "boss tag fresh again: " + boss.reading);
         }
-        if (returnPending && boss != null && bossMemory != null) {
+        if (fight.returnPending && boss != null && fight.memory != null) {
             if (boss.returning == null) {
-                boss.returning = new BlazeShield.Return(bossMemory, now);
-                KungDebugRecorder.event("blaze", "boss back, holding " + bossMemory + " while the tag reads "
+                boss.returning = new BlazeShield.Return(fight.memory, now);
+                KungDebugRecorder.event("blaze", "boss back, holding " + fight.memory + " while the tag reads "
                     + boss.reading);
             }
-            returnPending = false;
+            fight.returnPending = false;
         }
     }
 
     /** The boss's own last shield: what it shows again once the demons are gone while its tag lags. */
-    private void remember(Minecraft client, Actor boss, int demons) {
-        for (Actor actor : actors.values()) {
-            BlazeShield.Reading tag = readTag(client.level, actor);
-            if (tag != null && actor == boss && boss.returning == null && demons == 0) {
-                bossMemory = tag;
-            }
+    private void remember(ClientLevel level, Actor actor) {
+        BlazeShield.Reading tag = readTag(level, actor);
+        if (tag != null && actor.kind == BlazeShield.Kind.BOSS && actor.fight != null && actor.returning == null
+            && actor.fight.demons == 0) {
+            actor.fight.memory = tag;
         }
     }
 
@@ -431,7 +412,8 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
 
     private void extract(LevelExtractionContext context) {
         List<Label> labels = new ArrayList<>();
-        if (isEnabled() && !actors.isEmpty()) {
+        Minecraft client = Minecraft.getInstance();
+        if (isEnabled() && !actors.isEmpty() && client.player != null) {
             var camera = context.camera();
             Vec3 eye = camera.position();
             float partialTick = camera.getCameraEntityPartialTicks(context.deltaTracker());
@@ -439,7 +421,8 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
             long now = System.currentTimeMillis();
             for (Actor actor : actors.values()) {
                 Entity body = context.level().getEntity(actor.bodyId);
-                if (body == null || body.isRemoved() || !body.isAlive()) {
+                if (body == null || body.isRemoved() || !body.isAlive()
+                    || client.player.distanceToSqr(body) > LABEL_RANGE * LABEL_RANGE) {
                     continue;
                 }
 
@@ -581,10 +564,6 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         return body == null || !body.isAlive() || client.player.distanceToSqr(body) > range ? null : body;
     }
 
-    private long sinceSpawn(long now) {
-        return spawnMessageMillis == 0L ? -1L : now - spawnMessageMillis;
-    }
-
     private static boolean isBodyType(Entity entity) {
         return entity instanceof Blaze || entity instanceof WitherSkeleton || entity instanceof ZombifiedPiglin;
     }
@@ -612,8 +591,10 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     private static final class Actor {
         final int bodyId;
         final BlazeShield.Kind kind;
-        /** "boss", "quazii" or "typhoeus": one actor each. */
+        /** "boss", "quazii" or "typhoeus", for the trace. */
         final String slot;
+        /** The boss's own fight, or the fight whose boss was closest when this demon appeared; null when none was seen. */
+        Fight fight;
         int carrierId = -1;
         long carrierSeenMillis;
         String tagText = "";
@@ -627,7 +608,23 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         }
     }
 
-    private record Candidate(Entity body, BlazeShield.Kind kind, String slot, String owner, List<String> names) {
+    /** A boss with its demons: what it held before they came and when they are all gone. */
+    private static final class Fight {
+        Vec3 lastPos;
+        long lastSeenMillis;
+        BlazeShield.Reading memory;
+        boolean demonsSeen;
+        boolean returnPending;
+        /** Demons alive in range this tick. */
+        int demons;
+        final int bossId;
+
+        Fight(int bossId) {
+            this.bossId = bossId;
+        }
+    }
+
+    private record Candidate(Entity body, BlazeShield.Kind kind, String slot, List<String> names) {
     }
 
     private record Label(double x, double y, double z, float scale, Component text) {

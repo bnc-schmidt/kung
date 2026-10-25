@@ -36,7 +36,6 @@ final class BlazeShield {
     /** "ASHEN ♨8 04:19": a bare number right after the attunement, not a health value (7k, 7❤) or the timer. */
     private static final Pattern BARE_NUMBER = Pattern.compile("^[^\\p{L}\\d]*(\\d{1,3})(?![\\d.,kKmMbB❤%/:])");
     private static final Pattern STRIKE = Pattern.compile("strike using the (ashen|spirit|crystal|auric) attunement");
-    private static final Pattern OWNER =Pattern.compile("(?i)spawned by:?\\s*(\\w{1,16})");
 
     private BlazeShield() {
     }
@@ -70,12 +69,6 @@ final class BlazeShield {
         return strike.find() ? Attunement.valueOf(strike.group(1).toUpperCase(Locale.ROOT)) : null;
     }
 
-    /** "Spawned by: Name" -> "Name"; null for every other stand. Hypixel dropped this stand on 2026-10-18. */
-    static String ownerOf(String name) {
-        Matcher owner = OWNER.matcher(name);
-        return owner.find() ? owner.group(1) : null;
-    }
-
     static Kind kindOf(String name) {
         String lower = plainLetters(name);
         if (lower.contains("inferno demonlord")) {
@@ -103,12 +96,6 @@ final class BlazeShield {
             }
         }
         return plain.toString();
-    }
-
-    /** "slayer boss! inferno demonlord iv spawned!" (cleaned); the mini boss line says "slayer miniboss!". */
-    static boolean isSpawnMessage(String message) {
-        return message.startsWith("slayer boss!") && message.contains("spawned")
-            && (message.contains("demonlord") || message.contains("inferno"));
     }
 
     /**
