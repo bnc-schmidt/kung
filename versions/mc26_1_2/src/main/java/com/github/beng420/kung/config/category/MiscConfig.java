@@ -82,6 +82,21 @@ public final class MiscConfig extends ConfigCategory {
     private boolean derpyGuildCommandsEnabled = true;
     private boolean derpyAllChatCommandsEnabled = false;
     private boolean derpyPrivateCommandsEnabled = false;
+    private boolean yotpChatCommandEnabled = true;
+    private boolean yotpPartyCommandsEnabled = true;
+    private boolean yotpGuildCommandsEnabled = true;
+    private boolean yotpAllChatCommandsEnabled = false;
+    private boolean yotpPrivateCommandsEnabled = false;
+    private boolean yotwChatCommandEnabled = true;
+    private boolean yotwPartyCommandsEnabled = true;
+    private boolean yotwGuildCommandsEnabled = true;
+    private boolean yotwAllChatCommandsEnabled = false;
+    private boolean yotwPrivateCommandsEnabled = false;
+    private boolean yotsChatCommandEnabled = true;
+    private boolean yotsPartyCommandsEnabled = true;
+    private boolean yotsGuildCommandsEnabled = true;
+    private boolean yotsAllChatCommandsEnabled = false;
+    private boolean yotsPrivateCommandsEnabled = false;
 
     // Loadouts & Superpairs
     private boolean loadoutsAutoCloseEnabled = false;
@@ -382,6 +397,36 @@ public final class MiscConfig extends ConfigCategory {
     public void setDerpyAllChatCommandsEnabled(boolean value) { derpyAllChatCommandsEnabled = value; save(); }
     public boolean derpyPrivateCommandsEnabled() { return derpyPrivateCommandsEnabled; }
     public void setDerpyPrivateCommandsEnabled(boolean value) { derpyPrivateCommandsEnabled = value; save(); }
+    public boolean yotpChatCommandEnabled() { return yotpChatCommandEnabled; }
+    public void setYotpChatCommandEnabled(boolean value) { yotpChatCommandEnabled = value; save(); }
+    public boolean yotpPartyCommandsEnabled() { return yotpPartyCommandsEnabled; }
+    public void setYotpPartyCommandsEnabled(boolean value) { yotpPartyCommandsEnabled = value; save(); }
+    public boolean yotpGuildCommandsEnabled() { return yotpGuildCommandsEnabled; }
+    public void setYotpGuildCommandsEnabled(boolean value) { yotpGuildCommandsEnabled = value; save(); }
+    public boolean yotpAllChatCommandsEnabled() { return yotpAllChatCommandsEnabled; }
+    public void setYotpAllChatCommandsEnabled(boolean value) { yotpAllChatCommandsEnabled = value; save(); }
+    public boolean yotpPrivateCommandsEnabled() { return yotpPrivateCommandsEnabled; }
+    public void setYotpPrivateCommandsEnabled(boolean value) { yotpPrivateCommandsEnabled = value; save(); }
+    public boolean yotwChatCommandEnabled() { return yotwChatCommandEnabled; }
+    public void setYotwChatCommandEnabled(boolean value) { yotwChatCommandEnabled = value; save(); }
+    public boolean yotwPartyCommandsEnabled() { return yotwPartyCommandsEnabled; }
+    public void setYotwPartyCommandsEnabled(boolean value) { yotwPartyCommandsEnabled = value; save(); }
+    public boolean yotwGuildCommandsEnabled() { return yotwGuildCommandsEnabled; }
+    public void setYotwGuildCommandsEnabled(boolean value) { yotwGuildCommandsEnabled = value; save(); }
+    public boolean yotwAllChatCommandsEnabled() { return yotwAllChatCommandsEnabled; }
+    public void setYotwAllChatCommandsEnabled(boolean value) { yotwAllChatCommandsEnabled = value; save(); }
+    public boolean yotwPrivateCommandsEnabled() { return yotwPrivateCommandsEnabled; }
+    public void setYotwPrivateCommandsEnabled(boolean value) { yotwPrivateCommandsEnabled = value; save(); }
+    public boolean yotsChatCommandEnabled() { return yotsChatCommandEnabled; }
+    public void setYotsChatCommandEnabled(boolean value) { yotsChatCommandEnabled = value; save(); }
+    public boolean yotsPartyCommandsEnabled() { return yotsPartyCommandsEnabled; }
+    public void setYotsPartyCommandsEnabled(boolean value) { yotsPartyCommandsEnabled = value; save(); }
+    public boolean yotsGuildCommandsEnabled() { return yotsGuildCommandsEnabled; }
+    public void setYotsGuildCommandsEnabled(boolean value) { yotsGuildCommandsEnabled = value; save(); }
+    public boolean yotsAllChatCommandsEnabled() { return yotsAllChatCommandsEnabled; }
+    public void setYotsAllChatCommandsEnabled(boolean value) { yotsAllChatCommandsEnabled = value; save(); }
+    public boolean yotsPrivateCommandsEnabled() { return yotsPrivateCommandsEnabled; }
+    public void setYotsPrivateCommandsEnabled(boolean value) { yotsPrivateCommandsEnabled = value; save(); }
     public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
     public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled && ca50PartyCommandsEnabled; }
     public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled && ca50GuildCommandsEnabled; }

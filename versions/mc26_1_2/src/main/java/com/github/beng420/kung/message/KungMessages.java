@@ -17,6 +17,8 @@ public final class KungMessages {
         "(?i)\\b(?:red|orange|green|blue|purple)(?: dragon\\b|(?=:))"
             + "|\\b(?:ice spray|sprayed)\\b"
             + "|\\b(?:enabled|disabled|connected|disconnected|true|false|yes|no)\\b"
+            // A version ("v0.6.3", "0.6.3") is one value: the number rule skips the 0 after the v and would colour only "6.3".
+            + "|\\bv\\d+(?:\\.\\d+)+\\b|\\b\\d+(?:\\.\\d+){2,3}\\b"
             + "|(?<![\\w])[-+]?\\d+(?:[.,:]\\d+)*(?:ms|s|t|%|x)?(?![\\w])"
             + "|\\s\\|\\s");
     public enum Type {

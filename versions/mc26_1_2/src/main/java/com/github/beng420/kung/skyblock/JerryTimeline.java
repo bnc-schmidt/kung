@@ -15,7 +15,7 @@ import java.util.Locale;
  */
 final class JerryTimeline {
     private static final long SB_EPOCH_MILLIS = 1_560_275_700_000L;
-    private static final long SB_YEAR_MILLIS = 446_400_000L;
+    static final long SB_YEAR_MILLIS = 446_400_000L;
     /** The election's winner takes office on Late Spring 27: 88 SkyBlock days of 20 minutes into the year. */
     private static final long TAKE_OFFICE_OFFSET_MILLIS = 88L * 1_200_000L;
     /** Readings come from a countdown in minutes, so a slot grid a few minutes off the term start still counts as aligned. */
@@ -44,7 +44,7 @@ final class JerryTimeline {
         return yearStartMillis(electionYear + 2) + TAKE_OFFICE_OFFSET_MILLIS;
     }
 
-    private static long yearStartMillis(long year) {
+    static long yearStartMillis(long year) {
         return SB_EPOCH_MILLIS + (year - 1) * SB_YEAR_MILLIS;
     }
 

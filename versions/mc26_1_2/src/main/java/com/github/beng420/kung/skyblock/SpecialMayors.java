@@ -78,7 +78,7 @@ public final class SpecialMayors {
         return hours >= 1 ? "in " + hours + "h" : "in <1h";
     }
 
-    private static String date(long millis, ZoneId zone) {
+    static String date(long millis, ZoneId zone) {
         return DATE.format(Instant.ofEpochMilli(millis).atZone(zone));
     }
 }

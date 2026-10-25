@@ -44,11 +44,39 @@ public final class KungMessagesTest {
     }
 
     @Test
+    public void aVersionIsOneColouredValueNotJustItsLaterDigits() {
+        String text = "Kung is up to date (v0.6.3, latest: v0.6.3). Update 0.6.4 is out; Time: 5.2s, 1,234 items, 2 x";
+        Component message = KungMessages.info("Updater", text);
+        assertEquals("[Kung Updater] " + text, message.getString());
+        // Every character of "v0.6.3" has the value colour: the v, the 0 and the dots too.
+        for (int start : new int[] {message.getString().indexOf("v0.6.3"), message.getString().lastIndexOf("v0.6.3")}) {
+            for (int offset = 0; offset < "v0.6.3".length(); offset++) {
+                assertEquals("offset " + offset, 0xFFCC55, colorAtIndex(message, start + offset));
+            }
+        }
+        assertEquals(0xFFCC55, colorAt(message, "0.6.4"));
+        assertEquals(0xAAAAAA, colorAt(message, "up to date"));
+        assertEquals(0xAAAAAA, colorAt(message, "latest:"));
+        // Other numbers keep their old behaviour.
+        assertEquals(0xFFCC55, colorAt(message, "5.2s"));
+        assertEquals(0xFFCC55, colorAt(message, "1,234"));
+    }
+
+    @Test
     public void sharedColorsPreserveCommandsPathsAndSeverity() {
         String text = "Trace saved: C:\\profiles\\Dungeons 26.1.2\\logs\\kung.log | /kung hud";
         assertEquals(text, KungMessages.detail(text).getString());
         assertEquals(0xFF5555, colorAt(KungMessages.error("Test", "enabled 42"), "enabled"));
         assertEquals(0xFFFF55, colorAt(KungMessages.warning("Test", "3"), "3"));
+    }
+
+    private static int colorAtIndex(Component component, int index) {
+        List<Integer> colors = new ArrayList<>();
+        component.visit((style, text) -> {
+            for (int i = 0; i < text.length(); i++) colors.add(style.getColor().getValue());
+            return Optional.empty();
+        }, Style.EMPTY);
+        return colors.get(index);
     }
 
     private static int colorAt(Component component, String word) {

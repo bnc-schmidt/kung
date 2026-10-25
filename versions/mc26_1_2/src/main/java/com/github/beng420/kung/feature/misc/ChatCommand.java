@@ -4,6 +4,7 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
 import com.github.beng420.kung.skyblock.SpecialMayors;
+import com.github.beng420.kung.skyblock.ZodiacEvents;
 import com.github.beng420.kung.util.CatacombsAverageCalculator;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.Goal;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -18,7 +19,9 @@ import net.minecraft.client.Minecraft;
 enum ChatCommand {
     C50(Goal.CATACOMBS_50), CA50(Goal.CLASS_AVERAGE_50), TPS(null),
     // More names for one command: add them after the goal, e.g. SCORPIUS answers to !scorp and !scorpius.
-    JERRY(null, "jerry"), SCORPIUS(null, "scorp", "scorpius"), DERPY(null, "derpy");
+    JERRY(null, "jerry"), SCORPIUS(null, "scorp", "scorpius"), DERPY(null, "derpy"),
+    // The zodiac events: Year of the Pig, Witch and Seal.
+    YOTP(null, "yotp"), YOTW(null, "yotw"), YOTS(null, "yots");
 
     private static final CatacombsAverageCalculator CALCULATOR = new CatacombsAverageCalculator();
     private final Goal goal;
@@ -34,6 +37,15 @@ enum ChatCommand {
     String target(Matcher match) { return goal == null ? null : match.group("name"); }
 
     private boolean isMayorCommand() { return this == JERRY || this == SCORPIUS || this == DERPY; }
+
+    private ZodiacEvents.Event zodiac() {
+        return switch (this) {
+            case YOTP -> ZodiacEvents.Event.PIG;
+            case YOTW -> ZodiacEvents.Event.WITCH;
+            case YOTS -> ZodiacEvents.Event.SEAL;
+            default -> null;
+        };
+    }
 
     private SpecialMayors.Special special() {
         return switch (this) {
@@ -82,12 +94,34 @@ enum ChatCommand {
                 case ALL -> config.derpyAllChatCommandsEnabled();
                 case PRIVATE -> config.derpyPrivateCommandsEnabled();
             };
+            case YOTP -> config.yotpChatCommandEnabled() && switch (channel) {
+                case PARTY -> config.yotpPartyCommandsEnabled();
+                case GUILD -> config.yotpGuildCommandsEnabled();
+                case ALL -> config.yotpAllChatCommandsEnabled();
+                case PRIVATE -> config.yotpPrivateCommandsEnabled();
+            };
+            case YOTW -> config.yotwChatCommandEnabled() && switch (channel) {
+                case PARTY -> config.yotwPartyCommandsEnabled();
+                case GUILD -> config.yotwGuildCommandsEnabled();
+                case ALL -> config.yotwAllChatCommandsEnabled();
+                case PRIVATE -> config.yotwPrivateCommandsEnabled();
+            };
+            case YOTS -> config.yotsChatCommandEnabled() && switch (channel) {
+                case PARTY -> config.yotsPartyCommandsEnabled();
+                case GUILD -> config.yotsGuildCommandsEnabled();
+                case ALL -> config.yotsAllChatCommandsEnabled();
+                case PRIVATE -> config.yotsPrivateCommandsEnabled();
+            };
         };
     }
 
     void execute(Minecraft client, ChatChannel channel, String targetName, Consumer<String> responseConsumer) {
         if (this == TPS) {
             responseConsumer.accept(ServerTpsTracker.INSTANCE.snapshot().message());
+            return;
+        }
+        if (zodiac() != null) {
+            responseConsumer.accept(ZodiacEvents.answer(zodiac(), System.currentTimeMillis(), KungTime.zone()));
             return;
         }
         if (isMayorCommand()) {

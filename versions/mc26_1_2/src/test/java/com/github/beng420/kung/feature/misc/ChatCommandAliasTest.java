@@ -11,6 +11,11 @@ public class ChatCommandAliasTest {
         return command.pattern.matcher(body).matches();
     }
 
+    /** For tests of other packages: does the named command's pattern match the chat line? */
+    public static boolean matches(String body, String commandName) {
+        return matches(ChatCommand.valueOf(commandName), body);
+    }
+
     @Test
     public void everyNameOfACommandTriggersIt() {
         assertTrue(matches(ChatCommand.JERRY, "!jerry"));
@@ -36,6 +41,20 @@ public class ChatCommandAliasTest {
         var mayor = ChatCommand.DERPY.pattern.matcher("!derpy");
         assertTrue(mayor.matches());
         assertNull(ChatCommand.DERPY.target(mayor));
+    }
+
+    @Test
+    public void aReplyWaitsMoreThanHalfASecondAfterTheCommandAndAfterThePreviousReply() {
+        // Hypixel's limit is one message per 500 ms: the delay must clear it, and so must the pause between replies.
+        assertTrue(ChatCommandsFeature.REPLY_DELAY_MILLIS > 500);
+        long arrived = 10_000;
+        long ready = arrived + ChatCommandsFeature.REPLY_DELAY_MILLIS;
+        assertFalse(ChatCommandsFeature.replyDue(arrived, ready, 0));
+        assertFalse(ChatCommandsFeature.replyDue(ready - 1, ready, 0));
+        assertTrue(ChatCommandsFeature.replyDue(ready, ready, 0));
+        // A second reply queued at the same moment still waits for the pause after the first one.
+        assertFalse(ChatCommandsFeature.replyDue(ready + 100, ready, ready));
+        assertTrue(ChatCommandsFeature.replyDue(ready + 650, ready, ready));
     }
 
     @Test

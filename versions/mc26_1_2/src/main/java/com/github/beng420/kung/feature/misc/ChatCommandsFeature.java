@@ -36,6 +36,12 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         Pattern.compile("^\\[[0-9]{2}:[0-9]{2}:[0-9]{2}]\\s+");
     private static final Pattern USERNAME_PATTERN = Pattern.compile("\\b[A-Za-z0-9_]{3,16}\\b");
     private static final long SEND_INTERVAL_MILLIS = 650L;
+    /**
+     * Hypixel refuses a message sent less than half a second after your last one ("You can only send a message once
+     * every half second!"). When you type a command yourself, your own message is that last one, so a reply right
+     * after it was lost. Every reply waits this long after the command arrived, on top of the pause between replies.
+     */
+    static final long REPLY_DELAY_MILLIS = 600L;
     private static final long DUPLICATE_COMMAND_WINDOW_MILLIS = 1_200L;
     private static final int GUILD_RESOLVE_WAIT_TICKS = 45;
 
@@ -299,7 +305,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private static void queue(ChatChannel channel, String replyTarget, String message) {
-        PENDING_RESPONSES.add(new PendingResponse(channel, replyTarget, message));
+        PENDING_RESPONSES.add(new PendingResponse(channel, replyTarget, message, System.currentTimeMillis() + REPLY_DELAY_MILLIS));
     }
 
     private static void tick(Minecraft client) {
@@ -347,7 +353,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
             return;
         }
         long now = System.currentTimeMillis();
-        if (now - lastSendMillis < SEND_INTERVAL_MILLIS) {
+        if (!replyDue(now, PENDING_RESPONSES.peek().readyAtMillis(), lastSendMillis)) {
             return;
         }
         PendingResponse response = PENDING_RESPONSES.remove();
@@ -426,7 +432,12 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     private record ChatContext(ChatChannel channel, String senderName, String message, String replyTarget) {
     }
 
-    private record PendingResponse(ChatChannel channel, String replyTarget, String message) {
+    /** A reply goes out once its own delay is over and the pause after the previous reply is too. */
+    static boolean replyDue(long nowMillis, long readyAtMillis, long lastSendMillis) {
+        return nowMillis >= readyAtMillis && nowMillis - lastSendMillis >= SEND_INTERVAL_MILLIS;
+    }
+
+    private record PendingResponse(ChatChannel channel, String replyTarget, String message, long readyAtMillis) {
     }
 
     private record PendingExecution(
