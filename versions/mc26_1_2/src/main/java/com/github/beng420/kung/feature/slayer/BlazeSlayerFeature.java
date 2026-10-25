@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -69,7 +70,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
      * The stand that names a body is spawned right after it, so its id lies next to the body's. A plain Blaze beside
      * the boss can have the boss's stand in its column, but never in its id range.
      */
-    private static final int MAX_NAME_STAND_GAP = 40;
+    private static final int MAX_NAME_STAND_GAP = 12;
     /** Demons spawn where the boss stood; they belong to the fight whose boss was last seen closest. */
     private static final double DEMON_RANGE = 40.0;
     /** What a boss held before its demons is kept this long after it was last seen. */
@@ -91,6 +92,8 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     /** Bosses we cocooned: the body can outlive the fight, and the next boss spawns beside it. */
     private final Set<Integer> cocooned = new HashSet<>();
     private final Map<Integer, BlazeShield.Kind> claimed = new HashMap<>();
+    /** Name stand -> the body it named. It stays while the body hides, so a Blaze that walks into the column is not it. */
+    private final Map<Integer, Integer> nameStandOwners = new HashMap<>();
     private boolean projectionChecked;
     private Frame frame = Frame.EMPTY;
 
@@ -165,6 +168,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         fights.clear();
         cocooned.clear();
         claimed.clear();
+        nameStandOwners.clear();
         projectionChecked = false;
         frame = Frame.EMPTY;
     }
@@ -181,6 +185,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         actors.values().removeIf(actor -> bodyOf(client, actor) == null);
         cocooned.removeIf(id -> client.level.getEntity(id) == null);
         claimed.keySet().removeIf(id -> client.level.getEntity(id) == null);
+        nameStandOwners.keySet().removeIf(id -> client.level.getEntity(id) == null);
         fights.values().removeIf(fight -> now - fight.lastSeenMillis > FIGHT_MEMORY_MILLIS);
 
         List<ArmorStand> stands = new ArrayList<>();
@@ -226,58 +231,82 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     }
 
     private void bind(List<Entity> bodies, List<ArmorStand> stands, long now) {
+        List<Candidate> candidates = new ArrayList<>();
         for (Entity body : bodies) {
             if (actors.containsKey(body.getId()) || cocooned.contains(body.getId())) {
                 continue;
             }
             Candidate candidate = analyse(body, stands);
             if (candidate != null) {
+                candidates.add(candidate);
+            }
+        }
+
+        // One name stand names one body: where two bodies stand in its column, the one whose id is next to it wins.
+        candidates.sort(Comparator.comparingInt(Candidate::gap));
+        for (Candidate candidate : candidates) {
+            Integer owner = candidate.nameStandId() == -1 ? null : nameStandOwners.get(candidate.nameStandId());
+            if (owner == null || owner == candidate.body().getId()) {
                 add(candidate, now);
             }
         }
     }
 
     /**
-     * What the stands around a body say it is. The stand that names it wins by the id nearest to the body: stands
-     * of one mob are spawned together, while the leftovers of the demons that just died sit in the same column.
-     * The boss is a Blaze and the demons are not, which keeps every other Blaze out. A boss we already knew may
-     * come back before its name stand does, and then its shield stand is proof enough.
+     * What the stands around a body say it is. Every slayer boss and every demon is a body with three stands spawned
+     * right after it: its name, its shield and "SLAYER BOSS" (a mini boss has "SLAYER MINIBOSS" there). So a body is one
+     * of ours only when its column holds the name of a boss or demon and a "SLAYER BOSS" stand, both with ids next to
+     * the body's, and no mini boss stand nearer. That keeps out every Blaze, Millennia-Aged Blaze and mini boss that
+     * merely stands in a column. The boss is a Blaze and the demons are not. A boss we already knew may come back
+     * before its stands do, and then its shield stand is proof enough.
      */
     private Candidate analyse(Entity body, List<ArmorStand> stands) {
         BlazeShield.Kind kind = null;
         String namedText = null;
+        int nameStandId = -1;
         boolean shield = false;
-        int namedGap = MAX_NAME_STAND_GAP + 1;
+        int nameGap = MAX_NAME_STAND_GAP + 1;
+        int bossGap = MAX_NAME_STAND_GAP + 1;
+        int miniGap = MAX_NAME_STAND_GAP + 1;
         List<String> names = new ArrayList<>();
         for (ArmorStand stand : stands) {
             if (!inColumn(stand, body)) {
                 continue;
             }
             String text = plain(entityName(stand));
-            names.add(text);
             int gap = Math.abs(stand.getId() - body.getId());
-            if (BlazeShield.kindOf(text) != null && gap < namedGap) {
-                namedGap = gap;
+            names.add(text + "@" + gap);
+            if (BlazeShield.kindOf(text) != null && gap < nameGap) {
+                nameGap = gap;
                 kind = BlazeShield.kindOf(text);
                 namedText = text;
+                nameStandId = stand.getId();
+            }
+            if (BlazeShield.isSlayerBossStand(text)) {
+                bossGap = Math.min(bossGap, gap);
+            } else if (BlazeShield.isMinibossStand(text)) {
+                miniGap = Math.min(miniGap, gap);
             }
             shield |= BlazeShield.parse(text) != null;
         }
 
-        String slot;
-        if (kind != null && (kind == BlazeShield.Kind.BOSS) == body instanceof Blaze) {
-            slot = kind == BlazeShield.Kind.BOSS ? "boss" : BlazeShield.slotOf(namedText);
-        } else if (shield && fights.containsKey(body.getId())) {
-            kind = BlazeShield.Kind.BOSS;
-            slot = "boss";
-        } else {
-            return null;
+        List<String> shown = names.size() > 8 ? names.subList(0, 8) : names;
+        boolean slayerBoss = bossGap <= MAX_NAME_STAND_GAP && bossGap < miniGap;
+        if (kind != null && slayerBoss && (kind == BlazeShield.Kind.BOSS) == body instanceof Blaze) {
+            String slot = kind == BlazeShield.Kind.BOSS ? "boss" : BlazeShield.slotOf(namedText);
+            return new Candidate(body, kind, slot, shown, nameStandId, nameGap);
         }
-        return new Candidate(body, kind, slot, names.size() > 6 ? names.subList(0, 6) : names);
+        if (shield && fights.containsKey(body.getId())) {
+            return new Candidate(body, BlazeShield.Kind.BOSS, "boss", shown, -1, 0);
+        }
+        return null;
     }
 
     private void add(Candidate candidate, long now) {
         Entity body = candidate.body();
+        if (candidate.nameStandId() != -1) {
+            nameStandOwners.putIfAbsent(candidate.nameStandId(), body.getId());
+        }
         Actor actor = new Actor(body.getId(), candidate.kind(), candidate.slot());
         if (actor.kind == BlazeShield.Kind.BOSS) {
             Fight fight = fights.computeIfAbsent(body.getId(), Fight::new);
@@ -624,7 +653,9 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         }
     }
 
-    private record Candidate(Entity body, BlazeShield.Kind kind, String slot, List<String> names) {
+    /** {@code gap} is the id distance between the body and its name stand, {@code nameStandId} -1 for a returning boss. */
+    private record Candidate(Entity body, BlazeShield.Kind kind, String slot, List<String> names, int nameStandId,
+                             int gap) {
     }
 
     private record Label(double x, double y, double z, float scale, Component text) {

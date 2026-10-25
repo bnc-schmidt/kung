@@ -36,6 +36,11 @@ public final class BlazeShieldTest {
         assertEquals("typhoeus", BlazeShield.slotOf("[Lv999] ⓉⓎⓅⒽⓄⒺⓊⓈ 10M/10M❤"));
         assertNull(BlazeShield.kindOf("[Lv201]  Smoldering Blaze 1.8M/2M❤"));
         assertNull(BlazeShield.kindOf("Flare Demon 5k❤"));
+        // The stand that makes a body a slayer boss or demon; a mini boss has its own.
+        assertTrue(BlazeShield.isSlayerBossStand("SLAYER BOSS"));
+        assertFalse(BlazeShield.isSlayerBossStand("SLAYER MINIBOSS"));
+        assertTrue(BlazeShield.isMinibossStand("SLAYER MINIBOSS"));
+        assertFalse(BlazeShield.isSlayerBossStand("[Lv290]  Millennia-Aged Blaze 12M/12M❤"));
     }
 
     @Test

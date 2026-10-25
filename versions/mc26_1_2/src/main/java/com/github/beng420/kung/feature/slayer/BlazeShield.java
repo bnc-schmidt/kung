@@ -77,6 +77,16 @@ final class BlazeShield {
         return slotOf(lower) != null ? Kind.DEMON : null;
     }
 
+    /** The stand every slayer boss and every one of its demons has beside its name: exactly "SLAYER BOSS". */
+    static boolean isSlayerBossStand(String name) {
+        return name.trim().equalsIgnoreCase("slayer boss");
+    }
+
+    /** The same stand of a mini boss ("Kindleheart Demon"), which has no shield to show. */
+    static boolean isMinibossStand(String name) {
+        return name.trim().equalsIgnoreCase("slayer miniboss");
+    }
+
     /** The demons are told apart by name, so each keeps its own actor. */
     static String slotOf(String name) {
         String lower = plainLetters(name);
