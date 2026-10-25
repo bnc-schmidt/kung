@@ -14,7 +14,7 @@ public final class SplitsConfig extends ConfigCategory {
     private TimeFormat format = TimeFormat.MINUTES;
     private boolean timeLost = true;
     private boolean runEndChat = false;
-    private boolean pbTitle = false;
+    private boolean pbTitle = true;
     private boolean timePrediction = true;
     private PredictionMode predictionMode = PredictionMode.PHASE_END;
     private PredictionSource predictionSource = PredictionSource.PB;

@@ -37,6 +37,43 @@ public final class DungeonRunSummaryLayoutTest {
     }
 
     @Test
+    public void namesAreBoldSoARestyledNameCannotShiftItsRow() {
+        ToIntFunction<String> width = text -> text.chars().map(c -> c == 0xE000 ? 1 : 5).sum();
+        Component line = DungeonRunSummaryLayout.playerLine("Bob", 0xFFFFFFFF, "4 Secrets", 80, width);
+        assertTrue(line.getSiblings().get(0).getStyle().isBold());
+        assertFalse(line.getSiblings().get(2).getStyle().isBold());
+        // Bold adds one pixel per glyph; every row still starts its details at the same pixel.
+        assertEquals(15 + 3, DungeonRunSummaryLayout.nameWidth("Bob", width));
+        List<DungeonRunSummaryLayout.Row> rows = List.of(row("Bob", "1", "2", "3"), row("EternityMain", "1", "2", "3"));
+        List<Component> lines = DungeonRunSummaryLayout.lines(rows, width);
+        int column = DungeonRunSummaryLayout.nameColumnWidth(List.of("Bob", "EternityMain"), width);
+        for (int i = 0; i < rows.size(); i++) {
+            int padding = lines.get(i).getSiblings().get(1).getString().length();
+            assertEquals(column, DungeonRunSummaryLayout.nameWidth(rows.get(i).name(), width) + padding);
+        }
+    }
+
+    @Test
+    public void soloAndTotalRoomsAreOneColumnWithThePaddingInFront() {
+        ToIntFunction<String> width = text -> text.chars().map(c -> c == 0xE000 ? 1 : 6).sum();
+        List<DungeonRunSummaryLayout.Row> rows = List.of(
+            new DungeonRunSummaryLayout.Row("Alice", 0xFFFFFFFF, List.of(
+                DungeonRunSummaryLayout.Cell.number("rooms", "2-7"), DungeonRunSummaryLayout.Cell.text(" Rooms"))),
+            new DungeonRunSummaryLayout.Row("Bob", 0xFFFFFFFF, List.of(
+                DungeonRunSummaryLayout.Cell.number("rooms", "7-12"), DungeonRunSummaryLayout.Cell.text(" Rooms"))));
+        List<Component> lines = DungeonRunSummaryLayout.lines(rows, width);
+        for (Component line : lines) {
+            String text = line.getString();
+            assertFalse("no gap after the dash in '" + text + "'", text.contains("- ") || text.contains("-" + DungeonRunSummaryLayout.PIXEL_SPACE));
+        }
+        // Alice's shorter "2-7" sits one character (6 px) further right, so " Rooms" starts at the same pixel.
+        String alice = lines.get(0).getString(), bob = lines.get(1).getString();
+        assertEquals(6, pixelsBefore(lines.get(0), alice.indexOf('2'), width) - pixelsBefore(lines.get(1), bob.indexOf('7'), width));
+        assertEquals(pixelsBefore(lines.get(0), alice.indexOf(" Rooms"), width),
+            pixelsBefore(lines.get(1), bob.indexOf(" Rooms"), width));
+    }
+
+    @Test
     public void nameCarriesTheClassColourAndDetailsAreHighlightedNotWhite() {
         Component line = DungeonRunSummaryLayout.playerLine(
             "Alice", DungeonRunStats.DungeonClass.MAGE.argb(), "12/52 Secrets | 2-4 Rooms | 0 Deaths", 40,
@@ -62,14 +99,21 @@ public final class DungeonRunSummaryLayoutTest {
             int firstX = -1;
             for (Component line : lines) {
                 String text = line.getString();
-                int x = width.applyAsInt(text.substring(0, text.indexOf(marker)));
+                int x = pixelsBefore(line, text.indexOf(marker), width);
                 if (firstX < 0) firstX = x;
                 assertEquals("column " + marker.strip() + " in '" + text + "'", firstX, x);
             }
         }
         // Bob's one-digit secrets sit one digit (6 px) further right than Alice's two digits.
         String alice = lines.get(0).getString(), bob = lines.get(1).getString();
-        assertEquals(6, width.applyAsInt(bob.substring(0, bob.indexOf('5'))) - width.applyAsInt(alice.substring(0, alice.indexOf("12"))));
+        assertEquals(6, pixelsBefore(lines.get(1), bob.indexOf('5'), width) - pixelsBefore(lines.get(0), alice.indexOf("12"), width));
+    }
+
+    /** Where the character at {@code end} of the line's text starts, with the name measured as drawn (bold). */
+    private static int pixelsBefore(Component line, int end, ToIntFunction<String> width) {
+        String text = line.getString();
+        String name = line.getSiblings().get(0).getString();
+        return DungeonRunSummaryLayout.nameWidth(name, width) + width.applyAsInt(text.substring(name.length(), end));
     }
 
     private static DungeonRunSummaryLayout.Row row(String name, String secrets, String rooms, String deaths) {
@@ -96,7 +140,7 @@ public final class DungeonRunSummaryLayoutTest {
             Component line = DungeonRunSummaryLayout.playerLine(name, 0xFFFFFFFF, "4 Secrets", column, width);
             String padding = line.getSiblings().get(1).getString();
             assertTrue(padding.codePoints().allMatch(c -> c == 0xE000));
-            assertEquals(column, width.applyAsInt(name) + padding.length());
+            assertEquals(column, DungeonRunSummaryLayout.nameWidth(name, width) + padding.length());
             assertTrue(padding.length() >= 8);
         }
     }

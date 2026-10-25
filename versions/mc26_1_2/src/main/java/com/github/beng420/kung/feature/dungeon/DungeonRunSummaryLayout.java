@@ -18,12 +18,22 @@ final class DungeonRunSummaryLayout {
         new FontDescription.Resource(Identifier.fromNamespaceAndPath("kung", "chat_spacing"));
     private static final int COLUMN_GAP = 8;
     private static final Style TEXT_STYLE = Style.EMPTY.withFont(FontDescription.DEFAULT).withBold(false);
+    /**
+     * Names are drawn bold. A mod that restyles a name in chat (a colour gradient, bold) would otherwise make it wider
+     * than measured and push the rest of its row to the right; a bold name cannot get wider by being made bold.
+     */
+    private static final Style NAME_STYLE = TEXT_STYLE.withBold(true);
     private static final Style SPACING_STYLE = Style.EMPTY.withFont(SPACING_FONT).withBold(false);
 
     private DungeonRunSummaryLayout() { }
 
     static int nameColumnWidth(List<String> names, ToIntFunction<String> width) {
-        return names.stream().mapToInt(width).max().orElse(0) + COLUMN_GAP;
+        return names.stream().mapToInt(name -> nameWidth(name, width)).max().orElse(0) + COLUMN_GAP;
+    }
+
+    /** A name in chat pixels as drawn: bold adds one pixel to every glyph (a name has no spaces). */
+    static int nameWidth(String name, ToIntFunction<String> width) {
+        return width.applyAsInt(name) + name.length();
     }
 
     /** One piece of a player's details; a {@code column} marks a number that lines up right-aligned across players. */
@@ -64,9 +74,9 @@ final class DungeonRunSummaryLayout {
 
     private static Component playerLine(String name, int nameColor, Component details, int nameColumnWidth,
                                         ToIntFunction<String> width) {
-        int padding = Math.max(COLUMN_GAP, nameColumnWidth - width.applyAsInt(name));
+        int padding = Math.max(COLUMN_GAP, nameColumnWidth - nameWidth(name, width));
         return Component.empty()
-            .append(Component.literal(name).setStyle(TEXT_STYLE.withColor(nameColor & 0xFFFFFF)))
+            .append(Component.literal(name).setStyle(NAME_STYLE.withColor(nameColor & 0xFFFFFF)))
             .append(spacing(padding))
             .append(details);
     }

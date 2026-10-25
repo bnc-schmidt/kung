@@ -58,6 +58,7 @@ public class DungeonPbTitleTest {
     @Test
     public void everyPbPathIsQuietWhenTheToggleIsOff() {
         var settings = new SplitsConfig();
+        settings.setPbTitle(false);
         var first = new DungeonSplitTracker.PhaseMessage(7, false, "Maxor", 30_000L, -1L, true, TimeFormat.MINUTES);
         var better = new DungeonSplitTracker.PhaseMessage(7, false, "Maxor", 29_000L, 30_000L, true, TimeFormat.MINUTES);
         // With the toggle on and no game running there is no screen to show it on, and nothing may break.

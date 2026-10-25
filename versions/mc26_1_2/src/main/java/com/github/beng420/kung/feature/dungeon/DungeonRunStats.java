@@ -769,9 +769,8 @@ public final class DungeonRunStats {
             cells.add(DungeonRunSummaryLayout.Cell.text(" Total Secrets"));
         }
         cells.add(DungeonRunSummaryLayout.Cell.text(" | "));
-        cells.add(DungeonRunSummaryLayout.Cell.number("solo", Integer.toString(stats.soloRoomsCleared())));
-        cells.add(DungeonRunSummaryLayout.Cell.text("-"));
-        cells.add(DungeonRunSummaryLayout.Cell.number("rooms", Integer.toString(stats.roomsCleared())));
+        // One column for "solo-total": the padding goes in front of the pair, not after the dash.
+        cells.add(DungeonRunSummaryLayout.Cell.number("rooms", stats.soloRoomsCleared() + "-" + stats.roomsCleared()));
         cells.add(DungeonRunSummaryLayout.Cell.text(" Rooms | "));
         cells.add(DungeonRunSummaryLayout.Cell.number("deaths", Integer.toString(stats.deaths())));
         cells.add(DungeonRunSummaryLayout.Cell.text(" Deaths" + (stats.bonusMarkers().isEmpty() ? "" : " | " + stats.bonusMarkers())));
