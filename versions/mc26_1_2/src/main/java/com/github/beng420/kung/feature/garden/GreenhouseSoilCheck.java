@@ -17,8 +17,17 @@ final class GreenhouseSoilCheck {
      * (74) is not one: plants are read there, and a layer of plants must not pass for the soil.
      */
     static final int[] LAYERS = {73, 72, 71};
-    /** At least this many of the 100 cells must be soil-type blocks for a layer to be trusted. */
-    static final int MAJORITY = 50;
+    /**
+     * At least this many of the 100 cells must be soil-type blocks for a layer to be trusted. Low on purpose: a
+     * greenhouse with few unlocked cells (or a bare floor) has little soil, and without a layer no soil is drawn.
+     */
+    static final int MINIMUM = 10;
+    /**
+     * The layer used while no candidate has {@link #MINIMUM} soil-type blocks (all soil removed, or none placed yet):
+     * the crop floor, directly under the plants. Without it a bare greenhouse would get no soil ghosts at all, and a
+     * bare greenhouse is exactly where the soil is wanted. The scanner looks for the real layer again at every scan.
+     */
+    static final int ASSUMED_LAYER = GreenhouseLocator.FLOOR_Y;
 
     /** Blocks that look like a greenhouse floor; used to find the soil layer. */
     private static final Set<String> SOIL_TYPES = Set.of(
@@ -93,12 +102,21 @@ final class GreenhouseSoilCheck {
     }
 
     /**
+     * A crop whose soil is only assumed (farmland, see {@link GreenhouseSoils}) still gets one complaint: plain dirt
+     * where it stands. Fire is a flame, not a plant, so it has no soil to complain about.
+     */
+    private static boolean complainsAboutDirt(String crop) {
+        return !crop.equals("Fire");
+    }
+
+    /**
      * The soil layer: the candidate y with the most soil-type blocks among the 100 cells, if that is at least
-     * {@link #MAJORITY}; else -1 (draw no ghosts). {@code soilCounts} is indexed like {@link #LAYERS}.
+     * {@link #MINIMUM}; else -1 (the scanner then assumes {@link #ASSUMED_LAYER}). {@code soilCounts} is indexed like
+     * {@link #LAYERS}.
      */
     static int detectLayer(int[] soilCounts) {
         int best = -1;
-        int bestCount = MAJORITY - 1;
+        int bestCount = MINIMUM - 1;
         for (int i = 0; i < LAYERS.length && i < soilCounts.length; i++) {
             if (soilCounts[i] > bestCount) {
                 best = LAYERS[i];
@@ -145,12 +163,13 @@ final class GreenhouseSoilCheck {
      * The cells whose real block does not suit what is planned there, each with how it differs.
      * {@code blockIds} holds the real block id per cell at the soil layer, index {@code dx * 10 + dz}; a null entry
      * was not read and is skipped. A footprint puts its soil under every cell it covers; a crop with an untrusted
-     * soil gets no ghost, and cells the layout has no entry for are never looked at (soil there is ignored).
+     * soil only gets a wrong-state ghost (dirt where farmland is assumed), and cells the layout has no entry for are never looked at (soil there is ignored).
      */
     static List<Ghost> ghosts(List<Footprint> expected, String[] blockIds) {
         List<Ghost> out = new ArrayList<>();
         for (Footprint footprint : expected) {
-            if (!trusted(footprint.crop())) continue;
+            boolean trusted = trusted(footprint.crop());
+            if (!trusted && !complainsAboutDirt(footprint.crop())) continue;
             Soil soil = GreenhouseSoils.of(footprint.crop());
             if (soil == Soil.NONE) continue;
             int firstDx = (int) Math.round(footprint.minX());
@@ -161,7 +180,8 @@ final class GreenhouseSoilCheck {
                 for (int dz = firstDz; dz < firstDz + depth; dz++) {
                     if (dx < 0 || dx >= GreenhouseGrid.SIZE || dz < 0 || dz >= GreenhouseGrid.SIZE) continue;
                     GhostKind kind = classify(soil, blockIds[dx * GreenhouseGrid.SIZE + dz]);
-                    if (kind != null) out.add(new Ghost(dx, dz, soil, kind));
+                    // An assumed soil only tells dirt from farmland; any other block may well be right for the crop.
+                    if (kind != null && (trusted || kind == GhostKind.WRONG_STATE)) out.add(new Ghost(dx, dz, soil, kind));
                 }
             }
         }

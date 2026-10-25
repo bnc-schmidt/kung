@@ -1,6 +1,8 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.feature.garden.GreenhouseSupply.Plan;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -50,11 +52,20 @@ public final class GreenhouseSupplyRunner {
         void sendCommand(String command);
 
         void chat(Level level, String message);
+
+        /** The same line followed by a clickable prompt that opens the Bazaar with {@code search} typed in. */
+        void chatBazaar(Level level, String message, String search);
+
+        /** Whether the player plays Ironman, which has no Bazaar (taken from the planner's Ironman price mode). */
+        boolean ironman();
     }
 
+    /** Who asked for the items: a pick in the world holds them afterwards, a click in the planner only pulls. */
+    private enum Origin { PICK, PLANNER }
+
     /** {@code moved}: the amount the game reported, -1 while it has not. */
-    private record Pending(Plan plan, int baseline, long expiresAt, int moved) {
-        Pending withMoved(int amount) { return new Pending(plan, baseline, expiresAt, amount); }
+    private record Pending(Plan plan, int baseline, long expiresAt, int moved, Origin origin) {
+        Pending withMoved(int amount) { return new Pending(plan, baseline, expiresAt, amount, origin); }
     }
 
     private static GreenhouseSupplyRunner live;
@@ -93,15 +104,39 @@ public final class GreenhouseSupplyRunner {
         live().onPickSoil(soil);
     }
 
+    /**
+     * Entry for a click on a crop of the planner's shopping list: pulls the missing amount of {@code count} plants
+     * from the Sacks and, when the Sacks run short, opens the Bazaar for the rest (unless Ironman). Nothing is
+     * switched to: the planner is open. Client thread.
+     */
+    public static void fetch(String cropName, int count) {
+        live().onFetch(cropName, count);
+    }
+
     void onPick(String crop, int flag) {
-        act(GreenhouseSupply.plan(crop, flag, host.required(crop), GreenhouseSupply.planted(crop), host.inventory()));
+        act(GreenhouseSupply.plan(crop, flag, host.required(crop), GreenhouseSupply.planted(crop), host.inventory()),
+            Origin.PICK);
     }
 
     void onPickSoil(GreenhouseSoils.Soil soil) {
-        act(GreenhouseSupply.planSoil(soil, host.soilNeeded(soil), host.inventory()));
+        act(GreenhouseSupply.planSoil(soil, host.soilNeeded(soil), host.inventory()), Origin.PICK);
     }
 
-    private void act(Plan plan) {
+    void onFetch(String crop, int count) {
+        act(GreenhouseSupply.plan(crop, GreenhouseGrid.INGREDIENT, count, GreenhouseSupply.planted(crop),
+            host.inventory()), Origin.PLANNER);
+    }
+
+    private void act(Plan plan, Origin origin) {
+        if (origin == Origin.PLANNER) {
+            // The planner never switches the hotbar: it reports, or pulls.
+            switch (plan.action()) {
+                case PULL -> pull(plan, origin);
+                case UNKNOWN_CROP, NOT_SACKABLE, TARGET_SPOT -> host.chat(Level.WARNING, plan.message());
+                case SWITCH -> host.chat(Level.INFO, plan.message());
+            }
+            return;
+        }
         switch (plan.action()) {
             case TARGET_SPOT -> host.chat(Level.INFO, plan.message());
             case UNKNOWN_CROP -> host.chat(Level.WARNING, plan.message());
@@ -115,11 +150,11 @@ public final class GreenhouseSupplyRunner {
                 if (switchTo(plan) == Held.SWITCHED) pending = null;
                 host.chat(Level.WARNING, plan.message());
             }
-            case PULL -> pull(plan);
+            case PULL -> pull(plan, origin);
         }
     }
 
-    private void pull(Plan plan) {
+    private void pull(Plan plan, Origin origin) {
         if (pending != null && pending.plan().crop().equals(plan.crop())) {
             host.chat(Level.INFO, "Still waiting for " + plan.item().unit() + " from Sacks");
             return;
@@ -134,7 +169,8 @@ public final class GreenhouseSupplyRunner {
             return;
         }
         // A different crop's pull is dropped here: its items may still arrive, but nothing switches to them.
-        pending = new Pending(plan, plan.inInventory() / plan.item().plantsPerItem(), now + PENDING_MILLIS, -1);
+        int held = host.inventory().getOrDefault(GreenhouseSupply.normalizeId(plan.item().id()), 0);
+        pending = new Pending(plan, held, now + PENDING_MILLIS, -1, origin);
         lastSend = now;
         sent = true;
         host.sendCommand(plan.command());
@@ -168,7 +204,25 @@ public final class GreenhouseSupplyRunner {
         } else {
             host.chat(Level.WARNING, "Only " + got + " of " + asked + " " + item.unit() + " arrived from your sacks.");
         }
-        switchTo(current.plan());
+        if (got < asked) shortage(current, asked - got);
+        if (current.origin() == Origin.PICK) switchTo(current.plan());
+    }
+
+    /**
+     * The Sacks held less than the plan pulled: says how many items are missing and where to buy them. A pick in
+     * the world gets a clickable prompt, a click in the planner opens the Bazaar by itself; Ironman has no Bazaar.
+     */
+    private void shortage(Pending current, int missing) {
+        GreenhouseItems.Item item = current.plan().item();
+        String message = "Missing " + missing + " " + item.unit();
+        if (host.ironman()) {
+            host.chat(Level.WARNING, message);
+        } else if (current.origin() == Origin.PICK) {
+            host.chatBazaar(Level.WARNING, message, item.unit());
+        } else {
+            host.chat(Level.WARNING, message + ", opening the Bazaar");
+            host.sendCommand("bz " + item.unit());
+        }
     }
 
     /**
@@ -188,6 +242,9 @@ public final class GreenhouseSupplyRunner {
         if (none.isPresent() && item.answersTo(none.get())) {
             pending = null;
             host.chat(Level.ERROR, "Your Sacks have no " + item.unit());
+            int have = host.inventory().getOrDefault(GreenhouseSupply.normalizeId(item.id()), 0);
+            int got = Math.max(0, have - current.baseline());
+            if (got < current.plan().amount()) shortage(current, current.plan().amount() - got);
         }
     }
 
@@ -209,18 +266,26 @@ public final class GreenhouseSupplyRunner {
         SWITCHED
     }
 
+    /** The item's own preferred items first (Melon Seeds), then the item itself; the first one held anywhere wins. */
     private Held switchTo(Plan plan) {
-        if (plan.item().id() == null) return Held.NONE;
-        String id = GreenhouseSupply.normalizeId(plan.item().id());
-        int hotbar = host.hotbarSlot(id);
-        if (hotbar >= 0) {
-            host.select(hotbar);
-            return Held.SWITCHED;
+        GreenhouseItems.Item item = plan.item();
+        if (item.id() == null) return Held.NONE;
+        List<String> ids = new ArrayList<>();
+        for (String preferred : item.holdFirst()) ids.add(GreenhouseSupply.normalizeId(preferred));
+        String own = GreenhouseSupply.normalizeId(item.id());
+        ids.add(own);
+        for (String id : ids) {
+            int hotbar = host.hotbarSlot(id);
+            if (hotbar >= 0) {
+                host.select(hotbar);
+                return Held.SWITCHED;
+            }
+            int main = host.mainSlot(id);
+            if (main < 0) continue;
+            if (host.swapIntoSelected(main)) return Held.SWITCHED;
+            host.chat(Level.WARNING, "Move " + (id.equals(own) ? item.unit() : item.crop()) + " into your hotbar to hold it");
+            return Held.HINTED;
         }
-        int main = host.mainSlot(id);
-        if (main < 0) return Held.NONE;
-        if (host.swapIntoSelected(main)) return Held.SWITCHED;
-        host.chat(Level.WARNING, "Move " + plan.item().unit() + " into your hotbar to hold it");
-        return Held.HINTED;
+        return Held.NONE;
     }
 }

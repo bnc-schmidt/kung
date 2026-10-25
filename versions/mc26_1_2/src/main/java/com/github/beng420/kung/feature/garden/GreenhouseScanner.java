@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.garden.GreenhouseScanLogic.State;
 import com.github.beng420.kung.feature.garden.GreenhouseSoilCheck.Ghost;
 import com.github.beng420.kung.feature.garden.GreenhouseScanNames.Resolution;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -32,7 +33,7 @@ import net.minecraft.world.phys.AABB;
  * reads the armor stands and blocks of the greenhouse into {@link Found} entries and the soil layer into block ids,
  * lets {@link GreenhouseScanLogic} and {@link GreenhouseSoilCheck} decide, and keeps the result as an immutable
  * snapshot for the renderer. One entity query and about 200 block reads per scan (400 while the soil layer is
- * still unknown); client thread only. When the chunks are not all loaded the previous snapshot stays: missing
+ * still unknown or only assumed); client thread only. When the chunks are not all loaded the previous snapshot stays: missing
  * data never turns into "empty".
  *
  * <p>UNVERIFIED in game: that the crops stand at y 74, that special crops are armor stands wearing heads, the
@@ -49,6 +50,8 @@ final class GreenhouseScanner {
     private static Snapshot snapshot;
     private static List<Ghost> ghosts = List.of();
     private static int soilLayer = -1;
+    /** The layer is only {@link GreenhouseSoilCheck#ASSUMED_LAYER} (no soil seen yet): the next scan detects it again. */
+    private static boolean soilLayerAssumed;
     /** The hologram version the ghosts and the layer belong to (-1: none): they are raw offsets of that orientation. */
     private static int soilVersion = -1;
     private static String[] soilBlocks;
@@ -59,6 +62,7 @@ final class GreenhouseScanner {
     private static long scannedAt;
     private static boolean warned;
     private static boolean failed;
+    private static String lastTrace = "";
     private static final GreenhouseCompletion COMPLETION = new GreenhouseCompletion();
 
     private GreenhouseScanner() { }
@@ -236,9 +240,22 @@ final class GreenhouseScanner {
         // Every ingredient right and no unplanned crop in two scans in a row: the hologram has done its job
         // (setting permitting) and turns itself off; this was the last scan of that layout.
         boolean allCorrect = GreenhouseCompletion.allIngredientsCorrect(placements, next.raw(), next.rawExtras());
+        trace(placements, next, allCorrect);
         if (completeIfDone(allCorrect, GreenhouseHologramSettings.hideWhenComplete())) {
             KungMessages.send(client, KungMessages.Type.SUCCESS, "Greenhouse", GreenhouseCompletion.MESSAGE);
         }
+    }
+
+    /**
+     * One trace line whenever what the scanner believes changes, so a report of a hologram that stays, or soil that
+     * is missing, shows the soil layer, the soil ghosts and what blocks completion.
+     */
+    private static void trace(List<Placement> placements, Snapshot next, boolean allCorrect) {
+        String line = summary() + " allCorrect=" + allCorrect + " blockers="
+            + GreenhouseCompletion.blockers(placements, next.raw(), next.rawExtras());
+        if (line.equals(lastTrace)) return;
+        lastTrace = line;
+        KungDebugRecorder.event("greenhouse-scan", line);
     }
 
     private static List<Found> readFound(Level level, BlockPos corner) {
@@ -294,10 +311,11 @@ final class GreenhouseScanner {
 
     /**
      * Reads the soil layer: the first scan of a corner looks at all candidate layers and keeps the one that is mostly
-     * soil; later scans read only that layer. Without a clear majority no layer is chosen and no ghost is drawn.
+     * soil; later scans read only that layer. Without enough soil anywhere (all of it removed) the assumed layer is
+     * used so the missing soil is still drawn, and the next scan looks again.
      */
     private static void readSoil(Level level, BlockPos corner) {
-        if (soilLayer >= 0) {
+        if (soilLayer >= 0 && !soilLayerAssumed) {
             soilBlocks = readLayer(level, corner, soilLayer);
             return;
         }
@@ -310,14 +328,13 @@ final class GreenhouseScanner {
             }
         }
         int layer = GreenhouseSoilCheck.detectLayer(counts);
-        if (layer < 0) {
-            soilBlocks = null;
-            soilNote = "no soil layer: soil-type blocks per y " + describe(counts);
-            return;
-        }
+        soilLayerAssumed = layer < 0;
+        if (soilLayerAssumed) layer = GreenhouseSoilCheck.ASSUMED_LAYER;
         soilLayer = layer;
         soilBlocks = layers[indexOf(layer)];
-        soilNote = "soil layer y=" + layer + " chosen from " + describe(counts);
+        soilNote = soilLayerAssumed
+            ? "no soil found, assuming y=" + layer + " until soil shows up: soil-type blocks per y " + describe(counts)
+            : "soil layer y=" + layer + " chosen from " + describe(counts);
     }
 
     private static String[] readLayer(Level level, BlockPos corner, int y) {

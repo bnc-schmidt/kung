@@ -12,7 +12,11 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ServerData;
+import net.minecraft.ChatFormatting;
 import net.minecraft.core.NonNullList;
+import net.minecraft.network.chat.ClickEvent;
+import net.minecraft.network.chat.Component;
+import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.item.ItemStack;
 
@@ -102,11 +106,27 @@ final class GreenhouseSupplyHost implements GreenhouseSupplyRunner.Host {
     }
 
     @Override public void chat(GreenhouseSupplyRunner.Level level, String message) {
-        KungMessages.Type type = switch (level) {
+        KungMessages.send(Minecraft.getInstance(), KungMessages.component(type(level), AREA, message));
+    }
+
+    @Override public void chatBazaar(GreenhouseSupplyRunner.Level level, String message, String search) {
+        Component prompt = Component.literal(" [Click here to open the Bazaar]").withStyle(style -> style
+            .withColor(ChatFormatting.GREEN).withUnderlined(true)
+            .withClickEvent(new ClickEvent.RunCommand("/bz " + search))
+            .withHoverEvent(new HoverEvent.ShowText(Component.literal("/bz " + search))));
+        KungMessages.send(Minecraft.getInstance(), KungMessages.component(type(level), AREA, message).copy().append(prompt));
+    }
+
+    /** The planner's Ironman price mode stands in for the account type: nothing in the game tells it reliably. */
+    @Override public boolean ironman() {
+        return GreenhouseSession.get().state().costMode() == GreenhouseCosts.CostMode.IRONMAN;
+    }
+
+    private static KungMessages.Type type(GreenhouseSupplyRunner.Level level) {
+        return switch (level) {
             case INFO -> KungMessages.Type.INFO;
             case WARNING -> KungMessages.Type.WARNING;
             case ERROR -> KungMessages.Type.ERROR;
         };
-        KungMessages.send(Minecraft.getInstance(), type, AREA, message);
     }
 }

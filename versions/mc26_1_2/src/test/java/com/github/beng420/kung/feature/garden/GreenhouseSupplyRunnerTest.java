@@ -21,6 +21,7 @@ public final class GreenhouseSupplyRunnerTest {
         long now = 10_000;
         boolean hypixel = true;
         boolean swapWorks = true;
+        boolean ironman;
         final Map<String, Integer> required = new HashMap<>();
         final Map<GreenhouseSoils.Soil, Integer> soilNeeded = new HashMap<>();
         final String[] ids = new String[36];
@@ -79,6 +80,12 @@ public final class GreenhouseSupplyRunnerTest {
         @Override public void sendCommand(String command) { commands.add(command); }
 
         @Override public void chat(Level level, String message) { chats.add(level + ": " + message); }
+
+        @Override public void chatBazaar(Level level, String message, String search) {
+            chats.add(level + ": " + message + " [Bazaar: " + search + "]");
+        }
+
+        @Override public boolean ironman() { return ironman; }
     }
 
     private FakeHost host;
@@ -887,5 +894,161 @@ public final class GreenhouseSupplyRunnerTest {
         runner.onPick("Thornshade", INGREDIENT);
 
         assertEquals(List.of("gfs DUSTGRAIN 3"), host.commands);
+    }
+
+    @Test
+    public void aSackWithoutTheItemSaysHowManyAreMissingWithABazaarPrompt() {
+        host.required.put("Carrot", 3);
+        host.put(0, "CARROT_ITEM", 1);
+        runner.onPick("Carrot", INGREDIENT);
+
+        runner.onChat("You have no Carrot in your Sacks!");
+
+        assertEquals("ERROR: Your Sacks have no Carrot", host.chats.get(1));
+        assertEquals("WARNING: Missing 2 Carrot [Bazaar: Carrot]", host.chats.get(2));
+        assertEquals(List.of("gfs CARROT_ITEM 2"), host.commands);
+    }
+
+    @Test
+    public void aShortDeliveryNamesTheMissingRestWithTheItemsOwnBazaarName() {
+        host.required.put("Melon Seeds", 6);
+        runner.onPick("Melon Seeds", INGREDIENT);
+        runner.onChat("Moved 2 Melon Slice from your Sacks to your inventory.");
+        host.put(1, "MELON", 2);
+
+        runner.tick();
+
+        assertEquals("WARNING: Only 2 of 6 Melon Slice were in your sacks.", host.chats.get(1));
+        assertEquals("WARNING: Missing 4 Melon Slice [Bazaar: Melon Slice]", host.chats.get(2));
+    }
+
+    @Test
+    public void onIronmanTheShortageHasNoBazaarPrompt() {
+        host.ironman = true;
+        host.required.put("Carrot", 3);
+        runner.onPick("Carrot", INGREDIENT);
+
+        runner.onChat("You have no Carrot in your Sacks!");
+
+        assertEquals("WARNING: Missing 3 Carrot", host.chats.get(2));
+        assertEquals(List.of("gfs CARROT_ITEM 3"), host.commands);
+    }
+
+    @Test
+    public void aFullDeliveryReportsNoShortage() {
+        host.required.put("Carrot", 3);
+        runner.onPick("Carrot", INGREDIENT);
+        runner.onChat("Moved 3 Carrot from your Sacks to your inventory.");
+        host.put(0, "CARROT_ITEM", 3);
+
+        runner.tick();
+
+        assertEquals(2, host.chats.size());
+        assertEquals("INFO: Pulled 3 Carrot", host.chats.get(1));
+    }
+
+    @Test
+    public void melonSeedsInTheInventoryAreHeldAndCountTowardsTheCrop() {
+        host.required.put("Melon Seeds", 5);
+        host.put(2, "MELON", 1);
+        host.put(6, "MELON_SEEDS", 4);
+
+        runner.onPick("Melon Seeds", INGREDIENT);
+
+        // 4 seeds + 1 slice cover the 5 stems: nothing is pulled, the seeds are held rather than the slice.
+        assertTrue(host.commands.isEmpty());
+        assertEquals(List.of(6), host.selects);
+    }
+
+    @Test
+    public void onlyTheMissingSlicesArePulledThenTheSeedsAreHeld() {
+        host.required.put("Melon Seeds", 10);
+        host.put(1, "MELON", 3);
+        host.put(5, "MELON_SEEDS", 4);
+
+        runner.onPick("Melon Seeds", INGREDIENT);
+
+        // 10 needed, 4 seeds + 3 slices held: 3 more slices.
+        assertEquals(List.of("gfs MELON 3"), host.commands);
+        assertTrue(host.selects.isEmpty());
+        runner.onChat("Moved 3 Melon Slice from your Sacks to your inventory.");
+        host.put(1, "MELON", 6);
+        runner.tick();
+
+        assertFalse(runner.pendingPull());
+        assertEquals("seeds, not the slices", List.of(5), host.selects);
+        assertEquals("INFO: Pulled 3 Melon Slice", host.chats.get(1));
+    }
+
+    @Test
+    public void seedsInTheMainInventoryAreSwappedInAheadOfASliceInTheHotbar() {
+        host.required.put("Melon Seeds", 2);
+        host.put(0, "MELON", 2);
+        host.put(20, "MELON_SEEDS", 3);
+        host.selected = 4;
+
+        runner.onPick("Melon Seeds", INGREDIENT);
+
+        assertEquals(List.of(20), host.swaps);
+        assertEquals("MELON_SEEDS", host.ids[4]);
+        assertTrue(host.selects.isEmpty());
+    }
+
+    @Test
+    public void withoutSeedsTheSliceIsHeldAsBefore() {
+        host.required.put("Melon Seeds", 2);
+        host.put(7, "MELON", 2);
+
+        runner.onPick("Melon Seeds", INGREDIENT);
+
+        assertEquals(List.of(7), host.selects);
+        assertTrue(host.commands.isEmpty());
+    }
+
+    @Test
+    public void aClickInThePlannerPullsWithoutSwitchingAndOpensTheBazaarForTheRest() {
+        host.put(3, "CARROT_ITEM", 2);
+
+        runner.onFetch("Carrot", 6);
+
+        assertEquals(List.of("gfs CARROT_ITEM 4"), host.commands);
+        runner.onChat("Moved 1 Carrot from your Sacks to your inventory.");
+        host.put(3, "CARROT_ITEM", 3);
+        runner.tick();
+
+        assertTrue("the planner is open, nothing is switched", host.selects.isEmpty());
+        assertEquals(List.of("gfs CARROT_ITEM 4", "bz Carrot"), host.commands);
+        assertEquals("WARNING: Missing 3 Carrot, opening the Bazaar", host.chats.get(host.chats.size() - 1));
+    }
+
+    @Test
+    public void aPlannerClickOnIronmanOnlySaysWhatIsMissing() {
+        host.ironman = true;
+
+        runner.onFetch("Carrot", 2);
+        runner.onChat("You have no Carrot in your Sacks!");
+
+        assertEquals(List.of("gfs CARROT_ITEM 2"), host.commands);
+        assertEquals("WARNING: Missing 2 Carrot", host.chats.get(host.chats.size() - 1));
+    }
+
+    @Test
+    public void aPlannerClickWithEnoughInTheInventoryPullsNothing() {
+        host.put(3, "CARROT_ITEM", 9);
+
+        runner.onFetch("Carrot", 6);
+
+        assertTrue(host.commands.isEmpty());
+        assertTrue(host.selects.isEmpty());
+        assertEquals(1, host.chats.size());
+        assertTrue(host.chats.get(0).startsWith("INFO: Nothing to fetch"));
+    }
+
+    @Test
+    public void aPlannerClickOnACropNoSackHoldsOnlyWarns() {
+        runner.onFetch("Jerryflower", 3);
+
+        assertTrue(host.commands.isEmpty());
+        assertEquals(List.of("WARNING: Fetch Jerryflower manually (not in any Sack): 3 more needed"), host.chats);
     }
 }

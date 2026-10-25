@@ -30,9 +30,11 @@ final class GreenhouseItems {
      * id, null when the item is not in any Sack. {@code unit}: what the player sees pulled ("Melon Slice" for
      * Melon Seeds), the crop name otherwise. {@code plantsPerItem}: plants one item yields (Pumpkin gives 4 stems).
      * {@code chatNames}: other spellings the game's Sack answers may use for the item ("Seeds" for Wheat Seeds).
+     * {@code holdFirst}: ids of other items that plant the crop one to one and are held in preference to
+     * {@code id} (Melon Seeds beside the Melon Slice); they count towards what the inventory holds.
      */
     record Item(String crop, String id, String gfs, String unit, int plantsPerItem, List<String> chatNames,
-                String note) {
+                List<String> holdFirst, String note) {
         boolean sackable() { return gfs != null; }
 
         /**
@@ -47,7 +49,8 @@ final class GreenhouseItems {
         }
     }
 
-    private record Row(String id, String gfs, String item, Integer plantsPerItem, List<String> names, String note) { }
+    private record Row(String id, String gfs, String item, Integer plantsPerItem, List<String> names,
+                       List<String> holdFirst, String note) { }
 
     private record Data(int schema, Map<String, Row> crops, Map<String, Row> soils) { }
 
@@ -169,8 +172,14 @@ final class GreenhouseItems {
             if (names.stream().anyMatch(name -> name == null || name.isBlank())) {
                 throw new IllegalArgumentException("Blank chat name for " + crop);
             }
+            List<String> holdFirst = row.holdFirst() == null ? List.of() : List.copyOf(row.holdFirst());
+            for (String held : holdFirst) {
+                if (held == null || !ID.matcher(held).matches()) {
+                    throw new IllegalArgumentException("Bad hold-first id " + held + " for " + crop);
+                }
+            }
             out.put(crop, new Item(crop, row.id(), row.gfs(), row.item() == null ? crop : row.item(), per, names,
-                row.note()));
+                holdFirst, row.note()));
         });
         return Collections.unmodifiableMap(out);
     }

@@ -154,6 +154,7 @@ public final class GreenhouseScreen extends Screen {
     private static final int KIND_PRIORITY_NAME = 4;
     private static final int KIND_GOAL = 5;
     private static final int KIND_CROP = 6;
+    private static final String CROP_CLICK_TIP = "Click: pull what is missing from your Sacks";
     private static final int KIND_STATUS = 7;
     private static final int KIND_SOIL = 8;
     private static final int KIND_COST = 9;
@@ -786,9 +787,11 @@ public final class GreenhouseScreen extends Screen {
         var quotes = session.quotes();
         var quote = quotes.get(GreenhouseCrops.canonical(row.name()));
         String each = GreenhouseCosts.describe(row.name(), quotes);
-        if (quote == null || quote.basis() == GreenhouseCosts.Basis.FREE) return List.of(row.name() + " x" + row.count(), each);
+        if (quote == null || quote.basis() == GreenhouseCosts.Basis.FREE) {
+            return List.of(row.name() + " x" + row.count(), each, CROP_CLICK_TIP);
+        }
         return List.of(row.name() + " x" + row.count(), "Each: " + each,
-            "All: " + GreenhouseCosts.formatTotal(quote.cost() * row.count(), state.costMode()));
+            "All: " + GreenhouseCosts.formatTotal(quote.cost() * row.count(), state.costMode()), CROP_CLICK_TIP);
     }
 
     /** The lines are rebuilt only when the hovered cell, the grid or the lock on the cell changes, not every frame. */
@@ -1171,7 +1174,19 @@ public final class GreenhouseScreen extends Screen {
                 return true;
             }
         }
+        if (clickCrop(mx, my)) return true;
         if (!clickLeft(mx, my, event.hasShiftDown())) clickRight(mx, my, event.hasShiftDown());
+        return true;
+    }
+
+    /** A click on a crop of the shopping list pulls what is missing of it from the Sacks (see GreenhouseSupplyRunner#fetch). */
+    private boolean clickCrop(int mx, int my) {
+        if (!inside(mx, my, x + CROPS_X, y + RESULT_Y, MW - 156, RESULT_ROWS * RESULT_ROW)) return false;
+        int index = cropScroll.offset() + (my - (y + RESULT_Y)) / RESULT_ROW;
+        if (index >= cropRows.size()) return false;
+        CropRow row = cropRows.get(index);
+        GreenhouseSupplyRunner.fetch(row.name(), row.count());
+        say("Checked your Sacks for " + row.name() + " (see chat)", Tone.MUTED);
         return true;
     }
 

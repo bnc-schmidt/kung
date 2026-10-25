@@ -127,12 +127,21 @@ final class GreenhouseSupply {
         if (flag == GreenhouseGrid.TARGET) return plain(Action.TARGET_SPOT, name, null, TARGET_SPOT);
         if (found.isEmpty()) return plain(Action.UNKNOWN_CROP, name, null, unknown("crop", name));
         GreenhouseItems.Item item = found.get();
-        int held = item.id() == null ? 0 : inventory.getOrDefault(normalizeId(item.id()), 0);
-        int inInventory = held * item.plantsPerItem();
+        int inInventory = plantsHeld(item, inventory);
         int missing = Math.max(0, required - planted - inInventory);
         String counts = required + " needed, " + planted + " placed correctly, " + inInventory + " in inventory";
         return finish(item, name, required, planted, inInventory, missing, counts,
             nothingToFetch(name, required, planted, counts));
+    }
+
+    /**
+     * Plants the inventory can plant for the item: its own count times {@code plantsPerItem}, plus the items that
+     * plant it one to one ({@link GreenhouseItems.Item#holdFirst}, the Melon Seeds beside the Melon Slice).
+     */
+    static int plantsHeld(GreenhouseItems.Item item, Map<String, Integer> inventory) {
+        int plants = item.id() == null ? 0 : inventory.getOrDefault(normalizeId(item.id()), 0) * item.plantsPerItem();
+        for (String other : item.holdFirst()) plants += inventory.getOrDefault(normalizeId(other), 0);
+        return plants;
     }
 
     /**

@@ -72,10 +72,39 @@ public final class GreenhouseSoilCheckTest {
     }
 
     @Test
-    public void withoutAClearMajorityThereIsNoLayer() {
-        assertEquals(-1, GreenhouseSoilCheck.detectLayer(new int[] {49, 49, 49}));
+    public void withTooLittleSoilThereIsNoLayer() {
+        assertEquals(-1, GreenhouseSoilCheck.detectLayer(new int[] {9, 9, 9}));
         assertEquals(-1, GreenhouseSoilCheck.detectLayer(new int[] {0, 0, 0}));
-        assertEquals(73, GreenhouseSoilCheck.detectLayer(new int[] {50, 0, 0}));
+        assertEquals(73, GreenhouseSoilCheck.detectLayer(new int[] {10, 0, 0}));
+    }
+
+    @Test
+    public void aGreenhouseWithoutAnySoilStillGetsSoilGhostsOnTheAssumedLayer() {
+        // The player removed all soil: no layer has soil-type blocks, detection finds none, and the scanner then
+        // uses the assumed layer (the crop floor) instead of -1, which drew no soil at all.
+        assertEquals(-1, GreenhouseSoilCheck.detectLayer(new int[] {0, 0, 0}));
+        assertEquals(GreenhouseLocator.FLOOR_Y, GreenhouseSoilCheck.ASSUMED_LAYER);
+        assertEquals("the assumed layer is a candidate the scanner can read", GreenhouseSoilCheck.LAYERS[0],
+            GreenhouseSoilCheck.ASSUMED_LAYER);
+
+        GreenhouseGrid grid = new GreenhouseGrid();
+        grid.set(2, 3, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        GreenhouseHologramShapes.Layout layout = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY);
+        List<Ghost> ghosts = GreenhouseSoilCheck.ghosts(GreenhouseScanLogic.footprints(layout.placements()),
+            floor("minecraft:air"));
+
+        assertEquals(List.of(new Ghost(3, 2, Soil.FARMLAND, GhostKind.MISSING)), ghosts);
+        List<GreenhouseHologramShapes.Shape> boxes = GreenhouseOverlay.boxes(layout, null, List.of(), ghosts,
+            GreenhouseSoilCheck.ASSUMED_LAYER, null, new GreenhousePalette(0.30F, 0x4D8DFF, 0xFF3B3B, 0xFF55D8, 0xFFA126));
+        double soilY = GreenhouseSoilCheck.ASSUMED_LAYER - GreenhouseLocator.HOLOGRAM_Y;
+        assertTrue("the soil outline is drawn on the soil layer",
+            boxes.stream().anyMatch(box -> Math.abs(box.minY() - (soilY - 0.004)) < 1.0E-9));
+    }
+
+    @Test
+    public void aGreenhouseWithFewUnlockedCellsStillGetsItsLayer() {
+        // Only 23 cells are floor yet; the rest of the 10 x 10 is empty air.
+        assertEquals(73, GreenhouseSoilCheck.detectLayer(new int[] {23, 2, 0}));
     }
 
     @Test
@@ -168,6 +197,26 @@ public final class GreenhouseSoilCheckTest {
         assertTrue(GreenhouseSoilCheck.ghosts(expected, blocks).isEmpty());
         blocks[0] = "minecraft:stone";
         assertTrue(GreenhouseSoilCheck.ghosts(expected, blocks).isEmpty());
+    }
+
+    @Test
+    public void anAssumedSoilOnlyComplainsAboutDirtWhereFarmlandIsExpected() {
+        List<Footprint> expected = List.of(new Footprint("Sunflower", false, 0, 0, 1, 1),
+            new Footprint("Cactus", false, 1, 0, 2, 1), new Footprint("Fire", false, 2, 0, 3, 1),
+            new Footprint("Moonflower", false, 3, 0, 4, 1), new Footprint("Sugar Cane", false, 4, 0, 5, 1));
+        String[] blocks = floor("minecraft:farmland");
+        blocks[0 * 10 + 0] = "minecraft:dirt";
+        blocks[1 * 10 + 0] = "minecraft:coarse_dirt";
+        blocks[2 * 10 + 0] = "minecraft:dirt";
+        blocks[3 * 10 + 0] = "minecraft:sand";
+        blocks[4 * 10 + 0] = "minecraft:air";
+
+        List<GreenhouseSoilCheck.Ghost> ghosts = GreenhouseSoilCheck.ghosts(expected, blocks);
+
+        assertEquals(List.of(
+            new GreenhouseSoilCheck.Ghost(0, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_STATE),
+            new GreenhouseSoilCheck.Ghost(1, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_STATE)),
+            ghosts);
     }
 
     @Test

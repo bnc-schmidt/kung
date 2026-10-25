@@ -8,8 +8,8 @@ import java.util.List;
 
 /**
  * Whether every ingredient of the layout stands right, from completed scans: the layout counts as complete after two
- * consecutive scans agree that all its ingredient cells (the mutation spots are not ingredients) are CORRECT, and as
- * incomplete again after two consecutive scans that disagree. When it is complete and the setting asks for it,
+ * consecutive scans agree that all its ingredient cells (the mutation spots are not ingredients) are CORRECT or hold
+ * something the name tables cannot name, and as incomplete again after two consecutive scans that disagree. When it is complete and the setting asks for it,
  * {@link #update} says so once; the caller then deactivates the hologram (which resets this state), so nothing
  * lingers and nothing re-arms it.
  */
@@ -25,9 +25,13 @@ final class GreenhouseCompletion {
     private int streak;
 
     /**
-     * Whether the layout is complete in one scan: it has at least one ingredient cell, all of them are CORRECT and no
-     * recognised crop stands where the layout has none ({@code extras}, the scan's raw ones: the pink unplanned
-     * markers). Soil markers do not count. {@code raw} is the scan's verdicts aligned with the placements.
+     * Whether the layout is complete in one scan: it has at least one ingredient cell, all of them are CORRECT or
+     * UNVERIFIED and no recognised crop stands where the layout has none ({@code extras}, the scan's raw ones: the pink
+     * unplanned markers). Soil markers do not count. {@code raw} is the scan's verdicts aligned with the placements.
+     *
+     * <p>UNVERIFIED (a plant the name tables cannot name, which are unverified against the live game) counts as
+     * placed: the cell is filled and nothing recognised says it is wrong, so a gap in the tables must not keep the
+     * hologram on for a layout the player has finished.
      */
     static boolean allIngredientsCorrect(List<Placement> placements, List<Verdict> raw, List<Extra> extras) {
         if (placements.isEmpty() || raw.size() != placements.size() || !extras.isEmpty()) return false;
@@ -35,9 +39,42 @@ final class GreenhouseCompletion {
         for (int i = 0; i < placements.size(); i++) {
             if (placements.get(i).mutation()) continue;
             ingredients++;
-            if (raw.get(i).state() != State.CORRECT) return false;
+            State state = raw.get(i).state();
+            if (state != State.CORRECT && state != State.UNVERIFIED) return false;
         }
         return ingredients > 0;
+    }
+
+    /**
+     * What keeps a scan from counting as complete, for the trace: the ingredient cells still empty, wrong or not
+     * nameable, and the unplanned crops. Empty text when nothing blocks (or there is no layout).
+     */
+    static String blockers(List<Placement> placements, List<Verdict> raw, List<Extra> extras) {
+        if (placements.isEmpty() || raw.size() != placements.size()) return "";
+        int empty = 0;
+        int wrong = 0;
+        int unverified = 0;
+        for (int i = 0; i < placements.size(); i++) {
+            if (placements.get(i).mutation()) continue;
+            switch (raw.get(i).state()) {
+                case EMPTY -> empty++;
+                case WRONG -> wrong++;
+                case UNVERIFIED -> unverified++;
+                case CORRECT -> { }
+            }
+        }
+        StringBuilder out = new StringBuilder();
+        if (empty > 0) out.append("empty=").append(empty);
+        if (wrong > 0) out.append(out.isEmpty() ? "" : " ").append("wrong=").append(wrong);
+        if (unverified > 0) out.append(out.isEmpty() ? "" : " ").append("unverified=").append(unverified);
+        if (!extras.isEmpty()) {
+            out.append(out.isEmpty() ? "" : " ").append("extras=");
+            for (int i = 0; i < extras.size(); i++) {
+                Extra extra = extras.get(i);
+                out.append(i == 0 ? "" : ",").append(extra.crop()).append('@').append(extra.dx()).append(':').append(extra.dz());
+            }
+        }
+        return out.toString();
     }
 
     /**

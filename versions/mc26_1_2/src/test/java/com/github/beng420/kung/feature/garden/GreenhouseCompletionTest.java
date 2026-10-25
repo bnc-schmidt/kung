@@ -44,7 +44,29 @@ public final class GreenhouseCompletionTest {
             complete(placements, verdicts(State.CORRECT, State.CORRECT, State.WRONG)));
         assertFalse(complete(placements, verdicts(State.CORRECT, State.EMPTY, State.CORRECT)));
         assertFalse(complete(placements, verdicts(State.WRONG, State.CORRECT, State.CORRECT)));
-        assertFalse(complete(placements, verdicts(State.CORRECT, State.UNVERIFIED, State.CORRECT)));
+        assertFalse(complete(placements, verdicts(State.CORRECT, State.WRONG, State.CORRECT)));
+    }
+
+    @Test
+    public void aPlantTheNameTablesCannotNameStillCountsAsPlaced() {
+        List<Placement> placements = layout();
+
+        // The layout is built of mutations whose heads the tables may not know: the cell is filled, nothing is wrong.
+        assertTrue(complete(placements, verdicts(State.CORRECT, State.UNVERIFIED, State.CORRECT)));
+        assertTrue(complete(placements, verdicts(State.UNVERIFIED, State.UNVERIFIED, State.EMPTY)));
+        assertFalse("an empty cell is not placed", complete(placements, verdicts(State.UNVERIFIED, State.EMPTY, State.CORRECT)));
+    }
+
+    @Test
+    public void theBlockersNameWhatKeepsTheHologramOn() {
+        List<Placement> placements = layout();
+
+        assertEquals("", GreenhouseCompletion.blockers(placements, verdicts(State.CORRECT, State.CORRECT, State.EMPTY), List.of()));
+        assertEquals("empty=1 wrong=1", GreenhouseCompletion.blockers(placements,
+            verdicts(State.EMPTY, State.WRONG, State.WRONG), List.of()));
+        assertEquals("unverified=1 extras=Cactus@4:4,Carrot@0:1", GreenhouseCompletion.blockers(placements,
+            verdicts(State.CORRECT, State.UNVERIFIED, State.EMPTY),
+            List.of(new GreenhouseScanLogic.Extra(4, 4, "Cactus"), new GreenhouseScanLogic.Extra(0, 1, "Carrot"))));
     }
 
     @Test

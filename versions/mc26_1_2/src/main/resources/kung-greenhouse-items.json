@@ -47,7 +47,7 @@
   "Moonflower": {"id": "MOONFLOWER", "gfs": "MOONFLOWER"},
   "Sunflower": {"id": "DOUBLE_PLANT", "gfs": "DOUBLE_PLANT"},
   "Cactus": {"id": "CACTUS", "gfs": "CACTUS"},
-  "Melon Seeds": {"id": "MELON", "gfs": "MELON", "item": "Melon Slice", "names": ["Melon"], "note": "planted from a Melon Slice, one per stem"},
+  "Melon Seeds": {"id": "MELON", "gfs": "MELON", "item": "Melon Slice", "names": ["Melon"], "holdFirst": ["MELON_SEEDS"], "note": "planted from Melon Seeds or a Melon Slice, one per stem"},
   "Pumpkin Seeds": {"id": "PUMPKIN", "gfs": "PUMPKIN", "item": "Pumpkin", "plantsPerItem": 4, "note": "one Pumpkin gives 4 stems"},
   "Brown Mushroom": {"id": "BROWN_MUSHROOM", "gfs": "BROWN_MUSHROOM"},
   "Red Mushroom": {"id": "RED_MUSHROOM", "gfs": "RED_MUSHROOM"},
