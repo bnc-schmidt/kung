@@ -77,7 +77,7 @@ const server = http.createServer(async (request, response) => {
         return json(response, 429, { error: "too many requests" });
       }
       const report = await readJson(request);
-      const result = await mergeRoomReport(report);
+      const result = await serialized(() => mergeRoomReport(report));
       return json(response, 200, result);
     }
     if (request.method === "POST" && request.url === "/runs/live/report") {
@@ -97,7 +97,8 @@ const server = http.createServer(async (request, response) => {
       if (!withinLimit(jerryReportRequests, jerryReportLimit, request, session.uuid)) {
         return json(response, 429, { error: "too many requests" });
       }
-      return json(response, 200, await mergeJerryReport(await readJson(request)));
+      const report = await readJson(request);
+      return json(response, 200, await serialized(() => mergeJerryReport(report)));
     }
     if (request.method === "GET" && request.url.startsWith("/jerry?")) {
       const year = Number(new URL(request.url, "http://localhost").searchParams.get("year"));
@@ -129,7 +130,8 @@ server.listen(port, host, () => {
 });
 
 // Per client IP, so one person cannot burn the shared Hypixel key or spam Mojang. Behind Cloudflare
-// Tunnel every request comes from cloudflared, the real address is in CF-Connecting-IP.
+// Tunnel every request comes from cloudflared on this machine, the real address is in CF-Connecting-IP.
+// That header counts only when the connection itself is loopback; anyone else could set it freely.
 // The per-user limits are keyed on the session's UUID instead. The client posts a live report at most
 // every 10 ticks (2/s, 600 per 5 min), so its default is 3x that; a room report is a manual learn.
 const profileLimit = Number(process.env.KUNG_PROFILE_LIMIT_PER_5_MIN || 30);
@@ -151,8 +153,7 @@ const authLimit = Number(process.env.KUNG_AUTH_LIMIT_PER_5_MIN || 20);
 const authRequests = new Map();
 
 // Fixed 5 minute window per key; the key defaults to the client IP.
-function withinLimit(requests, limit, request,
-  key = String(request.headers["cf-connecting-ip"] || request.socket.remoteAddress || "?")) {
+function withinLimit(requests, limit, request, key = clientAddress(request)) {
   const now = Date.now();
   for (const [tracked, window] of requests) {
     if (now - window.start > 300_000) {
@@ -229,6 +230,12 @@ function pruneExpired(map) {
       map.delete(key);
     }
   }
+}
+
+function clientAddress(request) {
+  const peer = request.socket.remoteAddress || "?";
+  const forwarded = request.headers["cf-connecting-ip"];
+  return forwarded && /^(::1|127\.|::ffff:127\.)/.test(peer) ? String(forwarded) : peer;
 }
 
 function roomFor(map, max) {
@@ -420,8 +427,29 @@ async function readDatabase() {
 }
 
 async function writeDatabase(database) {
-  await fs.mkdir(path.dirname(dataFile), { recursive: true });
-  await fs.writeFile(dataFile, `${JSON.stringify(database, null, 2)}\n`, "utf8");
+  await writeFileAtomic(dataFile, `${JSON.stringify(database, null, 2)}\n`);
+}
+
+// Write next to the target, flush, then rename: a crash leaves the old file, never half a new one.
+async function writeFileAtomic(file, text) {
+  await fs.mkdir(path.dirname(file), { recursive: true });
+  const temporary = `${file}.${process.pid}.tmp`;
+  const handle = await fs.open(temporary, "w");
+  try {
+    await handle.writeFile(text, "utf8");
+    await handle.sync();
+  } finally {
+    await handle.close();
+  }
+  await fs.rename(temporary, file);
+}
+
+// Room and Jerry reports read, change and rewrite a file; one at a time so none overwrites another.
+let writeQueue = Promise.resolve();
+function serialized(task) {
+  const run = writeQueue.then(task);
+  writeQueue = run.catch(() => {});
+  return run;
 }
 
 function emptyJerry(year) {
@@ -458,8 +486,7 @@ async function mergeJerryReport(report) {
   const slot = (((Math.round((slotStart - jerry.anchor) / jerrySlotMillis)) % 6) + 6) % 6;
   jerry.positions = jerry.positions.map((known) => (known === mayor ? null : known));
   jerry.positions[slot] = mayor;
-  await fs.mkdir(path.dirname(jerryFile), { recursive: true });
-  await fs.writeFile(jerryFile, JSON.stringify(jerry), "utf8");
+  await writeFileAtomic(jerryFile, JSON.stringify(jerry));
   return jerry;
 }
 
@@ -560,22 +587,22 @@ function liveRunSnapshot(runKeyValue, requesterName) {
 
 function validateLiveRunReport(report) {
   if (!report || report.kind !== "kung-live-room-sync") {
-    throw new Error("expected kind=kung-live-room-sync");
+    throw httpError(400, "expected kind=kung-live-room-sync");
   }
   if (!report.runKey || typeof report.runKey !== "string") {
-    throw new Error("live report needs a runKey");
+    throw httpError(400, "live report needs a runKey");
   }
   if (report.rooms !== undefined && !Array.isArray(report.rooms)) {
-    throw new Error("live report rooms must be an array");
+    throw httpError(400, "live report rooms must be an array");
   }
   if (report.doors !== undefined && !Array.isArray(report.doors)) {
-    throw new Error("live report doors must be an array");
+    throw httpError(400, "live report doors must be an array");
   }
   if (report.players !== undefined && !Array.isArray(report.players)) {
-    throw new Error("live report players must be an array");
+    throw httpError(400, "live report players must be an array");
   }
   if (!Array.isArray(report.rooms) && !Array.isArray(report.doors) && !Array.isArray(report.players)) {
-    throw new Error("live report needs rooms, doors, or players");
+    throw httpError(400, "live report needs rooms, doors, or players");
   }
 }
 
@@ -657,19 +684,22 @@ function pruneLiveRuns() {
 
 function validateReport(report) {
   if (!report || report.kind !== "kung-room-export") {
-    throw new Error("expected kind=kung-room-export");
+    throw httpError(400, "expected kind=kung-room-export");
   }
   if (!report.name || typeof report.name !== "string") {
-    throw new Error("report needs a room name");
+    throw httpError(400, "report needs a room name");
   }
   if (!report.type || typeof report.type !== "string") {
-    throw new Error("report needs a room type");
+    throw httpError(400, "report needs a room type");
   }
   if (!Number.isInteger(report.secrets) || report.secrets < 0) {
-    throw new Error("report needs a non-negative secrets value");
+    throw httpError(400, "report needs a non-negative secrets value");
   }
   if (!Array.isArray(report.cells) || report.cells.length < 1 || report.cells.length > 4) {
-    throw new Error("report must contain 1-4 cells");
+    throw httpError(400, "report must contain 1-4 cells");
+  }
+  if (!report.cells.every(isObject)) {
+    throw httpError(400, "each cell must be an object");
   }
 }
 
@@ -703,17 +733,20 @@ function variantFromReport(report) {
   }));
   components.sort((a, b) => a.dz - b.dz || a.dx - b.dx);
   if (!connected(components)) {
-    throw new Error("room report cells must be connected");
+    throw httpError(400, "room report cells must be connected");
   }
   return { components };
 }
 
 function hashesFromReportCell(cell, report) {
   if (!Array.isArray(cell.hashes) || cell.hashes.length < 1) {
-    throw new Error("each cell needs at least one hash");
+    throw httpError(400, "each cell needs at least one hash");
   }
   const hashes = [];
   for (const hash of cell.hashes) {
+    if (!isObject(hash)) {
+      continue;
+    }
     const core = Number(hash.coreHash ?? hash.core ?? 0);
     const stable = Number(hash.stableCoreHash ?? hash.stable ?? 0);
     if (!core && !stable) {
@@ -734,7 +767,7 @@ function hashesFromReportCell(cell, report) {
     });
   }
   if (hashes.length < 1) {
-    throw new Error("each cell needs at least one non-zero hash");
+    throw httpError(400, "each cell needs at least one non-zero hash");
   }
   return hashes;
 }

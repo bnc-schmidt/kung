@@ -13,7 +13,8 @@ import { fileURLToPath } from "node:url";
 const here = path.dirname(fileURLToPath(import.meta.url));
 const fixtures = path.join(here, "../../versions/mc26_1_2/src/test/resources/catacombs");
 const rawFixture = JSON.parse(fs.readFileSync(path.join(fixtures, "salty-whale-profiles.json"), "utf8"));
-const strippedFixture = fs.readFileSync(path.join(fixtures, "salty-whale-profiles-stripped.json"), "utf8");
+// A Windows checkout may turn the fixture's \n into \r\n; the server always answers with \n.
+const strippedFixture = fs.readFileSync(path.join(fixtures, "salty-whale-profiles-stripped.json"), "utf8").replace(/\r\n/g, "\n");
 const fixtureUuid = new URL(rawFixture._source).searchParams.get("uuid");
 const dataFile = path.join(os.tmpdir(), `kung-room-sync-test-${process.pid}.json`);
 const roomReport = {
@@ -327,6 +328,59 @@ test("auth is rate limited per IP", async () => {
   assert.equal((await login(server, owner.name, "0".repeat(32))).status, 429);
 });
 
+test("CF-Connecting-IP counts only from a loopback connection", async (t) => {
+  const asIp = (ip) => ({ "cf-connecting-ip": ip });
+  const behindTunnel = await startServer({ KUNG_AUTH_LIMIT_PER_5_MIN: "1" });
+  assert.equal((await call(behindTunnel, "POST", "/auth/challenge", { headers: asIp("1.1.1.1") })).status, 200);
+  assert.equal((await call(behindTunnel, "POST", "/auth/challenge", { headers: asIp("1.1.1.1") })).status, 429);
+  assert.equal((await call(behindTunnel, "POST", "/auth/challenge", { headers: asIp("2.2.2.2") })).status, 200);
+
+  const external = Object.values(os.networkInterfaces()).flat()
+    .find((address) => address && address.family === "IPv4" && !address.internal)?.address;
+  if (!external) {
+    return t.skip("no non-loopback address on this machine");
+  }
+  const direct = await startServer({ KUNG_AUTH_LIMIT_PER_5_MIN: "1", KUNG_ROOM_SYNC_HOST: "0.0.0.0" });
+  direct.url = direct.url.replace("127.0.0.1", external);
+  assert.equal((await call(direct, "POST", "/auth/challenge", { headers: asIp("1.1.1.1") })).status, 200);
+  assert.equal((await call(direct, "POST", "/auth/challenge", { headers: asIp("2.2.2.2") })).status, 429);
+});
+
+test("authenticated but malformed reports are 400 and leave no stack in the log", async () => {
+  const server = await startServer({ KUNG_ROOM_WRITER_UUIDS: owner.id });
+  const token = (await signIn(server, owner)).body.token;
+  const cell = (hashes) => ({ ...roomReport, cells: [{ dx: 0, dz: 0, hashes }] });
+  const rooms = [null, [], {}, { ...roomReport, name: "" }, { ...roomReport, cells: [] }, { ...roomReport, cells: [null] },
+    cell([]), cell([null]), cell([{ coreHash: 0, stableCoreHash: 0 }])];
+  for (const body of rooms) {
+    assert.equal((await call(server, "POST", "/rooms/report", { token, body })).status, 400, JSON.stringify(body));
+  }
+  for (const body of [null, [], {}, { kind: "kung-live-room-sync" }, { kind: "kung-live-room-sync", runKey: "r" },
+    { kind: "kung-live-room-sync", runKey: "r", rooms: {} }]) {
+    assert.equal((await call(server, "POST", "/runs/live/report", { token, body })).status, 400, JSON.stringify(body));
+  }
+  assert.ok(!/\bat .*\.mjs/.test(server.output()), server.output());
+});
+
+test("parallel room reports all land in the file", async () => {
+  const file = path.join(os.tmpdir(), `kung-parallel-test-${process.pid}.json`);
+  fs.rmSync(file, { force: true });
+  const server = await startServer({
+    KUNG_ROOM_DATA_PATH: file,
+    KUNG_ROOM_WRITER_UUIDS: owner.id,
+    KUNG_ROOM_REPORT_LIMIT_PER_5_MIN: "1000",
+  });
+  const token = (await signIn(server, owner)).body.token;
+  const names = Array.from({ length: 25 }, (_, index) => `Room ${index}`);
+  const replies = await Promise.all(names.map((name) =>
+    call(server, "POST", "/rooms/report", { token, body: { ...roomReport, name } })));
+  assert.deepEqual(replies.map((reply) => reply.status), names.map(() => 200));
+  const saved = JSON.parse(fs.readFileSync(file, "utf8"));
+  assert.deepEqual(saved.rooms.map((room) => room.name).sort(), [...names].sort());
+  assert.deepEqual(fs.readdirSync(path.dirname(file)).filter((entry) => entry.startsWith(path.basename(file)) && entry.endsWith(".tmp")), []);
+  fs.rmSync(file, { force: true });
+});
+
 test("the log never shows a token or challenge", () => {
   assert.ok(secrets.length > 5);
   for (const secret of secrets) {
@@ -413,8 +467,8 @@ async function signIn(server, profile, name = profile.name) {
   return login(server, name, challenge);
 }
 
-async function call(server, method, route, { body, token } = {}) {
-  const headers = { "content-type": "application/json" };
+async function call(server, method, route, { body, token, headers: extra } = {}) {
+  const headers = { "content-type": "application/json", ...extra };
   if (token) {
     headers.authorization = `Bearer ${token}`;
   }

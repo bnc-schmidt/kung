@@ -11,7 +11,9 @@ import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
 import java.util.HashMap;
+import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.zip.ZipEntry;
@@ -42,27 +44,35 @@ public final class KungUpdateDownloadTest {
         assertOnlyFile(directory, verified);
     }
 
-    @Test public void checksumOptionalReleasesStillNeedCompleteValidKungMetadata() throws Exception {
-        byte[] bytes = jar(metadata("kung", VERSION, DEPENDENCIES), true);
+    @Test public void releaseWithoutAChecksumIsRejectedBeforeAnyRequest() throws Exception {
+        var requests = new AtomicInteger();
+        HttpServer server = server(200, new byte[] {1}, requests);
         Path directory = temp.newFolder("updates").toPath();
-        Path verified = download(200, bytes, bytes.length, "", directory);
-        assertArrayEquals(bytes, Files.readAllBytes(verified));
-        assertOnlyFile(directory, verified);
+        try (HttpClient client = HttpClient.newHttpClient()) {
+            for (String digest : new String[] {"", "sha256:abc", "md5:" + "0".repeat(32)}) {
+                assertThrows(IOException.class, () -> KungUpdateDownload.download(
+                    client, uri(server), directory, 1, digest, VERSION, INSTALLED));
+            }
+            assertEquals(0, requests.get());
+            assertEmpty(directory);
+        } finally {
+            server.stop(0);
+        }
     }
 
     @Test public void shortBodyCannotBecomeAValidDownloadEvenIfItIsACompleteZip() throws Exception {
         byte[] bytes = jar(metadata("kung", VERSION, DEPENDENCIES), true);
-        assertRejectedDownload(200, bytes, bytes.length + 10, "");
+        assertRejectedDownload(200, bytes, bytes.length + 10, digestOf(bytes));
     }
 
     @Test public void bodyLargerThanAdvertisedIsBoundedAndDiscarded() throws Exception {
         byte[] bytes = jar(metadata("kung", VERSION, DEPENDENCIES), true);
-        assertRejectedDownload(200, bytes, bytes.length - 10, "");
+        assertRejectedDownload(200, bytes, bytes.length - 10, digestOf(bytes));
     }
 
     @Test public void nonSuccessHttpStatusCannotInstallEvenIfItsBodyIsAValidJar() throws Exception {
         byte[] bytes = jar(metadata("kung", VERSION, DEPENDENCIES), true);
-        assertRejectedDownload(404, bytes, bytes.length, "");
+        assertRejectedDownload(404, bytes, bytes.length, digestOf(bytes));
     }
 
     @Test public void wrongReleaseChecksumIsRejectedAndTemporaryFileRemoved() throws Exception {
@@ -72,9 +82,9 @@ public final class KungUpdateDownloadTest {
 
     @Test public void invalidZipAndInvalidFabricMetadataNeverBecomeVerified() throws Exception {
         byte[] invalidZip = "not a zip".getBytes(StandardCharsets.UTF_8);
-        assertRejectedDownload(200, invalidZip, invalidZip.length, "");
+        assertRejectedDownload(200, invalidZip, invalidZip.length, digestOf(invalidZip));
         byte[] invalidJson = jar("{broken", true);
-        assertRejectedDownload(200, invalidJson, invalidJson.length, "");
+        assertRejectedDownload(200, invalidJson, invalidJson.length, digestOf(invalidJson));
     }
 
     @Test public void invalidAdvertisedSizeFailsBeforeOpeningNetworkConnection() throws Exception {
@@ -84,7 +94,7 @@ public final class KungUpdateDownloadTest {
         try (HttpClient client = HttpClient.newHttpClient()) {
             for (long size : new long[] {-1, 0, KungUpdateDownload.MAX_BYTES + 1}) {
                 assertThrows(IOException.class, () -> KungUpdateDownload.download(
-                    client, uri(server), directory, size, "", VERSION, INSTALLED));
+                    client, uri(server), directory, size, "sha256:" + "0".repeat(64), VERSION, INSTALLED));
             }
             assertEquals(0, requests.get());
             assertEmpty(directory);
@@ -147,6 +157,10 @@ public final class KungUpdateDownloadTest {
         assertThrows(IOException.class, () -> KungUpdateDownload.validate(candidate, VERSION, installed));
         installed.put("another-mod", "3.0.0");
         assertThrows(IOException.class, () -> KungUpdateDownload.validate(candidate, VERSION, installed));
+    }
+
+    private static String digestOf(byte[] bytes) throws Exception {
+        return "sha256:" + HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256").digest(bytes));
     }
 
     private void assertRejectedDownload(int status, byte[] bytes, long advertisedSize, String digest) throws Exception {

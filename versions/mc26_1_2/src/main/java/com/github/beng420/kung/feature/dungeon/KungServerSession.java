@@ -9,11 +9,13 @@ import com.mojang.authlib.exceptions.AuthenticationException;
 import com.mojang.authlib.exceptions.AuthenticationUnavailableException;
 import com.mojang.authlib.exceptions.InvalidCredentialsException;
 import java.io.IOException;
+import java.net.InetAddress;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
 import java.util.function.UnaryOperator;
@@ -97,6 +99,9 @@ public final class KungServerSession {
     private String signIn(URI base) {
         status = "Signing in...";
         try {
+            if (!safeForToken(base)) {
+                throw new IOException("the server URL must be https (http only for this computer or a home network)");
+            }
             HttpResponse<String> challengeResponse = post("auth/challenge", "");
             if (challengeResponse.statusCode() != 200) {
                 throw new IOException("server returned HTTP " + challengeResponse.statusCode());
@@ -138,6 +143,26 @@ public final class KungServerSession {
             }
             KungMod.LOGGER.warn("Kung server {}", status);
             throw new IllegalStateException(status);
+        }
+    }
+
+    /** The session token is a bearer: only https, or http to this computer or a private network, may carry it. */
+    static boolean safeForToken(URI base) {
+        if ("https".equalsIgnoreCase(base.getScheme())) {
+            return true;
+        }
+        String host = base.getHost();
+        if (!"http".equalsIgnoreCase(base.getScheme()) || host == null) {
+            return false;
+        }
+        if (host.equalsIgnoreCase("localhost") || host.toLowerCase(Locale.ROOT).endsWith(".local")) {
+            return true;
+        }
+        try {
+            InetAddress address = InetAddress.ofLiteral(host);
+            return address.isLoopbackAddress() || address.isSiteLocalAddress() || address.isLinkLocalAddress();
+        } catch (IllegalArgumentException exception) {
+            return false; // a public hostname
         }
     }
 

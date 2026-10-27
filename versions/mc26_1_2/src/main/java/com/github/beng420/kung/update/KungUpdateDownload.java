@@ -47,6 +47,7 @@ final class KungUpdateDownload {
     static Path download(HttpClient client, URI uri, Path directory, long size, String digest,
                          String version, Map<String, String> installed) throws IOException, InterruptedException {
         if (size <= 0 || size > MAX_BYTES) throw new IOException("Invalid release asset size.");
+        if (!digest.matches("(?i)sha256:[0-9a-f]{64}")) throw new IOException("Release asset has no SHA-256 digest.");
         Files.createDirectories(directory);
         Path temporary = Files.createTempFile(directory, "download-", ".tmp");
         try {
@@ -57,7 +58,7 @@ final class KungUpdateDownload {
             if (response.statusCode() != 200) throw new IOException("Asset returned HTTP " + response.statusCode());
             if (Files.size(temporary) != size) throw new IOException("Incomplete release asset.");
             String actualHash = KungUpdateInstaller.sha256(temporary);
-            if (!digest.isBlank() && !digest.equalsIgnoreCase("sha256:" + actualHash)) {
+            if (!digest.equalsIgnoreCase("sha256:" + actualHash)) {
                 throw new IOException("Release asset checksum mismatch.");
             }
             validate(temporary, version, installed);

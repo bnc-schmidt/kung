@@ -43,7 +43,7 @@ public final class KungUpdateActionTest {
             asset.addProperty("assetName", "kung-26.1.2-0.3.5.jar");
             asset.addProperty("downloadUrl", DOWNLOAD);
             asset.addProperty("size", 6_000_000L);
-            asset.addProperty("digest", "");
+            asset.addProperty("digest", "sha256:" + "0".repeat(64));
             snapshot.add("updateInfo", asset);
             state.set(gson.fromJson(snapshot, original.getClass()));
             System.setProperty("minecraft.launcher.brand", "theseus");

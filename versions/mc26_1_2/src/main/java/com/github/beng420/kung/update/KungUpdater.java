@@ -474,7 +474,7 @@ public enum KungUpdater {
         long size = object.has("size") ? object.get("size").getAsLong() : 0;
         if (size <= 0 || size > KungUpdateDownload.MAX_BYTES) return Optional.empty();
         String digest = stringValue(object, "digest");
-        if (!digest.isBlank() && !digest.matches("(?i)sha256:[0-9a-f]{64}")) return Optional.empty();
+        if (!digest.matches("(?i)sha256:[0-9a-f]{64}")) return Optional.empty();
         return Optional.of(new UpdateAsset(name, downloadUrl, size, digest));
     }
 

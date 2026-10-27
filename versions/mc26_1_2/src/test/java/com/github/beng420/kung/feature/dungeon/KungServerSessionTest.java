@@ -107,6 +107,18 @@ public final class KungServerSessionTest {
         }
     }
 
+    @Test public void theBearerTokenTravelsOnlyOverHttpsOrALocalNetwork() {
+        for (String safe : List.of("https://kung.bengcoding.org", "https://203.0.113.5:8765", "http://localhost:8765",
+            "http://127.0.0.1:8765", "http://[::1]:8765", "http://192.168.1.20:8765", "http://10.0.0.2", "http://172.16.5.4",
+            "http://homeserver.local:8765")) {
+            assertTrue(safe, KungServerSession.safeForToken(java.net.URI.create(safe)));
+        }
+        for (String unsafe : List.of("http://kung.bengcoding.org", "http://203.0.113.5:8765", "http://172.32.0.1",
+            "ftp://127.0.0.1", "http:///nohost")) {
+            assertFalse(unsafe, KungServerSession.safeForToken(java.net.URI.create(unsafe)));
+        }
+    }
+
     @Test public void mojangJoinFailuresKeepTheirCauseInTheMessage() {
         assertEquals("Mojang is unreachable",
             KungServerSession.signInFailure(new AuthenticationUnavailableException("Status: 503")));

@@ -169,7 +169,8 @@ depend on glob support in `node --test`, which older Node versions lack).
 Nothing to type: `https://kung.bengcoding.org` is the built-in server URL. Live map sync is
 still opt-in (`/kung roomsync enable`). The CA50 calculator uses the server when you have no
 own Hypixel key. Anyone signs in and reads; a player not on the writers list just has room
-uploads refused (403). `/kung roomsync server <url>` overrides the URL; a blank URL means no server.
+uploads refused (403). `/kung roomsync server <url>` overrides the URL; a blank URL means no server. Plain `http://` works
+only for this computer or a home network (localhost, 10.x, 172.16-31.x, 192.168.x, `*.local`); any other server needs `https://`.
 
 ## Cloudflare Tunnel
 
@@ -181,3 +182,7 @@ The tunnel is the only way in; no router port is opened.
 4. Bind the server to localhost: set `KUNG_ROOM_SYNC_HOST=127.0.0.1` in
    `kung-server.env` in the install folder, then `systemctl restart kung-server`. (An old `host.conf`
    drop-in that did this is moved into the env file by `install.sh`.)
+
+The server reads the player's address from `CF-Connecting-IP` only when the connection itself comes
+from this machine (that is `cloudflared`). A request that reaches the port directly is rate limited
+by its real address, whatever header it sends.
