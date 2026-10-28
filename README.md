@@ -39,7 +39,7 @@ progress and Critter Safari uniques.
 
 **Util** — hitboxes for any entity, SkyBlock mob or held item, sack tracker with goals,
 performance HUD with TPS, FPS and ping plus 30 second graphs, bow draw indicator, Frozen
-Blaze aura timer, lobby hop helper, superpairs helper, loadout auto close, chat commands,
+Blaze aura timer, Ragnarock Axe tick timer, lobby hop helper, superpairs helper, loadout auto close, chat commands,
 chat emotes and custom sounds.
 
 Everything stays client side and passive: Kung reads chat, packets and entities, and never

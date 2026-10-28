@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
+import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
@@ -76,6 +77,11 @@ public final class KungHudLayout {
                 config.misc::setFrozenBlazeHudX, config.misc::setFrozenBlazeHudY,
                 config.misc::frozenBlazeHudScale, config.misc::setFrozenBlazeHudScale,
                 config.misc::frozenBlazeHudEnabled, config.misc::setFrozenBlazeHudEnabled),
+            new Entry("rag_tick_timer", "Rag Tick Timer", () -> RagTickTimerFeature.overlayBounds(config.misc),
+                config.misc::ragTimerX, config.misc::ragTimerY,
+                config.misc::setRagTimerX, config.misc::setRagTimerY,
+                config.misc::ragTimerScale, config.misc::setRagTimerScale,
+                config.misc::ragTimerEnabled, config.misc::setRagTimerEnabled),
             new Entry("egg_sac_countdown", "Egg Sac Spawn Timer", () -> TarantulaHelperFeature.overlayBounds(config.slayer),
                 config.slayer::eggSacCountdownX, config.slayer::eggSacCountdownY,
                 config.slayer::setEggSacCountdownX, config.slayer::setEggSacCountdownY,

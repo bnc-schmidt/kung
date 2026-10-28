@@ -4,6 +4,7 @@ import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
+import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.client.multiplayer.MultiPlayerGameMode;
@@ -52,6 +53,12 @@ public abstract class MultiPlayerGameModeMixin {
         VisitorAlarmFeature.observeContainerInput(containerId, slotId, button, input);
         FeastOverlayFeature.observeContainerInput(containerId, slotId, button, input);
         NpcDialogueTrace.containerInput(containerId, slotId, button, input);
+    }
+
+    // Not useItemOn: a right-click on a chest or door never reaches the axe; one the block passes on lands here.
+    @Inject(method = "useItem", at = @At("HEAD"))
+    private void kung$observeUse(Player player, InteractionHand hand, CallbackInfoReturnable<InteractionResult> callbackInfo) {
+        RagTickTimerFeature.INSTANCE.observeUse(player, hand);
     }
 
     // Log-only: never cancels or changes the interaction.

@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
+import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import net.minecraft.client.Minecraft;
@@ -31,6 +32,7 @@ public final class KungHudPreviews {
             case "dragon_prio" -> M7DragonFeature.drawPrioPreview(graphics, config.dungeon);
             case "bow_draw_indicator" -> BowDrawIndicatorFeature.drawPreview(graphics, config.misc);
             case "frozen_blaze_hud" -> FrozenBlazeHudFeature.drawPreview(graphics, config.misc);
+            case "rag_tick_timer" -> RagTickTimerFeature.drawPreview(graphics, config.misc);
             case "egg_sac_countdown" -> TarantulaHelperFeature.drawCountdownPreview(graphics, config.slayer);
             case "performance_hud" -> PerformanceHudFeature.drawPreview(graphics, config.misc);
             case "sack_tracker" -> SackTrackerFeature.drawPreview(graphics, config.misc);

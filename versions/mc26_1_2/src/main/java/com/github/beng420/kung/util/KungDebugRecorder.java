@@ -261,7 +261,7 @@ public final class KungDebugRecorder {
             case "frozen-blaze" -> new AreaPolicy(0, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
             // Stand scans repeat every half second: digits are normalised, so one sample per 15 s and at most 40 a minute.
             case "nametag", "hitbox" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
-            case "bow-draw" -> new AreaPolicy(80, 60_000L, 0L, false, false);
+            case "bow-draw", "rag" -> new AreaPolicy(80, 60_000L, 0L, false, false);
             // Two lines per Sack pull (at most one per 2 s): never deduped, so every send shows up as evidence.
             case "greenhouse-supply" -> new AreaPolicy(0, 60_000L, 0L, false, important);
             case "map-change" -> new AreaPolicy(120, 60_000L, 3_000L, false, important);
