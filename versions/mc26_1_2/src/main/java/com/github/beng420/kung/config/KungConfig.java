@@ -8,6 +8,7 @@ import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.FeastConfig;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.HitboxesConfig;
+import com.github.beng420.kung.config.category.InvisibugConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.config.category.SafariConfig;
@@ -46,6 +47,7 @@ public final class KungConfig {
     public VisitorAlarmConfig visitorAlarm = new VisitorAlarmConfig();
     public HitboxesConfig hitboxes = new HitboxesConfig();
     public GreenhouseConfig greenhouse = new GreenhouseConfig();
+    public InvisibugConfig invisibug = new InvisibugConfig();
 
     private transient Path explicitConfigFile;
     private transient boolean loading;
@@ -94,6 +96,7 @@ public final class KungConfig {
                     visitorAlarm = loaded.visitorAlarm;
                     hitboxes = loaded.hitboxes;
                     greenhouse = loaded.greenhouse;
+                    invisibug = loaded.invisibug;
                     loadedSuccessfully = true;
                 }
             }
@@ -129,6 +132,7 @@ public final class KungConfig {
             loaded.debug.setTarantulaMessages(slayerJson.get("tarantulaHelperDebugMessages").getAsBoolean());
         }
         migrateLegacyChatCommandSettings(loaded, miscJson);
+        loaded.misc.keepOwnChannelsWhereChanged(name -> hasValue(miscJson, name));
         loaded.normalize();
         loaded.loading = false;
         return loaded;
@@ -160,6 +164,7 @@ public final class KungConfig {
         if (visitorAlarm == null) visitorAlarm = new VisitorAlarmConfig();
         if (hitboxes == null) hitboxes = new HitboxesConfig();
         if (greenhouse == null) greenhouse = new GreenhouseConfig();
+        if (invisibug == null) invisibug = new InvisibugConfig();
     }
 
     private void bindCategories() {
@@ -175,6 +180,7 @@ public final class KungConfig {
         visitorAlarm.onChange(this::save);
         hitboxes.onChange(this::save);
         greenhouse.onChange(this::save);
+        invisibug.onChange(this::save);
     }
 
     private void normalize() {
@@ -203,6 +209,7 @@ public final class KungConfig {
         misc.normalize();
         hitboxes.normalize();
         greenhouse.normalize();
+        invisibug.setThickness(invisibug.thickness());
     }
 
     private static JsonObject object(JsonObject parent, String name) {

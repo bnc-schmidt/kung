@@ -235,6 +235,160 @@ public final class CatacombsCalculatorTest {
             JsonParser.parseString("{\"attributes\":{\"stacks\":{}}}").getAsJsonObject()));
     }
 
+    @Test
+    public void onlyPlayingOneClassLetsTheOthersEarnAQuarterAndTheSlowestClassSetsTheRuns() {
+        var current = new EnumMap<DungeonClass, Double>(DungeonClass.class);
+        var xp = new EnumMap<DungeonClass, Double>(DungeonClass.class);
+        for (DungeonClass dungeonClass : DungeonClass.values()) {
+            current.put(dungeonClass, 0.0);
+            xp.put(dungeonClass, 400_000.0);
+        }
+        // The played Archer needs 1425 runs at 400k, the other four need 5699 at their 100k share.
+        long runs = CatacombsAverageCalculator.runsWithOnly(DungeonClass.ARCHER, current, xp, 50);
+        assertEquals(5699, runs);
+        assertSoloCompletes(DungeonClass.ARCHER, current, xp, runs, 50);
+
+        // A played class far behind the rest is the slowest itself.
+        for (DungeonClass dungeonClass : DungeonClass.values()) current.put(dungeonClass, LEVEL_50_XP);
+        current.put(DungeonClass.MAGE, 0.0);
+        xp.put(DungeonClass.MAGE, 100_000.0);
+        runs = CatacombsAverageCalculator.runsWithOnly(DungeonClass.MAGE, current, xp, 50);
+        assertEquals(5699, runs);
+        assertSoloCompletes(DungeonClass.MAGE, current, xp, runs, 50);
+        // Played by someone else, the same class only earns its quarter share.
+        runs = CatacombsAverageCalculator.runsWithOnly(DungeonClass.TANK, current, xp, 50);
+        assertEquals(22_793, runs);
+        assertSoloCompletes(DungeonClass.TANK, current, xp, runs, 50);
+    }
+
+    @Test
+    public void onlyPlayingOneClassIsDoneWithoutRunsOrNeverWithoutXp() {
+        var current = new EnumMap<DungeonClass, Double>(DungeonClass.class);
+        for (DungeonClass dungeonClass : DungeonClass.values()) current.put(dungeonClass, LEVEL_50_XP);
+        // Finished classes need no XP rate; a missing one does.
+        assertEquals(0, CatacombsAverageCalculator.runsWithOnly(DungeonClass.TANK, current, Map.of(), 50));
+        current.put(DungeonClass.HEALER, LEVEL_50_XP - 1);
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.runsWithOnly(DungeonClass.TANK, current, Map.of(), 50));
+        assertEquals(1, CatacombsAverageCalculator.runsWithOnly(DungeonClass.HEALER, current,
+            Map.of(DungeonClass.HEALER, 1.0), 50));
+    }
+
+    @Test
+    public void onlyPlayingOneClassNeverBeatsTheBestMixOnARealProfile() {
+        ProfileData profile = parse(fixture("salty-whale-profiles.json")).player().selectedProfile();
+        var xp = selectedXp(profile.classPerks(), 1.0);
+        Breakdown mixed = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp);
+        for (DungeonClass dungeonClass : DungeonClass.values()) {
+            long runs = CatacombsAverageCalculator.runsWithOnly(dungeonClass, profile.classXp(), xp, 50);
+            assertTrue(dungeonClass.label(), runs >= mixed.total());
+            assertSoloCompletes(dungeonClass, profile.classXp(), xp, runs, 50);
+        }
+    }
+
+    @Test
+    public void classLevelRunsRoundUpAndIgnoreTheOtherClasses() {
+        assertEquals(2, CatacombsAverageCalculator.runsToClassLevel(LEVEL_50_XP - 1_000_000, 630_000, 50));
+        assertEquals(1, CatacombsAverageCalculator.runsToClassLevel(LEVEL_50_XP - 630_000, 630_000, 50));
+        assertEquals(2, CatacombsAverageCalculator.runsToClassLevel(LEVEL_50_XP - 630_001, 630_000, 50));
+        assertEquals(0, CatacombsAverageCalculator.runsToClassLevel(LEVEL_50_XP, 0, 50));
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.runsToClassLevel(0, 0, 50));
+    }
+
+    @Test
+    public void oneClassAndClassLevelAnswersNameTheClassAndStayShort() {
+        assertEquals("Beng114 is 5699 M7 runs away from ca50 with only Archer",
+            CatacombsAverageCalculator.oneClassSummaryLine("Beng114", "M7", DungeonClass.ARCHER, 50, 5699));
+        assertEquals("Beng114 already has ca50", CatacombsAverageCalculator.oneClassSummaryLine("Beng114", "M7",
+            DungeonClass.ARCHER, 50, 0));
+        assertEquals("Beng114 is infinite M7 runs away from ca50 with only Tank",
+            CatacombsAverageCalculator.oneClassSummaryLine("Beng114", "M7", DungeonClass.TANK, 50, Long.MAX_VALUE));
+        // 49.99 is shown as 49.9, not rounded up to the level it has not reached.
+        assertEquals("Beng114 is 2 M7 runs away from Archer 50 (now 49.9)",
+            CatacombsAverageCalculator.classLevelSummaryLine("Beng114", "M7", DungeonClass.ARCHER, 50, LEVEL_50_XP - 1_000_000, 2));
+        assertEquals("Beng114's Archer is already 50",
+            CatacombsAverageCalculator.classLevelSummaryLine("Beng114", "M7", DungeonClass.ARCHER, 50, LEVEL_50_XP, 0));
+    }
+
+    @Test
+    public void everyGoalAnswersFromTheSameProfileData() {
+        var player = parse(fixture("salty-whale-profiles.json")).player();
+        var calculator = new CatacombsAverageCalculator();
+
+        var level = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_LEVEL, 50, DungeonClass.MAGE, false);
+        assertTrue(level.message(), level.success());
+        assertTrue(level.message(), level.message().startsWith(player.name() + " is ") && level.message().contains(" M7 runs away from Mage 50 (now ")
+            || level.message().equals(player.name() + "'s Mage is already 50"));
+        assertTrue(level.debugDetails().contains("class=mage"));
+
+        var solo = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, DungeonClass.TANK, false);
+        assertTrue(solo.message(), solo.success());
+        assertTrue(solo.message(), solo.message().endsWith("with only Tank") || solo.message().endsWith("already has ca50"));
+
+        var plain = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, false);
+        assertTrue(plain.message(), plain.message().contains("runs away from ca50 (Arch "));
+        assertFalse(plain.debugDetails().contains("class="));
+    }
+
+    @Test
+    public void everyLevelFromOneUpIsATargetNotJustFifty() {
+        var current = new EnumMap<DungeonClass, Double>(DungeonClass.class);
+        var xp = new EnumMap<DungeonClass, Double>(DungeonClass.class);
+        for (DungeonClass dungeonClass : DungeonClass.values()) {
+            current.put(dungeonClass, 0.0);
+            xp.put(dungeonClass, 1_000_000.0);
+        }
+        // Level 60 is 2,569,809,640 XP: 2570 runs for the played class, 10280 at the 250k share of the others.
+        long runs = CatacombsAverageCalculator.runsWithOnly(DungeonClass.ARCHER, current, xp, 60);
+        assertEquals(10_280, runs);
+        assertSoloCompletes(DungeonClass.ARCHER, current, xp, runs, 60);
+        assertEquals(2, CatacombsAverageCalculator.runsWithOnly(DungeonClass.ARCHER, current, Map.of(
+            DungeonClass.ARCHER, 100.0, DungeonClass.BERSERK, 100.0, DungeonClass.HEALER, 100.0,
+            DungeonClass.MAGE, 100.0, DungeonClass.TANK, 100.0), 1)); // 50 XP: 25 per run for the others
+        assertEquals(2570, CatacombsAverageCalculator.runsToClassLevel(0, 1_000_000, 60));
+        assertEquals(1, CatacombsAverageCalculator.runsToClassLevel(0, 100, 1));
+        assertEquals("Beng114 is 42 M7 runs away from Archer 60 (now 50.5)",
+            CatacombsAverageCalculator.classLevelSummaryLine("Beng114", "M7", DungeonClass.ARCHER, 60, LEVEL_50_XP + 100_000_000, 42));
+        assertEquals("Beng114's Archer is already 60",
+            CatacombsAverageCalculator.classLevelSummaryLine("Beng114", "M7", DungeonClass.ARCHER, 60, CatacombsAverageCalculator.xpForLevel(60), 0));
+        assertEquals("Beng114 is 7 M7 runs away from ca60 with only Mage",
+            CatacombsAverageCalculator.oneClassSummaryLine("Beng114", "M7", DungeonClass.MAGE, 60, 7));
+        assertEquals("Beng114 already has ca60", CatacombsAverageCalculator.oneClassSummaryLine("Beng114", "M7",
+            DungeonClass.MAGE, 60, 0));
+
+        var player = parse(fixture("salty-whale-profiles.json")).player();
+        var calculator = new CatacombsAverageCalculator();
+        var cata = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CATACOMBS, 67, null, false);
+        assertTrue(cata.message(), cata.message().startsWith(player.name() + " is ") && cata.message().endsWith(" M7 runs away from c67"));
+        assertTrue(cata.debugDetails(), cata.debugDetails().contains("level=67"));
+        var average = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, null, false);
+        assertTrue(average.message(), average.message().contains(" M7 runs away from ca60 (Arch "));
+        var solo = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, DungeonClass.HEALER, false);
+        assertTrue(solo.message(), solo.message().endsWith(" M7 runs away from ca60 with only Healer"));
+        // A higher goal never needs fewer runs than a lower one.
+        var lower = calculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, false);
+        assertTrue(runsIn(average.message()) >= runsIn(lower.message()));
+    }
+
+    private static long runsIn(String message) {
+        return Long.parseLong(message.replaceFirst("^.* is ([0-9]+) M7 runs away.*$", "$1"));
+    }
+
+    private static void assertSoloCompletes(DungeonClass played, Map<DungeonClass, Double> current,
+                                            Map<DungeonClass, Double> xp, long runs, int level) {
+        // The planned runs finish every class; one run fewer leaves the last class short.
+        assertTrue(everyClassDone(played, current, xp, runs, level));
+        assertTrue(runs == 0 || !everyClassDone(played, current, xp, runs - 1, level));
+    }
+
+    private static boolean everyClassDone(DungeonClass played, Map<DungeonClass, Double> current,
+                                          Map<DungeonClass, Double> xp, long runs, int level) {
+        for (DungeonClass dungeonClass : DungeonClass.values()) {
+            double share = xp.get(dungeonClass) * (dungeonClass == played ? 1.0 : 0.25);
+            if (current.getOrDefault(dungeonClass, 0.0) + runs * share < CatacombsAverageCalculator.xpForLevel(level)) return false;
+        }
+        return true;
+    }
+
     private static void assertCompletes(Map<DungeonClass, Double> current, Map<DungeonClass, Double> xp, Breakdown result) {
         assertCompletes(current, xp, result, LEVEL_50_XP);
     }

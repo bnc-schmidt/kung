@@ -32,12 +32,12 @@ public class ChatCommandAliasTest {
         assertFalse(matches(ChatCommand.JERRY, "!derpy"));
         // Existing commands keep their single name and their optional player.
         assertTrue(matches(ChatCommand.TPS, "!tps"));
-        assertTrue(matches(ChatCommand.C50, "!c50 Beng114"));
-        assertTrue(matches(ChatCommand.CA50, "!ca50"));
+        assertTrue(matches(ChatCommand.C, "!c50 Beng114"));
+        assertTrue(matches(ChatCommand.CA, "!ca50"));
         assertFalse(matches(ChatCommand.TPS, "!tps now"));
-        var named = ChatCommand.C50.pattern.matcher("!c50 Beng114");
+        var named = ChatCommand.C.pattern.matcher("!c50 Beng114");
         assertTrue(named.matches());
-        assertEquals("Beng114", ChatCommand.C50.target(named));
+        assertEquals("Beng114", ChatCommand.C.target(named));
         var mayor = ChatCommand.DERPY.pattern.matcher("!derpy");
         assertTrue(mayor.matches());
         assertNull(ChatCommand.DERPY.target(mayor));
@@ -74,6 +74,8 @@ public class ChatCommandAliasTest {
         var config = new MiscConfig();
         config.setChatCommandsEnabled(true);
 
+        config.setDerpyUseDefaultChannels(false);
+        config.setJerryUseDefaultChannels(false);
         config.setScorpChatCommandEnabled(false);
         assertFalse(ChatCommand.SCORPIUS.isEnabled(config, ChatChannel.PARTY));
         assertTrue(ChatCommand.JERRY.isEnabled(config, ChatChannel.PARTY));

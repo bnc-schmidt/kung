@@ -122,6 +122,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
             }
 
             String targetName = command.target(matcher);
+            int level = command.level(matcher);
             if (targetName == null || targetName.isBlank()) {
                 targetName = senderName;
             } else {
@@ -132,6 +133,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                         channel,
                         senderName,
                         targetName,
+                        level,
                         GUILD_RESOLVE_WAIT_TICKS,
                         chatContext.replyTarget()
                     ));
@@ -158,7 +160,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 return;
             }
 
-            command.execute(client, channel, targetName, response -> queue(channel, chatContext.replyTarget(), response));
+            command.execute(client, channel, targetName, level, response -> queue(channel, chatContext.replyTarget(), response));
             return;
         }
     }
@@ -327,6 +329,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                     pending.channel(),
                     pending.senderName(),
                     pending.inputName(),
+                    pending.level(),
                     ticksLeft,
                     pending.replyTarget()
                 ));
@@ -343,7 +346,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 queue(pending.channel(), pending.replyTarget(), "Could not match " + pending.inputName() + " to a player.");
                 continue;
             }
-            pending.command().execute(client, pending.channel(), resolution.name(), response ->
+            pending.command().execute(client, pending.channel(), resolution.name(), pending.level(), response ->
                 queue(pending.channel(), pending.replyTarget(), response));
         }
     }
@@ -445,6 +448,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         ChatChannel channel,
         String senderName,
         String inputName,
+        int level,
         int ticksLeft,
         String replyTarget
     ) {

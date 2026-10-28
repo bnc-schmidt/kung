@@ -4,6 +4,7 @@ import com.github.beng420.kung.util.KeyboardLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.function.Predicate;
 import org.lwjgl.glfw.GLFW;
 
 public final class MiscConfig extends ConfigCategory {
@@ -23,6 +24,14 @@ public final class MiscConfig extends ConfigCategory {
     private int frozenBlazeHudY = 210;
     private int frozenBlazeHudScale = 100;
     private boolean frozenBlazeAlarmEnabled = false;
+    private boolean ragTimerEnabled = false;
+    private boolean ragTimerEffectEnabled = false;
+    private boolean ragTimerCooldownEnabled = false;
+    /** From the right-click, so the effect's 200 ticks and the 60 of the cast come out of it. */
+    private int ragTimerCooldownTicks = 400;
+    private int ragTimerX = 6;
+    private int ragTimerY = 270;
+    private int ragTimerScale = 100;
     private boolean performanceHudEnabled = false;
     private int performanceHudX = 6;
     private int performanceHudY = 120;
@@ -97,6 +106,28 @@ public final class MiscConfig extends ConfigCategory {
     private boolean yotsGuildCommandsEnabled = true;
     private boolean yotsAllChatCommandsEnabled = false;
     private boolean yotsPrivateCommandsEnabled = false;
+    private boolean classLevelChatCommandEnabled = true;
+    private boolean classLevelPartyCommandsEnabled = true;
+    private boolean classLevelGuildCommandsEnabled = true;
+    private boolean classLevelAllChatCommandsEnabled = false;
+    private boolean classLevelPrivateCommandsEnabled = false;
+    private boolean specialMayorsChatCommandsEnabled = true;
+    private boolean yearlyEventsChatCommandsEnabled = true;
+    // The channels every command answers in, unless its own "UseDefaultChannels" is off.
+    private boolean defaultPartyCommandsEnabled = true;
+    private boolean defaultGuildCommandsEnabled = true;
+    private boolean defaultAllChatCommandsEnabled = false;
+    private boolean defaultPrivateCommandsEnabled = false;
+    private boolean c50UseDefaultChannels = true;
+    private boolean ca50UseDefaultChannels = true;
+    private boolean tpsUseDefaultChannels = true;
+    private boolean jerryUseDefaultChannels = true;
+    private boolean scorpUseDefaultChannels = true;
+    private boolean derpyUseDefaultChannels = true;
+    private boolean yotpUseDefaultChannels = true;
+    private boolean yotwUseDefaultChannels = true;
+    private boolean yotsUseDefaultChannels = true;
+    private boolean classLevelUseDefaultChannels = true;
 
     // Loadouts & Superpairs
     private boolean loadoutsAutoCloseEnabled = false;
@@ -141,6 +172,20 @@ public final class MiscConfig extends ConfigCategory {
     public void setFrozenBlazeHudScale(int value) { frozenBlazeHudScale = Math.clamp(value, 25, 300); save(); }
     public boolean frozenBlazeAlarmEnabled() { return frozenBlazeAlarmEnabled; }
     public void setFrozenBlazeAlarmEnabled(boolean value) { frozenBlazeAlarmEnabled = value; save(); }
+    public boolean ragTimerEnabled() { return ragTimerEnabled; }
+    public void setRagTimerEnabled(boolean value) { ragTimerEnabled = value; save(); }
+    public boolean ragTimerEffectEnabled() { return ragTimerEffectEnabled; }
+    public void setRagTimerEffectEnabled(boolean value) { ragTimerEffectEnabled = value; save(); }
+    public boolean ragTimerCooldownEnabled() { return ragTimerCooldownEnabled; }
+    public void setRagTimerCooldownEnabled(boolean value) { ragTimerCooldownEnabled = value; save(); }
+    public int ragTimerCooldownTicks() { return Math.clamp(ragTimerCooldownTicks, 60, 400); }
+    public void setRagTimerCooldownTicks(int value) { ragTimerCooldownTicks = Math.clamp(value, 60, 400); save(); }
+    public int ragTimerX() { return ragTimerX; }
+    public void setRagTimerX(int value) { ragTimerX = value; save(); }
+    public int ragTimerY() { return ragTimerY; }
+    public void setRagTimerY(int value) { ragTimerY = value; save(); }
+    public int ragTimerScale() { return ragTimerScale; }
+    public void setRagTimerScale(int value) { ragTimerScale = Math.clamp(value, 25, 300); save(); }
     public boolean performanceHudEnabled() { return performanceHudEnabled; }
     public void setPerformanceHudEnabled(boolean value) { performanceHudEnabled = value; save(); }
     public int performanceHudX() { return performanceHudX; }
@@ -339,97 +384,169 @@ public final class MiscConfig extends ConfigCategory {
     }
     public boolean c50ChatCommandEnabled() { return c50ChatCommandEnabled; }
     public void setC50ChatCommandEnabled(boolean value) { c50ChatCommandEnabled = value; save(); }
-    public boolean c50PartyCommandsEnabled() { return c50PartyCommandsEnabled; }
+    public boolean c50PartyCommandsEnabled() { return c50UseDefaultChannels ? defaultPartyCommandsEnabled : c50PartyCommandsEnabled; }
     public void setC50PartyCommandsEnabled(boolean value) { c50PartyCommandsEnabled = value; save(); }
-    public boolean c50GuildCommandsEnabled() { return c50GuildCommandsEnabled; }
+    public boolean c50GuildCommandsEnabled() { return c50UseDefaultChannels ? defaultGuildCommandsEnabled : c50GuildCommandsEnabled; }
     public void setC50GuildCommandsEnabled(boolean value) { c50GuildCommandsEnabled = value; save(); }
-    public boolean c50AllChatCommandsEnabled() { return c50AllChatCommandsEnabled; }
+    public boolean c50AllChatCommandsEnabled() { return c50UseDefaultChannels ? defaultAllChatCommandsEnabled : c50AllChatCommandsEnabled; }
     public void setC50AllChatCommandsEnabled(boolean value) { c50AllChatCommandsEnabled = value; save(); }
-    public boolean c50PrivateCommandsEnabled() { return c50PrivateCommandsEnabled; }
+    public boolean c50PrivateCommandsEnabled() { return c50UseDefaultChannels ? defaultPrivateCommandsEnabled : c50PrivateCommandsEnabled; }
     public void setC50PrivateCommandsEnabled(boolean value) { c50PrivateCommandsEnabled = value; save(); }
     public boolean ca50ChatCommandEnabled() { return ca50ChatCommandEnabled; }
     public void setCa50ChatCommandEnabled(boolean value) { ca50ChatCommandEnabled = value; save(); }
-    public boolean ca50PartyCommandsEnabled() { return ca50PartyCommandsEnabled; }
+    public boolean ca50PartyCommandsEnabled() { return ca50UseDefaultChannels ? defaultPartyCommandsEnabled : ca50PartyCommandsEnabled; }
     public void setCa50PartyCommandsEnabled(boolean value) { ca50PartyCommandsEnabled = value; save(); }
-    public boolean ca50GuildCommandsEnabled() { return ca50GuildCommandsEnabled; }
+    public boolean ca50GuildCommandsEnabled() { return ca50UseDefaultChannels ? defaultGuildCommandsEnabled : ca50GuildCommandsEnabled; }
     public void setCa50GuildCommandsEnabled(boolean value) { ca50GuildCommandsEnabled = value; save(); }
-    public boolean ca50AllChatCommandsEnabled() { return ca50AllChatCommandsEnabled; }
+    public boolean ca50AllChatCommandsEnabled() { return ca50UseDefaultChannels ? defaultAllChatCommandsEnabled : ca50AllChatCommandsEnabled; }
     public void setCa50AllChatCommandsEnabled(boolean value) { ca50AllChatCommandsEnabled = value; save(); }
-    public boolean ca50PrivateCommandsEnabled() { return ca50PrivateCommandsEnabled; }
+    public boolean ca50PrivateCommandsEnabled() { return ca50UseDefaultChannels ? defaultPrivateCommandsEnabled : ca50PrivateCommandsEnabled; }
     public void setCa50PrivateCommandsEnabled(boolean value) { ca50PrivateCommandsEnabled = value; save(); }
     public boolean tpsChatCommandEnabled() { return tpsChatCommandEnabled; }
     public void setTpsChatCommandEnabled(boolean value) { tpsChatCommandEnabled = value; save(); }
-    public boolean tpsPartyCommandsEnabled() { return tpsPartyCommandsEnabled; }
+    public boolean tpsPartyCommandsEnabled() { return tpsUseDefaultChannels ? defaultPartyCommandsEnabled : tpsPartyCommandsEnabled; }
     public void setTpsPartyCommandsEnabled(boolean value) { tpsPartyCommandsEnabled = value; save(); }
-    public boolean tpsGuildCommandsEnabled() { return tpsGuildCommandsEnabled; }
+    public boolean tpsGuildCommandsEnabled() { return tpsUseDefaultChannels ? defaultGuildCommandsEnabled : tpsGuildCommandsEnabled; }
     public void setTpsGuildCommandsEnabled(boolean value) { tpsGuildCommandsEnabled = value; save(); }
-    public boolean tpsAllChatCommandsEnabled() { return tpsAllChatCommandsEnabled; }
+    public boolean tpsAllChatCommandsEnabled() { return tpsUseDefaultChannels ? defaultAllChatCommandsEnabled : tpsAllChatCommandsEnabled; }
     public void setTpsAllChatCommandsEnabled(boolean value) { tpsAllChatCommandsEnabled = value; save(); }
-    public boolean tpsPrivateCommandsEnabled() { return tpsPrivateCommandsEnabled; }
+    public boolean tpsPrivateCommandsEnabled() { return tpsUseDefaultChannels ? defaultPrivateCommandsEnabled : tpsPrivateCommandsEnabled; }
     public void setTpsPrivateCommandsEnabled(boolean value) { tpsPrivateCommandsEnabled = value; save(); }
     public boolean jerryChatCommandEnabled() { return jerryChatCommandEnabled; }
     public void setJerryChatCommandEnabled(boolean value) { jerryChatCommandEnabled = value; save(); }
-    public boolean jerryPartyCommandsEnabled() { return jerryPartyCommandsEnabled; }
+    public boolean jerryPartyCommandsEnabled() { return jerryUseDefaultChannels ? defaultPartyCommandsEnabled : jerryPartyCommandsEnabled; }
     public void setJerryPartyCommandsEnabled(boolean value) { jerryPartyCommandsEnabled = value; save(); }
-    public boolean jerryGuildCommandsEnabled() { return jerryGuildCommandsEnabled; }
+    public boolean jerryGuildCommandsEnabled() { return jerryUseDefaultChannels ? defaultGuildCommandsEnabled : jerryGuildCommandsEnabled; }
     public void setJerryGuildCommandsEnabled(boolean value) { jerryGuildCommandsEnabled = value; save(); }
-    public boolean jerryAllChatCommandsEnabled() { return jerryAllChatCommandsEnabled; }
+    public boolean jerryAllChatCommandsEnabled() { return jerryUseDefaultChannels ? defaultAllChatCommandsEnabled : jerryAllChatCommandsEnabled; }
     public void setJerryAllChatCommandsEnabled(boolean value) { jerryAllChatCommandsEnabled = value; save(); }
-    public boolean jerryPrivateCommandsEnabled() { return jerryPrivateCommandsEnabled; }
+    public boolean jerryPrivateCommandsEnabled() { return jerryUseDefaultChannels ? defaultPrivateCommandsEnabled : jerryPrivateCommandsEnabled; }
     public void setJerryPrivateCommandsEnabled(boolean value) { jerryPrivateCommandsEnabled = value; save(); }
     public boolean scorpChatCommandEnabled() { return scorpChatCommandEnabled; }
     public void setScorpChatCommandEnabled(boolean value) { scorpChatCommandEnabled = value; save(); }
-    public boolean scorpPartyCommandsEnabled() { return scorpPartyCommandsEnabled; }
+    public boolean scorpPartyCommandsEnabled() { return scorpUseDefaultChannels ? defaultPartyCommandsEnabled : scorpPartyCommandsEnabled; }
     public void setScorpPartyCommandsEnabled(boolean value) { scorpPartyCommandsEnabled = value; save(); }
-    public boolean scorpGuildCommandsEnabled() { return scorpGuildCommandsEnabled; }
+    public boolean scorpGuildCommandsEnabled() { return scorpUseDefaultChannels ? defaultGuildCommandsEnabled : scorpGuildCommandsEnabled; }
     public void setScorpGuildCommandsEnabled(boolean value) { scorpGuildCommandsEnabled = value; save(); }
-    public boolean scorpAllChatCommandsEnabled() { return scorpAllChatCommandsEnabled; }
+    public boolean scorpAllChatCommandsEnabled() { return scorpUseDefaultChannels ? defaultAllChatCommandsEnabled : scorpAllChatCommandsEnabled; }
     public void setScorpAllChatCommandsEnabled(boolean value) { scorpAllChatCommandsEnabled = value; save(); }
-    public boolean scorpPrivateCommandsEnabled() { return scorpPrivateCommandsEnabled; }
+    public boolean scorpPrivateCommandsEnabled() { return scorpUseDefaultChannels ? defaultPrivateCommandsEnabled : scorpPrivateCommandsEnabled; }
     public void setScorpPrivateCommandsEnabled(boolean value) { scorpPrivateCommandsEnabled = value; save(); }
     public boolean derpyChatCommandEnabled() { return derpyChatCommandEnabled; }
     public void setDerpyChatCommandEnabled(boolean value) { derpyChatCommandEnabled = value; save(); }
-    public boolean derpyPartyCommandsEnabled() { return derpyPartyCommandsEnabled; }
+    public boolean derpyPartyCommandsEnabled() { return derpyUseDefaultChannels ? defaultPartyCommandsEnabled : derpyPartyCommandsEnabled; }
     public void setDerpyPartyCommandsEnabled(boolean value) { derpyPartyCommandsEnabled = value; save(); }
-    public boolean derpyGuildCommandsEnabled() { return derpyGuildCommandsEnabled; }
+    public boolean derpyGuildCommandsEnabled() { return derpyUseDefaultChannels ? defaultGuildCommandsEnabled : derpyGuildCommandsEnabled; }
     public void setDerpyGuildCommandsEnabled(boolean value) { derpyGuildCommandsEnabled = value; save(); }
-    public boolean derpyAllChatCommandsEnabled() { return derpyAllChatCommandsEnabled; }
+    public boolean derpyAllChatCommandsEnabled() { return derpyUseDefaultChannels ? defaultAllChatCommandsEnabled : derpyAllChatCommandsEnabled; }
     public void setDerpyAllChatCommandsEnabled(boolean value) { derpyAllChatCommandsEnabled = value; save(); }
-    public boolean derpyPrivateCommandsEnabled() { return derpyPrivateCommandsEnabled; }
+    public boolean derpyPrivateCommandsEnabled() { return derpyUseDefaultChannels ? defaultPrivateCommandsEnabled : derpyPrivateCommandsEnabled; }
     public void setDerpyPrivateCommandsEnabled(boolean value) { derpyPrivateCommandsEnabled = value; save(); }
+    public boolean classLevelChatCommandEnabled() { return classLevelChatCommandEnabled; }
+    public void setClassLevelChatCommandEnabled(boolean value) { classLevelChatCommandEnabled = value; save(); }
+    public boolean classLevelPartyCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPartyCommandsEnabled : classLevelPartyCommandsEnabled; }
+    public void setClassLevelPartyCommandsEnabled(boolean value) { classLevelPartyCommandsEnabled = value; save(); }
+    public boolean classLevelGuildCommandsEnabled() { return classLevelUseDefaultChannels ? defaultGuildCommandsEnabled : classLevelGuildCommandsEnabled; }
+    public void setClassLevelGuildCommandsEnabled(boolean value) { classLevelGuildCommandsEnabled = value; save(); }
+    public boolean classLevelAllChatCommandsEnabled() { return classLevelUseDefaultChannels ? defaultAllChatCommandsEnabled : classLevelAllChatCommandsEnabled; }
+    public void setClassLevelAllChatCommandsEnabled(boolean value) { classLevelAllChatCommandsEnabled = value; save(); }
+    public boolean classLevelPrivateCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPrivateCommandsEnabled : classLevelPrivateCommandsEnabled; }
+    public void setClassLevelPrivateCommandsEnabled(boolean value) { classLevelPrivateCommandsEnabled = value; save(); }
     public boolean yotpChatCommandEnabled() { return yotpChatCommandEnabled; }
     public void setYotpChatCommandEnabled(boolean value) { yotpChatCommandEnabled = value; save(); }
-    public boolean yotpPartyCommandsEnabled() { return yotpPartyCommandsEnabled; }
+    public boolean yotpPartyCommandsEnabled() { return yotpUseDefaultChannels ? defaultPartyCommandsEnabled : yotpPartyCommandsEnabled; }
     public void setYotpPartyCommandsEnabled(boolean value) { yotpPartyCommandsEnabled = value; save(); }
-    public boolean yotpGuildCommandsEnabled() { return yotpGuildCommandsEnabled; }
+    public boolean yotpGuildCommandsEnabled() { return yotpUseDefaultChannels ? defaultGuildCommandsEnabled : yotpGuildCommandsEnabled; }
     public void setYotpGuildCommandsEnabled(boolean value) { yotpGuildCommandsEnabled = value; save(); }
-    public boolean yotpAllChatCommandsEnabled() { return yotpAllChatCommandsEnabled; }
+    public boolean yotpAllChatCommandsEnabled() { return yotpUseDefaultChannels ? defaultAllChatCommandsEnabled : yotpAllChatCommandsEnabled; }
     public void setYotpAllChatCommandsEnabled(boolean value) { yotpAllChatCommandsEnabled = value; save(); }
-    public boolean yotpPrivateCommandsEnabled() { return yotpPrivateCommandsEnabled; }
+    public boolean yotpPrivateCommandsEnabled() { return yotpUseDefaultChannels ? defaultPrivateCommandsEnabled : yotpPrivateCommandsEnabled; }
     public void setYotpPrivateCommandsEnabled(boolean value) { yotpPrivateCommandsEnabled = value; save(); }
     public boolean yotwChatCommandEnabled() { return yotwChatCommandEnabled; }
     public void setYotwChatCommandEnabled(boolean value) { yotwChatCommandEnabled = value; save(); }
-    public boolean yotwPartyCommandsEnabled() { return yotwPartyCommandsEnabled; }
+    public boolean yotwPartyCommandsEnabled() { return yotwUseDefaultChannels ? defaultPartyCommandsEnabled : yotwPartyCommandsEnabled; }
     public void setYotwPartyCommandsEnabled(boolean value) { yotwPartyCommandsEnabled = value; save(); }
-    public boolean yotwGuildCommandsEnabled() { return yotwGuildCommandsEnabled; }
+    public boolean yotwGuildCommandsEnabled() { return yotwUseDefaultChannels ? defaultGuildCommandsEnabled : yotwGuildCommandsEnabled; }
     public void setYotwGuildCommandsEnabled(boolean value) { yotwGuildCommandsEnabled = value; save(); }
-    public boolean yotwAllChatCommandsEnabled() { return yotwAllChatCommandsEnabled; }
+    public boolean yotwAllChatCommandsEnabled() { return yotwUseDefaultChannels ? defaultAllChatCommandsEnabled : yotwAllChatCommandsEnabled; }
     public void setYotwAllChatCommandsEnabled(boolean value) { yotwAllChatCommandsEnabled = value; save(); }
-    public boolean yotwPrivateCommandsEnabled() { return yotwPrivateCommandsEnabled; }
+    public boolean yotwPrivateCommandsEnabled() { return yotwUseDefaultChannels ? defaultPrivateCommandsEnabled : yotwPrivateCommandsEnabled; }
     public void setYotwPrivateCommandsEnabled(boolean value) { yotwPrivateCommandsEnabled = value; save(); }
     public boolean yotsChatCommandEnabled() { return yotsChatCommandEnabled; }
     public void setYotsChatCommandEnabled(boolean value) { yotsChatCommandEnabled = value; save(); }
-    public boolean yotsPartyCommandsEnabled() { return yotsPartyCommandsEnabled; }
+    public boolean yotsPartyCommandsEnabled() { return yotsUseDefaultChannels ? defaultPartyCommandsEnabled : yotsPartyCommandsEnabled; }
     public void setYotsPartyCommandsEnabled(boolean value) { yotsPartyCommandsEnabled = value; save(); }
-    public boolean yotsGuildCommandsEnabled() { return yotsGuildCommandsEnabled; }
+    public boolean yotsGuildCommandsEnabled() { return yotsUseDefaultChannels ? defaultGuildCommandsEnabled : yotsGuildCommandsEnabled; }
     public void setYotsGuildCommandsEnabled(boolean value) { yotsGuildCommandsEnabled = value; save(); }
-    public boolean yotsAllChatCommandsEnabled() { return yotsAllChatCommandsEnabled; }
+    public boolean yotsAllChatCommandsEnabled() { return yotsUseDefaultChannels ? defaultAllChatCommandsEnabled : yotsAllChatCommandsEnabled; }
     public void setYotsAllChatCommandsEnabled(boolean value) { yotsAllChatCommandsEnabled = value; save(); }
-    public boolean yotsPrivateCommandsEnabled() { return yotsPrivateCommandsEnabled; }
+    public boolean yotsPrivateCommandsEnabled() { return yotsUseDefaultChannels ? defaultPrivateCommandsEnabled : yotsPrivateCommandsEnabled; }
     public void setYotsPrivateCommandsEnabled(boolean value) { yotsPrivateCommandsEnabled = value; save(); }
     public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
-    public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled && ca50PartyCommandsEnabled; }
-    public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled && ca50GuildCommandsEnabled; }
+    public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled() && ca50PartyCommandsEnabled(); }
+    public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled() && ca50GuildCommandsEnabled(); }
+    public boolean specialMayorsChatCommandsEnabled() { return specialMayorsChatCommandsEnabled; }
+    public void setSpecialMayorsChatCommandsEnabled(boolean value) { specialMayorsChatCommandsEnabled = value; save(); }
+    public boolean yearlyEventsChatCommandsEnabled() { return yearlyEventsChatCommandsEnabled; }
+    public void setYearlyEventsChatCommandsEnabled(boolean value) { yearlyEventsChatCommandsEnabled = value; save(); }
+    public boolean defaultPartyCommandsEnabled() { return defaultPartyCommandsEnabled; }
+    public void setDefaultPartyCommandsEnabled(boolean value) { defaultPartyCommandsEnabled = value; save(); }
+    public boolean defaultGuildCommandsEnabled() { return defaultGuildCommandsEnabled; }
+    public void setDefaultGuildCommandsEnabled(boolean value) { defaultGuildCommandsEnabled = value; save(); }
+    public boolean defaultAllChatCommandsEnabled() { return defaultAllChatCommandsEnabled; }
+    public void setDefaultAllChatCommandsEnabled(boolean value) { defaultAllChatCommandsEnabled = value; save(); }
+    public boolean defaultPrivateCommandsEnabled() { return defaultPrivateCommandsEnabled; }
+    public void setDefaultPrivateCommandsEnabled(boolean value) { defaultPrivateCommandsEnabled = value; save(); }
+    public boolean c50UseDefaultChannels() { return c50UseDefaultChannels; }
+    public void setC50UseDefaultChannels(boolean value) { c50UseDefaultChannels = value; save(); }
+    public boolean ca50UseDefaultChannels() { return ca50UseDefaultChannels; }
+    public void setCa50UseDefaultChannels(boolean value) { ca50UseDefaultChannels = value; save(); }
+    public boolean tpsUseDefaultChannels() { return tpsUseDefaultChannels; }
+    public void setTpsUseDefaultChannels(boolean value) { tpsUseDefaultChannels = value; save(); }
+    public boolean jerryUseDefaultChannels() { return jerryUseDefaultChannels; }
+    public void setJerryUseDefaultChannels(boolean value) { jerryUseDefaultChannels = value; save(); }
+    public boolean scorpUseDefaultChannels() { return scorpUseDefaultChannels; }
+    public void setScorpUseDefaultChannels(boolean value) { scorpUseDefaultChannels = value; save(); }
+    public boolean derpyUseDefaultChannels() { return derpyUseDefaultChannels; }
+    public void setDerpyUseDefaultChannels(boolean value) { derpyUseDefaultChannels = value; save(); }
+    public boolean yotpUseDefaultChannels() { return yotpUseDefaultChannels; }
+    public void setYotpUseDefaultChannels(boolean value) { yotpUseDefaultChannels = value; save(); }
+    public boolean yotwUseDefaultChannels() { return yotwUseDefaultChannels; }
+    public void setYotwUseDefaultChannels(boolean value) { yotwUseDefaultChannels = value; save(); }
+    public boolean yotsUseDefaultChannels() { return yotsUseDefaultChannels; }
+    public void setYotsUseDefaultChannels(boolean value) { yotsUseDefaultChannels = value; save(); }
+    public boolean classLevelUseDefaultChannels() { return classLevelUseDefaultChannels; }
+    public void setClassLevelUseDefaultChannels(boolean value) { classLevelUseDefaultChannels = value; save(); }
+
+    /** Every command follows the default channels again; the defaults and all switches stay as they are. */
+    public void useDefaultChannelsEverywhere() {
+        c50UseDefaultChannels = ca50UseDefaultChannels = tpsUseDefaultChannels = true;
+        jerryUseDefaultChannels = scorpUseDefaultChannels = derpyUseDefaultChannels = true;
+        yotpUseDefaultChannels = yotwUseDefaultChannels = yotsUseDefaultChannels = classLevelUseDefaultChannels = true;
+        save();
+    }
+
+    /**
+     * A file from before the shared defaults keeps what it changed: a command whose own channels differ from the
+     * shipped ones stays on them instead of silently following the defaults. {@code fileHasKey} says which
+     * settings the file stored.
+     */
+    public void keepOwnChannelsWhereChanged(Predicate<String> fileHasKey) {
+        if (!fileHasKey.test("c50UseDefaultChannels") && changed(c50PartyCommandsEnabled, c50GuildCommandsEnabled, c50AllChatCommandsEnabled, c50PrivateCommandsEnabled)) c50UseDefaultChannels = false;
+        if (!fileHasKey.test("ca50UseDefaultChannels") && changed(ca50PartyCommandsEnabled, ca50GuildCommandsEnabled, ca50AllChatCommandsEnabled, ca50PrivateCommandsEnabled)) ca50UseDefaultChannels = false;
+        if (!fileHasKey.test("tpsUseDefaultChannels") && changed(tpsPartyCommandsEnabled, tpsGuildCommandsEnabled, tpsAllChatCommandsEnabled, tpsPrivateCommandsEnabled)) tpsUseDefaultChannels = false;
+        if (!fileHasKey.test("jerryUseDefaultChannels") && changed(jerryPartyCommandsEnabled, jerryGuildCommandsEnabled, jerryAllChatCommandsEnabled, jerryPrivateCommandsEnabled)) jerryUseDefaultChannels = false;
+        if (!fileHasKey.test("scorpUseDefaultChannels") && changed(scorpPartyCommandsEnabled, scorpGuildCommandsEnabled, scorpAllChatCommandsEnabled, scorpPrivateCommandsEnabled)) scorpUseDefaultChannels = false;
+        if (!fileHasKey.test("derpyUseDefaultChannels") && changed(derpyPartyCommandsEnabled, derpyGuildCommandsEnabled, derpyAllChatCommandsEnabled, derpyPrivateCommandsEnabled)) derpyUseDefaultChannels = false;
+        if (!fileHasKey.test("yotpUseDefaultChannels") && changed(yotpPartyCommandsEnabled, yotpGuildCommandsEnabled, yotpAllChatCommandsEnabled, yotpPrivateCommandsEnabled)) yotpUseDefaultChannels = false;
+        if (!fileHasKey.test("yotwUseDefaultChannels") && changed(yotwPartyCommandsEnabled, yotwGuildCommandsEnabled, yotwAllChatCommandsEnabled, yotwPrivateCommandsEnabled)) yotwUseDefaultChannels = false;
+        if (!fileHasKey.test("yotsUseDefaultChannels") && changed(yotsPartyCommandsEnabled, yotsGuildCommandsEnabled, yotsAllChatCommandsEnabled, yotsPrivateCommandsEnabled)) yotsUseDefaultChannels = false;
+        if (!fileHasKey.test("classLevelUseDefaultChannels") && changed(classLevelPartyCommandsEnabled, classLevelGuildCommandsEnabled, classLevelAllChatCommandsEnabled, classLevelPrivateCommandsEnabled)) classLevelUseDefaultChannels = false;
+    }
+
+    private static boolean changed(boolean party, boolean guild, boolean allChat, boolean direct) {
+        return !party || !guild || allChat || direct;
+    }
     public boolean loadoutsAutoCloseEnabled() { return loadoutsAutoCloseEnabled; }
     public void setLoadoutsAutoCloseEnabled(boolean value) { loadoutsAutoCloseEnabled = value; save(); }
     public boolean loadoutsCloseOnlyOnChange() { return loadoutsCloseOnlyOnChange; }
@@ -523,6 +640,7 @@ public final class MiscConfig extends ConfigCategory {
     public void normalize() {
         bowDrawIndicatorScale = Math.clamp(bowDrawIndicatorScale, 25, 300);
         frozenBlazeHudScale = Math.clamp(frozenBlazeHudScale, 25, 300);
+        ragTimerScale = Math.clamp(ragTimerScale, 25, 300);
         performanceHudScale = Math.clamp(performanceHudScale, 25, 300);
         performanceRefreshTenths = Math.clamp(performanceRefreshTenths, 1, 10);
         sackTrackerScale = Math.clamp(sackTrackerScale, 25, 300);

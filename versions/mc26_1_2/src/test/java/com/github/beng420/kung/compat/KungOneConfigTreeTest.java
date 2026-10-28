@@ -32,7 +32,7 @@ public final class KungOneConfigTreeTest {
         assertEquals(expected, tree.map.size());
         assertEquals(6, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
         long keybinds = tree.map.values().stream().filter(node -> node.getMetadata("visualizer") == Visualizer.KeybindVisualizer.class).count();
-        assertEquals(15, keybinds);
+        assertEquals(16, keybinds);
         assertEquals(Property.Display.DISABLED, property(tree, "Crypt Messages", "Enabled").getDisplay());
         assertEquals(false, property(tree, "Colored F7/M7 Pillars", "Enabled").get());
         assertArrayEquals(java.util.Arrays.stream(com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial.choices())
@@ -206,7 +206,8 @@ public final class KungOneConfigTreeTest {
 
     private static int countControls(List<SettingEntry> settings) {
         return settings.stream().mapToInt(setting -> (setting.kind() == SettingKind.GROUP ? 0
-            : setting.kind() == SettingKind.COLOR_REMOVE ? 2 : 1) + countControls(setting.children())).sum();
+            : setting.kind() == SettingKind.COLOR_REMOVE ? 2 : 1) + (setting.reset() != null ? 1 : 0)
+            + countControls(setting.children())).sum();
     }
 
     private static KungOneConfigTree create(KungSettings.FeatureEntry feature, AtomicBoolean allowed) {

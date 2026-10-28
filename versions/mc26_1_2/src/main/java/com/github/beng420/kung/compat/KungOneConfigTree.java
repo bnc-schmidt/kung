@@ -106,6 +106,12 @@ final class KungOneConfigTree {
                     : available.getAsBoolean() ? Property.Display.SHOWN : Property.Display.DISABLED);
                 put(property, category, feature);
             }
+            if (setting.reset() != null) {
+                var reset = button(key + "__reset", label + " / Reset", setting.reset().hint(), "Reset", setting.reset().action());
+                reset.addDisplayCondition(() -> !visible.getAsBoolean() || !setting.resettable() ? Property.Display.HIDDEN
+                    : available.getAsBoolean() ? Property.Display.SHOWN : Property.Display.DISABLED);
+                put(reset, category, feature);
+            }
             if (setting.kind() == SettingKind.COLOR_REMOVE) {
                 put(button(key + "__remove", label + " / Remove", description, "Remove", setting.cycleChoice()), category, feature);
             }

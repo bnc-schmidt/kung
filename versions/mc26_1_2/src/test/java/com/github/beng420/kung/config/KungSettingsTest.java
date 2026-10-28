@@ -32,7 +32,7 @@ public final class KungSettingsTest {
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 3, 1, 2, modrinth ? 14 : 15, 4),
+        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 15 : 16, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -48,6 +48,24 @@ public final class KungSettingsTest {
     }
 
     @Test
+    public void invisibugLineIsOffByDefaultAndWritesColorAndThicknessThroughToTheConfig() {
+        KungConfig config = new KungConfig(temporary.getRoot().toPath().resolve("invisibug.json"));
+        FeatureEntry line = feature(KungSettings.categories(config, () -> { }), "Invisibug Line");
+        assertFalse(line.enabled());
+        assertEquals(List.of("Color", "Thickness"), line.settings().stream().map(SettingEntry::label).toList());
+
+        assertEquals("#00FFFF", setting(line, "Color").choiceSupplier().get());
+        SettingEntry thickness = setting(line, "Thickness");
+        assertEquals(1, thickness.intSupplier().getAsInt());
+        thickness.intConsumer().accept(4);
+        assertEquals(4, config.invisibug.thickness());
+        thickness.intConsumer().accept(99);
+        assertEquals(6, config.invisibug.thickness());
+        config.invisibug.setColor(0x12FF8040);
+        assertEquals(0xFFFF8040, config.invisibug.color());
+    }
+
+    @Test
     public void greenhouseHologramGroupHasNoMasterToggleAndWritesThroughToTheConfig() {
         Path file = temporary.getRoot().toPath().resolve("greenhouse.json");
         KungConfig config = new KungConfig(file);
@@ -56,7 +74,7 @@ public final class KungSettingsTest {
         assertFalse(group.clickable());
         assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color", "Extra Crop Color",
             "Wrong State Color", "Deactivate When Complete", "Hide Models Over Wrong Soil", "Crosshair Label",
-            "Toggle Key"),
+            "Toggle Key", "Unload Key"),
             group.settings().stream().map(SettingEntry::label).toList());
 
         SettingEntry opacity = setting(group, "Opacity (%)");

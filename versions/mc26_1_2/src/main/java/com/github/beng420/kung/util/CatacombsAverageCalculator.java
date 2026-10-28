@@ -29,8 +29,11 @@ public final class CatacombsAverageCalculator {
      * Your own XP comes from the loader, merged with or answered from your saved data either way.
      * {@code useLastRunXp} additionally swaps the preset class XP per run for your last run's; chat replies
      * keep the M7 max-bonus preset so they don't depend on whichever floor you ran last.
+     * {@code level} is the target of every goal. {@code dungeonClass} narrows two goals: with
+     * {@link Goal#CLASS_AVERAGE} it is the only class played, with {@link Goal#CLASS_LEVEL} the class to level.
      */
-    public CompletableFuture<Result> calculateAsync(String username, Goal goal, boolean useLastRunXp) {
+    public CompletableFuture<Result> calculateAsync(String username, Goal goal, int level, DungeonClass dungeonClass,
+                                                    boolean useLastRunXp) {
         String normalized = username == null ? "" : username.trim();
         if (!validUsername(normalized)) {
             return CompletableFuture.completedFuture(Result.error("invalid username"));
@@ -42,7 +45,7 @@ public final class CatacombsAverageCalculator {
                     return Result.error(externalProfileError(result.error()), "profileError=" + result.error());
                 }
                 Result calculated = calculate(result.player(), "source=" + result.source() + " secrets=" + result.secretsFound(),
-                    normalized, goal, useLastRunXp);
+                    normalized, goal, level, dungeonClass, useLastRunXp);
                 return result.local() && calculated.success()
                     ? Result.ok(calculated.message() + " (local)", calculated.debugDetails())
                     : calculated;
@@ -50,10 +53,11 @@ public final class CatacombsAverageCalculator {
     }
 
     public Result calculate(PlayerData player) {
-        return calculate(player, "", "", Goal.CLASS_AVERAGE_50, true);
+        return calculate(player, "", "", Goal.CLASS_AVERAGE, 50, null, true);
     }
 
-    private Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, boolean useLastRunXp) {
+    Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, int level,
+                     DungeonClass dungeonClass, boolean useLastRunXp) {
         if (player == null || player.profiles().isEmpty()) {
             return Result.error("no SkyBlock profile found");
         }
@@ -67,14 +71,21 @@ public final class CatacombsAverageCalculator {
             ? CatacombsRecentXpTracker.INSTANCE.localClassXpPerRun(requestedName)
             : Map.of();
         classXpPerRun.putAll(lastRunXp);
-        Breakdown breakdown = calculateBreakdown(profile.classXp(), classXpPerRun);
+        Breakdown breakdown = calculateBreakdown(profile.classXp(), classXpPerRun, level);
         long cataXpPerRun = catacombsXpPerRun();
-        long cataRuns = runsToCatacombs(profile.cataXp(), 50, cataXpPerRun);
-        String message = goal == Goal.CATACOMBS_50
-            ? catacombsSummaryLine(player.name(), "M7", 50, cataRuns)
-            : classAverageSummaryLine(player.name(), "M7", breakdown);
+        long cataRuns = runsToCatacombs(profile.cataXp(), level, cataXpPerRun);
+        String message = switch (goal) {
+            case CATACOMBS -> catacombsSummaryLine(player.name(), "M7", level, cataRuns);
+            case CLASS_LEVEL -> classLevelSummaryLine(player.name(), "M7", dungeonClass, level, profile.classXp(dungeonClass),
+                runsToClassLevel(profile.classXp(dungeonClass), classXpPerRun.get(dungeonClass), level));
+            case CLASS_AVERAGE -> dungeonClass == null
+                ? classAverageSummaryLine(player.name(), "M7", level, breakdown)
+                : oneClassSummaryLine(player.name(), "M7", dungeonClass, level,
+                    runsWithOnly(dungeonClass, profile.classXp(), classXpPerRun, level));
+        };
         return Result.ok(message, resultDebug(player, profile, breakdown, cataRuns, cataXpPerRun, classXpPerRun,
-            requestDebug, useLastRunXp ? "lastRunXp=" + lastRunXp : "lastRunXp=disabled", goal));
+            requestDebug + " level=" + level + (dungeonClass == null ? "" : " class=" + dungeonClass.id()),
+            useLastRunXp ? "lastRunXp=" + lastRunXp : "lastRunXp=disabled", goal));
     }
 
     private EnumMap<DungeonClass, Double> classXpPerRun(Map<DungeonClass, Integer> classPerks) {
@@ -270,6 +281,51 @@ public final class CatacombsAverageCalculator {
         return playerName + " is " + format(runs) + " " + floor + " runs away from c" + targetLevel;
     }
 
+    /**
+     * Runs until every class reaches {@code targetLevel} when only {@code played} is played: it earns a run's
+     * full class XP, every other class the 25% team share. The last class to get there decides.
+     */
+    public static long runsWithOnly(
+        DungeonClass played,
+        Map<DungeonClass, Double> currentClassXp,
+        Map<DungeonClass, Double> classXpPerRun,
+        int targetLevel
+    ) {
+        long targetXp = xpForLevel(targetLevel);
+        long runs = 0L;
+        for (DungeonClass dungeonClass : CLASSES) {
+            double share = classXpPerRun.getOrDefault(dungeonClass, 0.0) * (dungeonClass == played ? 1.0 : 0.25);
+            runs = Math.max(runs, ceilRuns(targetXp - currentClassXp.getOrDefault(dungeonClass, 0.0), share));
+        }
+        return runs;
+    }
+
+    /** Runs played as that class until it reaches the level; the other classes' share does not matter. */
+    public static long runsToClassLevel(double currentClassXp, double classXpPerRun, int targetLevel) {
+        return ceilRuns(xpForLevel(targetLevel) - currentClassXp, classXpPerRun);
+    }
+
+    private static long ceilRuns(double remainingXp, double xpPerRun) {
+        return remainingXp <= 0.0 ? 0L : xpPerRun <= 0.0 ? Long.MAX_VALUE : (long) Math.ceil(remainingXp / xpPerRun - 0.0000001);
+    }
+
+    public static String oneClassSummaryLine(String playerName, String floor, DungeonClass played, int targetLevel, long runs) {
+        return runs == 0L
+            ? playerName + " already has ca" + targetLevel
+            : playerName + " is " + format(runs) + " " + floor + " runs away from ca" + targetLevel + " with only "
+                + played.label();
+    }
+
+    public static String classLevelSummaryLine(String playerName, String floor, DungeonClass dungeonClass, int targetLevel,
+                                               double classXp, long runs) {
+        // Floored, so 49.99 doesn't read as 50.0.
+        double level = Math.floor(levelFromXp(classXp) * 10.0) / 10.0;
+        return runs == 0L
+            ? playerName + "'s " + dungeonClass.label() + " is already " + targetLevel
+            : playerName + " is " + format(runs) + " " + floor + " runs away from " + dungeonClass.label()
+                + " " + targetLevel + " (now " + String.format(Locale.ROOT, "%.1f", level) + ")";
+    }
+
     private static String resultDebug(
         PlayerData player,
         ProfileData profile,
@@ -402,8 +458,9 @@ public final class CatacombsAverageCalculator {
     }
 
     public enum Goal {
-        CLASS_AVERAGE_50("ca50"),
-        CATACOMBS_50("c50");
+        CLASS_AVERAGE("ca"),
+        CATACOMBS("c"),
+        CLASS_LEVEL("class");
 
         private final String id;
 

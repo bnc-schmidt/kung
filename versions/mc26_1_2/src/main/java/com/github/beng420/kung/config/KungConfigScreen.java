@@ -58,6 +58,17 @@ public final class KungConfigScreen extends Screen {
     private static final int CHOICE_BUTTON_MAXIMUM = 96;
     /** How far a child row is indented from its parent. */
     private static final int SETTING_INDENT = 12;
+    private static final int RESET_WIDTH = 14;
+    /** The reset button's glyph: an arrow turning back. */
+    private static final String[] RESET_ICON = {
+        "..#.....",
+        ".######.",
+        "###....#",
+        ".##....#",
+        "..#....#",
+        "......#.",
+        "...###.."
+    };
     private static final int SETTING_ARROW_HITBOX_WIDTH = 12;
     private static final int SCROLL_STEP = 42;
     private static final int CATEGORY_SCROLL_STEP = SETTING_HEIGHT * 3;
@@ -521,7 +532,10 @@ public final class KungConfigScreen extends Screen {
         boolean twoLine = height > SETTING_HEIGHT;
         String value = setting.kind() == SettingKind.SLIDER ? setting.sliderValue() : "";
         int controlWidth = twoLine ? COLUMN_WIDTH - 10 - indent : controlWidthFor(setting);
-        int labelWidth = twoLine ? COLUMN_WIDTH - indent - 16 - menuFont.width(value) : COLUMN_WIDTH - controlWidth - indent - 20;
+        boolean resettable = !twoLine && setting.resettable();
+        int resetSpace = resettable ? RESET_WIDTH + 3 : 0;
+        int labelWidth = twoLine ? COLUMN_WIDTH - indent - 16 - menuFont.width(value)
+            : COLUMN_WIDTH - controlWidth - indent - 20 - resetSpace;
         graphics.text(menuFont, trimToWidth(setting.label(), labelWidth), labelX, rowY + 4, THEME.muted(), true);
         if (!value.isEmpty()) graphics.text(menuFont, value, x + COLUMN_WIDTH - 5 - menuFont.width(value), rowY + 4, THEME.text(), true);
         if (hovered && (!setting.tooltip().isEmpty() || menuFont.width(setting.label()) > labelWidth)) {
@@ -536,6 +550,17 @@ public final class KungConfigScreen extends Screen {
         addClickRegion(x, rowY, COLUMN_WIDTH, height, (clickX, clickY, button) ->
             clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth)
         );
+        if (resettable) {
+            // Added after the row's own region, so a click on the button never reaches the row.
+            int resetX = controlX - resetSpace;
+            boolean overReset = inside(mouseX, mouseY, resetX, rowY, RESET_WIDTH, height);
+            drawResetButton(graphics, resetX, rowY + 3, overReset);
+            if (overReset) requestTooltip(setting.reset(), "Reset", List.of(setting.reset().hint()), x, rowY);
+            addClickRegion(resetX, rowY, RESET_WIDTH, height, (clickX, clickY, button) -> {
+                if (button == 0) setting.reset().action().run();
+                return true;
+            });
+        }
         if (setting.expandable()) {
             addClickRegion(x + 2 + indent, rowY, SETTING_ARROW_HITBOX_WIDTH, height, (clickX, clickY, button) -> {
                 if (button == 0) {
@@ -544,6 +569,20 @@ public final class KungConfigScreen extends Screen {
                 }
                 return clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth);
             });
+        }
+    }
+
+    private void drawResetButton(GuiGraphicsExtractor graphics, int x, int y, boolean hovered) {
+        UiShapes.rounded(graphics, x, y, RESET_WIDTH, SETTING_HEIGHT - 6, 2, hovered ? THEME.accent() : THEME.panelDark());
+        int iconX = x + (RESET_WIDTH - RESET_ICON[0].length()) / 2;
+        int iconY = y + (SETTING_HEIGHT - 6 - RESET_ICON.length) / 2;
+        for (int row = 0; row < RESET_ICON.length; row++) {
+            for (int column = 0; column < RESET_ICON[row].length(); column++) {
+                if (RESET_ICON[row].charAt(column) == '#') {
+                    graphics.fill(iconX + column, iconY + row, iconX + column + 1, iconY + row + 1,
+                        hovered ? THEME.text() : THEME.warning());
+                }
+            }
         }
     }
 
