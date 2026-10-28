@@ -504,7 +504,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
      * The matrix the world was drawn with: projection, then the camera's bobbing and hurt tilt, then its rotation.
      * GameRenderer builds it from private parts, so it is rebuilt here from the same snapshot values.
      */
-    private static Matrix4f clipMatrix(CameraRenderState camera, Minecraft client) {
+    public static Matrix4f clipMatrix(CameraRenderState camera, Minecraft client) {
         CameraEntityRenderState entity = camera.entityRenderState;
         Matrix4f shake = new Matrix4f();
         if (entity.isLiving) {

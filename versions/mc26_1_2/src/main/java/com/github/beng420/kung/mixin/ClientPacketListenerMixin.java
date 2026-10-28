@@ -7,6 +7,7 @@ import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
+import com.github.beng420.kung.feature.hunting.InvisibugLineFeature;
 import com.github.beng420.kung.feature.misc.CustomSoundsFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
@@ -83,6 +84,7 @@ public abstract class ClientPacketListenerMixin {
     private void kung$onParticles(ClientboundLevelParticlesPacket packet, CallbackInfo callbackInfo) {
         M7DragonFeature.INSTANCE.observeParticles(packet);
         FrozenBlazeHudFeature.INSTANCE.observeParticles(packet);
+        InvisibugLineFeature.INSTANCE.observeParticles(packet);
     }
 
     @Inject(method = "handleContainerSetSlot", at = @At("TAIL"))
