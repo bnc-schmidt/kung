@@ -16,6 +16,19 @@ public class SpecialMayorsTest {
     }
 
     @Test
+    public void anApiAnswerForAnEndedTermIsStaleSoJerryIsNotInOfficeAnyMore() {
+        // Jerry's vote was year 520; his term ended Sun 25 Oct 19:15 UTC. The API still named him minutes later.
+        long end = JerryTimeline.termEndMillis(520);
+        assertEquals(Instant.parse("2026-10-25T19:15:00Z").toEpochMilli(), end);
+        assertEquals("Jerry rotation: for 520", answer(Special.JERRY, end - 60_000L, "Jerry", 520));
+        assertEquals("Jerry is not in office. Next election: in 118 days (Sun 21 Feb).",
+            answer(Special.JERRY, end + 3 * 60_000L, "Jerry", 520));
+        // The new mayor's election year (521) is current again: nothing is stale.
+        assertEquals("Jerry is not in office. Next election: in 118 days (Sun 21 Feb).",
+            answer(Special.JERRY, end + 3 * 60_000L, "Cole", 521));
+    }
+
+    @Test
     public void theNextElectionOfEachSpecialMayorFollowsTheTwentyFourYearRotation() {
         assertEquals(528, SpecialMayors.nextElectionYear(Special.SCORPIUS, NOW));
         assertEquals(536, SpecialMayors.nextElectionYear(Special.DERPY, NOW));

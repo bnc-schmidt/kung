@@ -41,7 +41,12 @@ public final class SpecialMayors {
     /** {@code mayorNow} and {@code electionYear} are what the election API says; blank/negative before it answered. */
     static String answer(Special special, long nowMillis, ZoneId zone, String mayorNow, long electionYear,
                          LongFunction<String> jerryRotation) {
-        // The API is authoritative; the calendar only stands in while it has not answered yet.
+        // The API is authoritative; the calendar only stands in while it has not answered yet, or has fallen behind:
+        // its answer for a term that has ended is stale (the new mayor shows up minutes later).
+        if (electionYear >= 0 && nowMillis >= JerryTimeline.termEndMillis(electionYear)) {
+            mayorNow = "";
+            electionYear = -1;
+        }
         long officeYear = mayorNow.isBlank() || special.mayor.equalsIgnoreCase(mayorNow)
             ? (!mayorNow.isBlank() && electionYear >= 0 ? electionYear : officeYearByCalendar(special, nowMillis)) : -1;
         if (officeYear >= 0) {

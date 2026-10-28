@@ -50,16 +50,24 @@ public final class SkyBlockMayorTracker {
 
     /** Elected EZPZ, or Jerry currently copying Paul with all his perks. */
     public boolean paulScoreBonusActive() {
-        return paulScoreBonusActive || "Paul".equals(jerryCopiedMayor());
+        return (paulScoreBonusActive && !termOver(System.currentTimeMillis())) || "Paul".equals(jerryCopiedMayor());
     }
 
     public boolean jerryInOffice() {
-        return jerryInOffice;
+        return jerryInOffice && !termOver(System.currentTimeMillis());
     }
 
     /** The mayor Jerry copies right now, or "" when Jerry is not in office or the copy is not known yet. */
     public String jerryCopiedMayor() {
-        return jerryInOffice ? JerryPerkpocalypse.INSTANCE.copiedMayor(electionYear, System.currentTimeMillis()) : "";
+        return jerryInOffice() ? JerryPerkpocalypse.INSTANCE.copiedMayor(electionYear, System.currentTimeMillis()) : "";
+    }
+
+    /**
+     * The answer held is for a term that has ended by the calendar: the election API (or its cache) is still on the
+     * old mayor. Everything read from it is stale until it names the new election year.
+     */
+    boolean termOver(long nowMillis) {
+        return electionYear >= 0 && nowMillis >= JerryTimeline.termEndMillis(electionYear);
     }
 
     public long electionYear() {
@@ -67,19 +75,20 @@ public final class SkyBlockMayorTracker {
     }
 
     public double catacombsXpMultiplier() {
-        return catacombsXpMultiplier;
+        return termOver(System.currentTimeMillis()) ? 1.0 : catacombsXpMultiplier;
     }
 
     public String catacombsXpBoostLabel() {
-        return catacombsXpBoostLabel;
+        return termOver(System.currentTimeMillis()) ? "None" : catacombsXpBoostLabel;
     }
 
+    /** The mayor in office, or "" before the API answered and after the term it described has ended. */
     public String mayorName() {
-        return mayorName;
+        return termOver(System.currentTimeMillis()) ? "" : mayorName;
     }
 
     public String ministerName() {
-        return ministerName;
+        return termOver(System.currentTimeMillis()) ? "" : ministerName;
     }
 
     public String status() {
@@ -101,7 +110,9 @@ public final class SkyBlockMayorTracker {
         long now = System.currentTimeMillis();
         boolean feastRefresh = KungConfig.get().feast.enabled()
             && now - lastAttemptMillis >= FEAST_REFRESH_INTERVAL_MILLIS;
-        if (now < nextRefreshAfterMillis && !feastRefresh) {
+        // After a term's end the old answer is stale: ask again every couple of minutes until the new mayor shows.
+        boolean staleRefresh = termOver(now) && now - lastAttemptMillis >= FAILED_REFRESH_INTERVAL_MILLIS;
+        if (now < nextRefreshAfterMillis && !feastRefresh && !staleRefresh) {
             return;
         }
         refreshAsync(now);
