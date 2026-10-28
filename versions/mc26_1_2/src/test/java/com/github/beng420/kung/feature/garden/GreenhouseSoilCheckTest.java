@@ -200,7 +200,7 @@ public final class GreenhouseSoilCheckTest {
     }
 
     @Test
-    public void anAssumedSoilOnlyComplainsAboutDirtWhereFarmlandIsExpected() {
+    public void anAssumedSoilComplainsAboutDirtAndEmptyCellsOnly() {
         List<Footprint> expected = List.of(new Footprint("Sunflower", false, 0, 0, 1, 1),
             new Footprint("Cactus", false, 1, 0, 2, 1), new Footprint("Fire", false, 2, 0, 3, 1),
             new Footprint("Moonflower", false, 3, 0, 4, 1), new Footprint("Sugar Cane", false, 4, 0, 5, 1));
@@ -215,8 +215,24 @@ public final class GreenhouseSoilCheckTest {
 
         assertEquals(List.of(
             new GreenhouseSoilCheck.Ghost(0, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_STATE),
-            new GreenhouseSoilCheck.Ghost(1, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_STATE)),
+            new GreenhouseSoilCheck.Ghost(1, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.WRONG_STATE),
+            new GreenhouseSoilCheck.Ghost(4, 0, GreenhouseSoils.Soil.FARMLAND, GreenhouseSoilCheck.GhostKind.MISSING)),
             ghosts);
+    }
+
+    @Test
+    public void deadPlantsGrowOnAnythingButStillGetFarmlandWhereTheCellIsEmpty() {
+        List<Footprint> expected = List.of(new Footprint("Dead Plants", false, 0, 0, 1, 1),
+            new Footprint("Dead Plants", false, 1, 0, 2, 1), new Footprint("Dead Plants", false, 2, 0, 3, 1));
+        String[] blocks = floor("minecraft:farmland");
+        blocks[0] = "minecraft:air";
+        blocks[1 * 10 + 0] = "minecraft:sand";
+
+        assertEquals("only the empty cell: sand and farmland are fine for a dead plant",
+            List.of(new Ghost(0, 0, Soil.FARMLAND, GhostKind.MISSING)), GreenhouseSoilCheck.ghosts(expected, blocks));
+        assertEquals(Soil.FARMLAND, GreenhouseSoils.of("Dead Plants"));
+        assertEquals("a bare floor wants farmland under every one", 3,
+            GreenhouseSoilCheck.ghosts(expected, floor("minecraft:air")).size());
     }
 
     @Test

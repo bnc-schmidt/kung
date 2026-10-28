@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.feature.garden.GreenhouseHologramShapes.Placement;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -17,8 +18,8 @@ import java.util.TreeMap;
  * <p>Only a RECOGNISED crop that differs from the expected one is ever WRONG (red). Anything we cannot name,
  * whether a stand with an unknown head or a block that is not a crop, is UNVERIFIED (a neutral outline): our name
  * tables are not checked against the live game, so a gap in them must not paint a correct greenhouse red. A
- * recognised crop in a cell the layout has no entry for is an {@link Extra} (drawn pink); soil and unrecognised
- * things there are ignored.
+ * recognised crop in a cell the layout has no entry for is an {@link Extra} (drawn pink) when the cell is within one
+ * cell of the layout's bounding box and not locked in the planner; soil and unrecognised things there are ignored.
  */
 final class GreenhouseScanLogic {
     /** What is drawn for a footprint. */
@@ -138,6 +139,16 @@ final class GreenhouseScanLogic {
      * at once. {@code previous} is the last snapshot, or null; it only counts for the same footprints.
      */
     static Snapshot evaluate(List<Footprint> expected, List<Found> found, Snapshot previous, int layoutVersion) {
+        return evaluate(expected, found, previous, layoutVersion, null);
+    }
+
+    /**
+     * {@link #evaluate(List, List, Snapshot, int)} that does not count a crop as unplanned in the cells the player
+     * locked in the planner because something already grows there. {@code lockedCells} is indexed
+     * {@code dx * 10 + dz} (raw offsets), or null for none; a crop inside a footprint is judged as usual.
+     */
+    static Snapshot evaluate(List<Footprint> expected, List<Found> found, Snapshot previous, int layoutVersion,
+                             boolean[] lockedCells) {
         int unknown = 0;
         Map<String, Integer> planted = new TreeMap<>();
         List<List<Found>> byFootprint = new ArrayList<>(expected.size());
@@ -149,16 +160,26 @@ final class GreenhouseScanLogic {
             List<Integer> owners = owners(expected, item);
             for (int index : owners) byFootprint.get(index).add(item);
             Extra extra = owners.isEmpty() ? extraOf(item) : null;
+            if (extra != null && lockedCells != null && lockedCells[extra.dx() * GreenhouseGrid.SIZE + extra.dz()]) {
+                extra = null;
+            }
+            if (extra != null && !nearLayout(expected, extra)) extra = null;
             if (extra != null && !rawExtras.contains(extra)) rawExtras.add(extra);
         }
         boolean samePrevious = previous != null && previous.footprints().equals(expected);
 
         List<Verdict> raw = new ArrayList<>(expected.size());
+        for (int i = 0; i < expected.size(); i++) raw.add(judge(expected.get(i), byFootprint.get(i)));
+        // One plant of a multi-cell mutation stands right when any of its cells does: its heads cluster near the
+        // centre and its crop blocks (wheat) sit on only some cells, so a cell cannot be judged alone.
+        for (int[] group : plantGroups(expected)) {
+            boolean standing = false;
+            for (int index : group) standing |= raw.get(index).state() == State.CORRECT;
+            if (standing) for (int index : group) raw.set(index, new Verdict(State.CORRECT, ""));
+        }
         List<State> shown = new ArrayList<>(expected.size());
         for (int i = 0; i < expected.size(); i++) {
-            Verdict verdict = judge(expected.get(i), byFootprint.get(i));
-            raw.add(verdict);
-            shown.add(debounced(verdict, samePrevious ? previous.raw().get(i) : null,
+            shown.add(debounced(raw.get(i), samePrevious ? previous.raw().get(i) : null,
                 samePrevious ? previous.shown().get(i) : State.EMPTY));
         }
         // An unplanned crop is shown once two consecutive scans saw it (or it already was shown).
@@ -171,6 +192,84 @@ final class GreenhouseScanLogic {
         return new Snapshot(layoutVersion, List.copyOf(expected), Collections.unmodifiableList(shown),
             Collections.unmodifiableList(raw), Collections.unmodifiableMap(planted), unknown, found.size(),
             unrecognisedShare(unknown, found.size()), List.copyOf(shownExtras), List.copyOf(rawExtras));
+    }
+
+    /**
+     * Whether an unplanned crop is close enough to the layout to matter: its cell lies within one cell of the
+     * layout's bounding box. A layout often covers only part of the plot (one recipe in a corner, the rest of the
+     * greenhouse growing other mutations); crops far from it are not its business and must neither be marked nor keep
+     * it from completing. Without any footprint there is no box and every crop counts.
+     */
+    static boolean nearLayout(List<Footprint> expected, Extra extra) {
+        if (expected.isEmpty()) return true;
+        double minX = Double.MAX_VALUE;
+        double minZ = Double.MAX_VALUE;
+        double maxX = -Double.MAX_VALUE;
+        double maxZ = -Double.MAX_VALUE;
+        for (Footprint footprint : expected) {
+            minX = Math.min(minX, footprint.minX());
+            minZ = Math.min(minZ, footprint.minZ());
+            maxX = Math.max(maxX, footprint.maxX());
+            maxZ = Math.max(maxZ, footprint.maxZ());
+        }
+        return extra.dx() >= Math.floor(minX) - 1 && extra.dx() <= Math.ceil(maxX)
+            && extra.dz() >= Math.floor(minZ) - 1 && extra.dz() <= Math.ceil(maxZ);
+    }
+
+    /**
+     * The footprints (by index) that are cells of one plant. A mutation of more than one cell (Snoozling 3x3,
+     * Noctilume 2x2) planted as an ingredient is laid out as one 1x1 footprint per cell, but grows as a single plant:
+     * the dump of a real Snoozling shows seven heads around its centre and wheat blocks on its four corner cells only.
+     * Cells of such a crop that fill a width x height box (or the turned one), the top-left cell first, form a group;
+     * any other cell stays alone and is not listed.
+     */
+    static List<int[]> plantGroups(List<Footprint> expected) {
+        int size = GreenhouseGrid.SIZE;
+        int[] at = new int[size * size];
+        Arrays.fill(at, -1);
+        for (int i = 0; i < expected.size(); i++) {
+            Footprint footprint = expected.get(i);
+            int x = (int) Math.round(footprint.minX());
+            int z = (int) Math.round(footprint.minZ());
+            boolean cell = !footprint.mutation() && Math.abs(footprint.maxX() - footprint.minX() - 1) < EDGE
+                && Math.abs(footprint.maxZ() - footprint.minZ() - 1) < EDGE;
+            if (cell && x >= 0 && x < size && z >= 0 && z < size) at[x * size + z] = i;
+        }
+        boolean[] used = new boolean[size * size];
+        List<int[]> groups = new ArrayList<>();
+        for (int x = 0; x < size; x++) {
+            for (int z = 0; z < size; z++) {
+                if (at[x * size + z] < 0 || used[x * size + z]) continue;
+                String crop = expected.get(at[x * size + z]).crop();
+                GreenhouseMutations.Mutation recipe = GreenhouseMutations.find(crop).orElse(null);
+                if (recipe == null || recipe.width() * recipe.height() < 2) continue;
+                int[] group = box(expected, at, used, crop, x, z, recipe.width(), recipe.height());
+                if (group == null && recipe.width() != recipe.height()) {
+                    group = box(expected, at, used, crop, x, z, recipe.height(), recipe.width());
+                }
+                if (group != null) groups.add(group);
+            }
+        }
+        return groups;
+    }
+
+    /** The footprints of a full width x depth box of unused cells of this crop at (x, z), marked used; else null. */
+    private static int[] box(List<Footprint> expected, int[] at, boolean[] used, String crop, int x, int z, int width,
+                             int depth) {
+        int size = GreenhouseGrid.SIZE;
+        int[] indices = new int[width * depth];
+        for (int dx = 0; dx < width; dx++) {
+            for (int dz = 0; dz < depth; dz++) {
+                if (x + dx >= size || z + dz >= size) return null;
+                int index = at[(x + dx) * size + z + dz];
+                if (index < 0 || used[(x + dx) * size + z + dz] || !expected.get(index).crop().equals(crop)) return null;
+                indices[dx * depth + dz] = index;
+            }
+        }
+        for (int dx = 0; dx < width; dx++) {
+            for (int dz = 0; dz < depth; dz++) used[(x + dx) * size + z + dz] = true;
+        }
+        return indices;
     }
 
     /**

@@ -102,8 +102,8 @@ final class GreenhouseSoilCheck {
     }
 
     /**
-     * A crop whose soil is only assumed (farmland, see {@link GreenhouseSoils}) still gets one complaint: plain dirt
-     * where it stands. Fire is a flame, not a plant, so it has no soil to complain about.
+     * A crop whose soil is only assumed (farmland, see {@link GreenhouseSoils}) still gets two complaints: nothing
+     * where it stands, and plain dirt there. Fire is a flame, not a plant, so it has no soil to complain about.
      */
     private static boolean complainsAboutDirt(String crop) {
         return !crop.equals("Fire");
@@ -163,7 +163,9 @@ final class GreenhouseSoilCheck {
      * The cells whose real block does not suit what is planned there, each with how it differs.
      * {@code blockIds} holds the real block id per cell at the soil layer, index {@code dx * 10 + dz}; a null entry
      * was not read and is skipped. A footprint puts its soil under every cell it covers; a crop with an untrusted
-     * soil only gets a wrong-state ghost (dirt where farmland is assumed), and cells the layout has no entry for are never looked at (soil there is ignored).
+     * soil (Dead Plants, which grow on anything, among them) only gets a missing ghost where the cell is empty and a
+     * wrong-state ghost (dirt where farmland is assumed), and cells the layout has no entry for are never looked at
+     * (soil there is ignored).
      */
     static List<Ghost> ghosts(List<Footprint> expected, String[] blockIds) {
         List<Ghost> out = new ArrayList<>();
@@ -180,8 +182,9 @@ final class GreenhouseSoilCheck {
                 for (int dz = firstDz; dz < firstDz + depth; dz++) {
                     if (dx < 0 || dx >= GreenhouseGrid.SIZE || dz < 0 || dz >= GreenhouseGrid.SIZE) continue;
                     GhostKind kind = classify(soil, blockIds[dx * GreenhouseGrid.SIZE + dz]);
-                    // An assumed soil only tells dirt from farmland; any other block may well be right for the crop.
-                    if (kind != null && (trusted || kind == GhostKind.WRONG_STATE)) out.add(new Ghost(dx, dz, soil, kind));
+                    // An assumed soil only tells dirt from farmland (any other block may well be right for the crop), but
+                    // an empty cell is missing its block whatever the crop: the assumed soil is the one to place there.
+                    if (kind != null && (trusted || kind != GhostKind.WRONG_BLOCK)) out.add(new Ghost(dx, dz, soil, kind));
                 }
             }
         }

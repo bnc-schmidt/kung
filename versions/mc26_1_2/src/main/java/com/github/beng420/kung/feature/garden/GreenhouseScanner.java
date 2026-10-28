@@ -219,7 +219,8 @@ final class GreenhouseScanner {
         List<Placement> placements = GreenhouseHologram.placements();
         List<Footprint> expected = GreenhouseScanLogic.footprints(placements);
         List<Found> found = readFound(level, corner);
-        Snapshot next = GreenhouseScanLogic.evaluate(expected, found, snapshot, hologramVersion);
+        Snapshot next = GreenhouseScanLogic.evaluate(expected, found, snapshot, hologramVersion,
+            GreenhouseHologram.lockedCells());
 
         int layerBefore = soilLayer;
         readSoil(level, corner);

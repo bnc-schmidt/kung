@@ -334,8 +334,8 @@ public final class GreenhouseScanLogicTest {
 
     @Test
     public void aRecognisedCropWhereTheLayoutHasNothingIsAnExtraOnceTwoScansSawIt() {
-        List<Footprint> expected = List.of(cell("Carrot", 0, 0));
-        List<Found> found = List.of(at("Carrot", 0.5, 0.5), at("Cactus", 5.5, 6.5));
+        List<Footprint> expected = List.of(cell("Carrot", 5, 5));
+        List<Found> found = List.of(at("Carrot", 5.5, 5.5), at("Cactus", 5.5, 6.5));
 
         Snapshot first = scan(expected, found, null);
         assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), first.rawExtras());
@@ -345,7 +345,7 @@ public final class GreenhouseScanLogicTest {
         assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), second.extras());
 
         // Gone: gone at once.
-        assertTrue(scan(expected, List.of(at("Carrot", 0.5, 0.5)), second).extras().isEmpty());
+        assertTrue(scan(expected, List.of(at("Carrot", 5.5, 5.5)), second).extras().isEmpty());
     }
 
     @Test
@@ -389,7 +389,7 @@ public final class GreenhouseScanLogicTest {
 
     @Test
     public void extrasAreListedOncePerCellAndCropAndKeepTheirOwnNames() {
-        List<Footprint> expected = List.of(cell("Carrot", 0, 0));
+        List<Footprint> expected = List.of(cell("Carrot", 5, 4));
         List<Found> found = List.of(at("Cactus", 5.4, 5.4), at("Cactus", 5.6, 5.6), at("Sunflower", 5.5, 5.5),
             at("Potato", 6.5, 5.5));
 
@@ -400,6 +400,90 @@ public final class GreenhouseScanLogicTest {
     }
 
     @Test
+    public void cropsInLockedCellsAreNotUnplannedButStillCountAsPlanted() {
+        List<Footprint> expected = List.of(cell("Carrot", 4, 4));
+        List<Found> found = List.of(at("Carrot", 4.5, 4.5), at("Cactus", 5.5, 5.5), at("Potato", 5.5, 4.5));
+        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
+        locked[5 * GreenhouseGrid.SIZE + 5] = true;
+
+        Snapshot snapshot = GreenhouseScanLogic.evaluate(expected, found, null, 1, locked);
+
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 4, "Potato")), snapshot.rawExtras());
+        assertEquals(1, (int) snapshot.planted().get("Cactus"));
+        assertEquals("without a mask both are unplanned", 2, scan(expected, found, null).rawExtras().size());
+        assertEquals("a null mask is no mask", 2,
+            GreenhouseScanLogic.evaluate(expected, found, null, 1, null).rawExtras().size());
+    }
+
+    @Test
+    public void aLockedCellInsideAFootprintIsJudgedAsUsual() {
+        List<Footprint> expected = List.of(cell("Carrot", 5, 5));
+        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
+        locked[5 * GreenhouseGrid.SIZE + 5] = true;
+
+        Snapshot snapshot = GreenhouseScanLogic.evaluate(expected, List.of(at("Cactus", 5.5, 5.5)), null, 1, locked);
+
+        assertEquals(State.WRONG, snapshot.raw().getFirst().state());
+    }
+
+    @Test
+    public void aLayoutIsCompleteDespiteCropsGrowingInLockedCells() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        grid.set(4, 4, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        var placements = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements();
+        List<Footprint> expected = GreenhouseScanLogic.footprints(placements);
+        List<Found> found = List.of(at("Carrot", 4.5, 4.5), at("Creambloom", 5.5, 5.5));
+        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
+        locked[5 * GreenhouseGrid.SIZE + 5] = true;
+
+        Snapshot open = scan(expected, found, null);
+        Snapshot withLock = GreenhouseScanLogic.evaluate(expected, found, null, 1, locked);
+
+        assertFalse("an unplanned crop keeps it open", GreenhouseCompletion.allIngredientsCorrect(placements, open.raw(),
+            open.rawExtras()));
+        assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, withLock.raw(), withLock.rawExtras()));
+    }
+
+    @Test
+    public void aPartialLayoutCompletesAlthoughTheRestOfThePlotGrowsOtherPlants() {
+        // Kuna's dump (kung 0.6.4): a Turtlellini ring in the top right corner, all eight ingredients right, the spot
+        // in the middle still empty, and 40 other plants elsewhere that used to keep the hologram on for ever.
+        GreenhouseGrid grid = new GreenhouseGrid();
+        int[][] choconut = {{0, 7}, {0, 8}, {0, 9}, {1, 9}};
+        int[][] soggybud = {{1, 7}, {2, 7}, {2, 8}, {2, 9}};
+        List<Found> found = new ArrayList<>();
+        for (int[] at : choconut) {
+            grid.set(at[0], at[1], new GreenhouseGrid.Cell("Choconut", GreenhouseGrid.INGREDIENT));
+            found.add(at("Choconut", at[1] + 0.5, at[0] + 0.5));
+        }
+        for (int[] at : soggybud) {
+            grid.set(at[0], at[1], new GreenhouseGrid.Cell("Soggybud", GreenhouseGrid.INGREDIENT));
+            found.add(at("Soggybud", at[1] + 0.5, at[0] + 0.5));
+        }
+        grid.set(1, 8, new GreenhouseGrid.Cell("Turtlellini", GreenhouseGrid.TARGET));
+        var placements = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements();
+        List<Footprint> expected = GreenhouseScanLogic.footprints(placements);
+        for (int dx = 0; dx < 4; dx++) {
+            for (int dz = 0; dz < 4; dz++) found.add(at("Duskbloom", dx + 0.5, dz + 0.5));
+        }
+        for (int dx = 0; dx < 5; dx++) {
+            for (int dz = 5; dz < 10; dz++) found.add(at("Creambloom", dx + 0.5, dz + 0.5));
+        }
+
+        Snapshot snapshot = scan(expected, found, null);
+
+        assertTrue("far from the layout: no pink box", snapshot.rawExtras().isEmpty());
+        assertEquals(1, snapshot.raw().stream().filter(verdict -> verdict.state() == State.EMPTY).count());
+        assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, snapshot.raw(), snapshot.rawExtras()));
+
+        // A plant right beside the ring is another matter: the recipe may need that cell empty.
+        found.add(at("Duskbloom", 6.5, 1.5));
+        Snapshot beside = scan(expected, found, null);
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(6, 1, "Duskbloom")), beside.rawExtras());
+        assertFalse(GreenhouseCompletion.allIngredientsCorrect(placements, beside.raw(), beside.rawExtras()));
+    }
+
+    @Test
     public void aSnapshotBuiltTheOldWayHasNoExtras() {
         Snapshot old = new Snapshot(1, List.of(), List.of(), List.of(), java.util.Map.of(), 0, 0, false);
 
@@ -407,6 +491,82 @@ public final class GreenhouseScanLogicTest {
         assertTrue(old.rawExtras().isEmpty());
         assertTrue("a first sighting still needs a second",
             scan(List.of(), List.of(at("Cactus", 5.5, 5.5)), old).extras().isEmpty());
+    }
+
+    /** A 3x3 Snoozling planted as an ingredient: nine cells at raw (4..6, 0..2). */
+    private static List<Footprint> snoozlingCells() {
+        List<Footprint> cells = new ArrayList<>();
+        for (int dx = 4; dx <= 6; dx++) {
+            for (int dz = 0; dz <= 2; dz++) cells.add(cell("Snoozling", dx, dz));
+        }
+        return cells;
+    }
+
+    /** What the dump of a real Snoozling showed: its heads around the centre, wheat blocks on the corner cells. */
+    private static List<Found> aRealSnoozling() {
+        return List.of(at("Snoozling", 5.5, 2.344), at("Snoozling", 5.031, 1.125), at("Snoozling", 5.5, 0.594),
+            at("Snoozling", 5.5, 0.875), at("Snoozling", 5.5, 1.5), at("Snoozling", 5.5, 1.906),
+            at("Snoozling", 6.0, 1.125), at("Wheat Seeds", 4.5, 0.5), at("Wheat Seeds", 6.5, 0.5),
+            at("Wheat Seeds", 4.5, 2.5), at("Wheat Seeds", 6.5, 2.5));
+    }
+
+    @Test
+    public void aPlantedSnoozlingStandsRightOnAllNineCellsAlthoughItsBlocksAreOnTheCornersOnly() {
+        Snapshot snapshot = scan(snoozlingCells(), aRealSnoozling(), null);
+
+        for (var verdict : snapshot.raw()) assertEquals(State.CORRECT, verdict.state());
+        for (State state : snapshot.shown()) assertEquals(State.CORRECT, state);
+        assertTrue(snapshot.rawExtras().isEmpty());
+    }
+
+    @Test
+    public void aSnoozlingSpotWithOnlyTheCornerBlocksIsNotPlantedYet() {
+        List<Found> onlyWheat = List.of(at("Wheat Seeds", 4.5, 0.5), at("Wheat Seeds", 6.5, 0.5));
+
+        Snapshot snapshot = scan(snoozlingCells(), onlyWheat, null);
+
+        assertEquals(2, snapshot.raw().stream().filter(verdict -> verdict.state() == State.WRONG).count());
+        assertEquals(7, snapshot.raw().stream().filter(verdict -> verdict.state() == State.EMPTY).count());
+    }
+
+    @Test
+    public void aNoctilumeOfFourCellsIsOnePlantToo() {
+        List<Footprint> cells = List.of(cell("Noctilume", 2, 0), cell("Noctilume", 2, 1), cell("Noctilume", 3, 0),
+            cell("Noctilume", 3, 1));
+
+        Snapshot snapshot = scan(cells, List.of(at("Noctilume", 2.6, 1.3)), null);
+
+        for (var verdict : snapshot.raw()) assertEquals(State.CORRECT, verdict.state());
+    }
+
+    @Test
+    public void cellsThatDoNotFillAMutationsBoxStayOnTheirOwn() {
+        List<Footprint> eight = new ArrayList<>(snoozlingCells());
+        eight.removeLast();
+        List<Footprint> mixed = List.of(cell("Snoozling", 0, 0), cell("Carrot", 1, 0), cell("Carrot", 0, 1),
+            cell("Cactus", 1, 1));
+
+        assertTrue("eight of nine are no Snoozling", GreenhouseScanLogic.plantGroups(eight).isEmpty());
+        assertTrue("one cell is no plant of its own", GreenhouseScanLogic.plantGroups(mixed).isEmpty());
+        assertEquals("the stand's own cell only", State.CORRECT, stateOf(eight, List.of(at("Snoozling", 4.5, 0.5)), 0));
+        assertEquals(State.EMPTY, stateOf(eight, List.of(at("Snoozling", 4.5, 0.5)), 1));
+        assertEquals("a full box is one group", 1, GreenhouseScanLogic.plantGroups(snoozlingCells()).size());
+        assertEquals(9, GreenhouseScanLogic.plantGroups(snoozlingCells()).getFirst().length);
+    }
+
+    @Test
+    public void aSnoozlingGroupCompletesTheLayoutOnceItsHeadsStand() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        for (int row = 0; row < 3; row++) {
+            for (int column = 4; column <= 6; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell("Snoozling", GreenhouseGrid.INGREDIENT));
+            }
+        }
+        var placements = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements();
+
+        Snapshot snapshot = scan(GreenhouseScanLogic.footprints(placements), aRealSnoozling(), null);
+
+        assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, snapshot.raw(), snapshot.rawExtras()));
     }
 
     @Test

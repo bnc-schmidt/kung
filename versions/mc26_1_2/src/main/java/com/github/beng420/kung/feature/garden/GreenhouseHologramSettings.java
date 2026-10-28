@@ -7,13 +7,14 @@ import java.util.function.Supplier;
 import net.minecraft.client.input.KeyEvent;
 
 /**
- * What the player chose for the hologram (opacity, colors, auto-deactivation, soil and label options) and its toggle key. The getters are
+ * What the player chose for the hologram (opacity, colors, auto-deactivation, soil and label options) and its toggle and unload keys. The getters are
  * package-private for the renderer and read the live config on every call, so a change in the menu shows at once;
  * before the config is loaded they return the defaults. The class is public only for the key mixins.
  */
 public final class GreenhouseHologramSettings {
     private static Supplier<GreenhouseConfig> source = () -> KungConfig.get().greenhouse;
     private static volatile Runnable toggleHandler;
+    private static volatile Runnable unloadHandler;
 
     private GreenhouseHologramSettings() { }
 
@@ -47,19 +48,29 @@ public final class GreenhouseHologramSettings {
     /** The hologram registers what a press of the toggle key does; it runs on the client thread. */
     static void setToggleHandler(Runnable handler) { toggleHandler = handler; }
 
+    /** The hologram registers what a press of the unload key does; it runs on the client thread. */
+    static void setUnloadHandler(Runnable handler) { unloadHandler = handler; }
+
     static void onToggleKey() {
         Runnable handler = toggleHandler;
+        if (handler != null) handler.run();
+    }
+
+    static void onUnloadKey() {
+        Runnable handler = unloadHandler;
         if (handler != null) handler.run();
     }
 
     /** Called by KeyboardHandlerMixin for key presses while no screen is open. Never cancels the key. */
     public static void onKeyPress(KeyEvent event) {
         if (LoadoutsAutoCloseFeature.keybindMatchesKey(config().toggleKeybind(), event)) onToggleKey();
+        if (LoadoutsAutoCloseFeature.keybindMatchesKey(config().unloadKeybind(), event)) onUnloadKey();
     }
 
     /** Called by MouseHandlerMixin for button presses while no screen is open. Never cancels the click. */
     public static void onMousePress(int button) {
         if (LoadoutsAutoCloseFeature.keybindMatchesMouse(config().toggleKeybind(), button)) onToggleKey();
+        if (LoadoutsAutoCloseFeature.keybindMatchesMouse(config().unloadKeybind(), button)) onUnloadKey();
     }
 
     /** Tests swap the config source so they never write the real config file; null restores the live one. */

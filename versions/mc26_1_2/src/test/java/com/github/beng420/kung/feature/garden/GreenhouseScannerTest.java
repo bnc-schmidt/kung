@@ -91,11 +91,11 @@ public final class GreenhouseScannerTest {
         GreenhouseHologram.show(carrotAt(2, 3), true);
         int version = GreenhouseHologram.version();
         var footprints = GreenhouseScanLogic.footprints(GreenhouseHologram.placements());
-        List<Found> seen = List.of(new Found("Cactus", 5.5, 5.5));
+        List<Found> seen = List.of(new Found("Cactus", 4.5, 3.5));
         GreenhouseScanner.setSnapshotForTest(GreenhouseScanLogic.evaluate(footprints, seen,
             GreenhouseScanLogic.evaluate(footprints, seen, null, version), version));
 
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 5, "Cactus")), GreenhouseScanner.extras(version));
+        assertEquals(List.of(new GreenhouseScanLogic.Extra(4, 3, "Cactus")), GreenhouseScanner.extras(version));
         assertTrue(GreenhouseScanner.extras(version + 1).isEmpty());
         GreenhouseScanner.reset();
         assertTrue(GreenhouseScanner.extras(version).isEmpty());

@@ -21,6 +21,8 @@ public final class GreenhouseConfig extends ConfigCategory {
     public static final int DEFAULT_COLOR_WRONG_STATE = 0xFFA126;
     /** GLFW_KEY_K, in the same "key:<key>:<scancode>" form the loadout and sack keybinds use. */
     public static final String DEFAULT_TOGGLE_KEYBIND = "key:75:0";
+    /** GLFW_KEY_U: vanilla leaves it free. */
+    public static final String DEFAULT_UNLOAD_KEYBIND = "key:85:0";
     private static final int RGB = 0xFFFFFF;
     private static final Pattern KEYBIND = Pattern.compile("|key:-?\\d+(:-?\\d+)?|mouse:\\d+");
 
@@ -33,6 +35,7 @@ public final class GreenhouseConfig extends ConfigCategory {
     private boolean hideModelsOverWrongSoil = true;
     private boolean showCrosshairLabel = true;
     private String toggleKeybind = DEFAULT_TOGGLE_KEYBIND;
+    private String unloadKeybind = DEFAULT_UNLOAD_KEYBIND;
 
     public float hologramOpacity() { return clampOpacity(hologramOpacity); }
     public void setHologramOpacity(float value) { hologramOpacity = clampOpacity(value); save(); }
@@ -72,6 +75,16 @@ public final class GreenhouseConfig extends ConfigCategory {
         save();
     }
 
+    /** Raw keybind text of the key that removes the hologram completely; empty means unbound. */
+    public String unloadKeybind() { return unloadKeybind == null ? DEFAULT_UNLOAD_KEYBIND : unloadKeybind; }
+
+    /** A malformed value keeps the current key; the settings screen only ever passes well-formed ones. */
+    public void setUnloadKeybind(String value) {
+        if (value == null || !KEYBIND.matcher(value).matches()) return;
+        unloadKeybind = value;
+        save();
+    }
+
     /** The GLFW key code, or -1 when unbound or bound to a mouse button. */
     public int toggleKey() {
         String[] parts = toggleKeybind().split(":");
@@ -90,6 +103,7 @@ public final class GreenhouseConfig extends ConfigCategory {
         colorExtra &= RGB;
         colorWrongState &= RGB;
         if (toggleKeybind == null || !KEYBIND.matcher(toggleKeybind).matches()) toggleKeybind = DEFAULT_TOGGLE_KEYBIND;
+        if (unloadKeybind == null || !KEYBIND.matcher(unloadKeybind).matches()) unloadKeybind = DEFAULT_UNLOAD_KEYBIND;
     }
 
     /**
@@ -108,6 +122,7 @@ public final class GreenhouseConfig extends ConfigCategory {
             keepIf(json, name, JsonPrimitive::isBoolean);
         }
         keepIf(json, "toggleKeybind", JsonPrimitive::isString);
+        keepIf(json, "unloadKeybind", JsonPrimitive::isString);
     }
 
     private static void keepIf(JsonObject json, String name, Predicate<JsonPrimitive> valid) {

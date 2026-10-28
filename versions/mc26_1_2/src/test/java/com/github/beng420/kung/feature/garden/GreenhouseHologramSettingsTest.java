@@ -24,6 +24,7 @@ public final class GreenhouseHologramSettingsTest {
     public void restoreTheLiveConfig() {
         GreenhouseHologramSettings.useConfig(null);
         GreenhouseHologramSettings.setToggleHandler(null);
+        GreenhouseHologramSettings.setUnloadHandler(null);
     }
 
     @Test
@@ -104,6 +105,35 @@ public final class GreenhouseHologramSettingsTest {
         GreenhouseHologramSettings.onKeyPress(new KeyEvent(66, 48, 0));
         GreenhouseHologramSettings.onKeyPress(new KeyEvent(75, 37, 0));
         assertEquals("Unbound means no key toggles", 2, toggles.get());
+    }
+
+    @Test
+    public void theUnloadKeyCallsItsOwnHandlerAndNeverTheToggleOne() {
+        AtomicInteger toggles = new AtomicInteger();
+        AtomicInteger unloads = new AtomicInteger();
+        GreenhouseHologramSettings.onKeyPress(new KeyEvent(85, 22, 0));
+        assertEquals("No handler set yet: nothing happens and nothing throws", 0, unloads.get());
+
+        GreenhouseHologramSettings.setToggleHandler(toggles::incrementAndGet);
+        GreenhouseHologramSettings.setUnloadHandler(unloads::incrementAndGet);
+        GreenhouseHologramSettings.onKeyPress(new KeyEvent(85, 22, 0));
+        assertEquals("U is the default", 1, unloads.get());
+        assertEquals(0, toggles.get());
+        GreenhouseHologramSettings.onKeyPress(new KeyEvent(75, 37, 0));
+        assertEquals(1, toggles.get());
+        assertEquals(1, unloads.get());
+
+        config.setUnloadKeybind("mouse:4");
+        GreenhouseHologramSettings.onKeyPress(new KeyEvent(85, 22, 0));
+        assertEquals("A rebound key replaces U", 1, unloads.get());
+        GreenhouseHologramSettings.onMousePress(4);
+        assertEquals(2, unloads.get());
+
+        config.setUnloadKeybind("");
+        GreenhouseHologramSettings.onMousePress(4);
+        GreenhouseHologramSettings.onKeyPress(new KeyEvent(85, 22, 0));
+        assertEquals("Unbound means no key unloads", 2, unloads.get());
+        assertEquals(1, toggles.get());
     }
 
     @Test

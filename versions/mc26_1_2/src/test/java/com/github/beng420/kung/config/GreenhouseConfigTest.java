@@ -40,6 +40,7 @@ public final class GreenhouseConfigTest {
         config.greenhouse.setHideModelsOverWrongSoil(false);
         config.greenhouse.setShowCrosshairLabel(false);
         config.greenhouse.setToggleKeybind("key:66:48");
+        config.greenhouse.setUnloadKeybind("mouse:4");
 
         KungConfig restored = new KungConfig(file);
         restored.load();
@@ -55,6 +56,9 @@ public final class GreenhouseConfigTest {
         assertEquals(false, loaded.showCrosshairLabel());
         assertEquals("key:66:48", loaded.toggleKeybind());
         assertEquals(66, loaded.toggleKey());
+        assertEquals("mouse:4", loaded.unloadKeybind());
+        assertEquals("key:85:0", read("{\"greenhouse\":{\"unloadKeybind\":7}}").greenhouse.unloadKeybind());
+        assertEquals("", read("{\"greenhouse\":{\"unloadKeybind\":\"\"}}").greenhouse.unloadKeybind());
         assertTrue("The file keeps colors as plain RGB", Files.readString(file).contains("\"colorToPlace\": " + 0x112233));
     }
 
@@ -144,6 +148,7 @@ public final class GreenhouseConfigTest {
         assertTrue("The crosshair label is on by default", config.showCrosshairLabel());
         assertEquals("key:75:0", config.toggleKeybind());
         assertEquals("K", 75, config.toggleKey());
+        assertEquals("U unloads", "key:85:0", config.unloadKeybind());
     }
 
     private static KungConfig read(String json) {
