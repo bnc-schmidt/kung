@@ -32,7 +32,7 @@ public final class KungSettingsTest {
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 15 : 16, 4),
+        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 16 : 17, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {

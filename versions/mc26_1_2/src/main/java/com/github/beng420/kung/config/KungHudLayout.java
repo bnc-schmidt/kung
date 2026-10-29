@@ -8,6 +8,7 @@ import com.github.beng420.kung.feature.dungeon.M7DragonFeature;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
+import com.github.beng420.kung.feature.misc.StorageHudFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
@@ -82,6 +83,11 @@ public final class KungHudLayout {
                 config.misc::setRagTimerX, config.misc::setRagTimerY,
                 config.misc::ragTimerScale, config.misc::setRagTimerScale,
                 config.misc::ragTimerEnabled, config.misc::setRagTimerEnabled),
+            new Entry("storage_hud", "Storage HUD", () -> StorageHudFeature.overlayBounds(config.misc),
+                config.misc::storageHudX, config.misc::storageHudY,
+                config.misc::setStorageHudX, config.misc::setStorageHudY,
+                config.misc::storageHudScale, config.misc::setStorageHudScale,
+                config.misc::storageHudEnabled, config.misc::setStorageHudEnabled),
             new Entry("egg_sac_countdown", "Egg Sac Spawn Timer", () -> TarantulaHelperFeature.overlayBounds(config.slayer),
                 config.slayer::eggSacCountdownX, config.slayer::eggSacCountdownY,
                 config.slayer::setEggSacCountdownX, config.slayer::setEggSacCountdownY,

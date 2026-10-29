@@ -17,6 +17,7 @@ import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.feature.hunting.InvisibugLineFeature;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
+import com.github.beng420.kung.feature.misc.StorageHudFeature;
 import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
 import com.github.beng420.kung.feature.misc.PeekChatFeature;
@@ -69,6 +70,7 @@ public final class FeatureRegistry {
         register(BowDrawIndicatorFeature.INSTANCE);
         register(FrozenBlazeHudFeature.INSTANCE);
         register(RagTickTimerFeature.INSTANCE);
+        register(StorageHudFeature.INSTANCE);
         register(PerformanceHudFeature.INSTANCE);
         register(SackTrackerFeature.INSTANCE);
         register(PeekChatFeature.INSTANCE);

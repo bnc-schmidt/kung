@@ -32,6 +32,11 @@ public final class MiscConfig extends ConfigCategory {
     private int ragTimerX = 6;
     private int ragTimerY = 270;
     private int ragTimerScale = 100;
+    private boolean storageHudEnabled = false;
+    private boolean storageHudBackground = false;
+    private int storageHudX = 6;
+    private int storageHudY = 60;
+    private int storageHudScale = 100;
     private boolean performanceHudEnabled = false;
     private int performanceHudX = 6;
     private int performanceHudY = 120;
@@ -186,6 +191,16 @@ public final class MiscConfig extends ConfigCategory {
     public void setRagTimerY(int value) { ragTimerY = value; save(); }
     public int ragTimerScale() { return ragTimerScale; }
     public void setRagTimerScale(int value) { ragTimerScale = Math.clamp(value, 25, 300); save(); }
+    public boolean storageHudEnabled() { return storageHudEnabled; }
+    public void setStorageHudEnabled(boolean value) { storageHudEnabled = value; save(); }
+    public boolean storageHudBackground() { return storageHudBackground; }
+    public void setStorageHudBackground(boolean value) { storageHudBackground = value; save(); }
+    public int storageHudX() { return storageHudX; }
+    public void setStorageHudX(int value) { storageHudX = value; save(); }
+    public int storageHudY() { return storageHudY; }
+    public void setStorageHudY(int value) { storageHudY = value; save(); }
+    public int storageHudScale() { return storageHudScale; }
+    public void setStorageHudScale(int value) { storageHudScale = Math.clamp(value, 25, 300); save(); }
     public boolean performanceHudEnabled() { return performanceHudEnabled; }
     public void setPerformanceHudEnabled(boolean value) { performanceHudEnabled = value; save(); }
     public int performanceHudX() { return performanceHudX; }
@@ -641,6 +656,7 @@ public final class MiscConfig extends ConfigCategory {
         bowDrawIndicatorScale = Math.clamp(bowDrawIndicatorScale, 25, 300);
         frozenBlazeHudScale = Math.clamp(frozenBlazeHudScale, 25, 300);
         ragTimerScale = Math.clamp(ragTimerScale, 25, 300);
+        storageHudScale = Math.clamp(storageHudScale, 25, 300);
         performanceHudScale = Math.clamp(performanceHudScale, 25, 300);
         performanceRefreshTenths = Math.clamp(performanceRefreshTenths, 1, 10);
         sackTrackerScale = Math.clamp(sackTrackerScale, 25, 300);

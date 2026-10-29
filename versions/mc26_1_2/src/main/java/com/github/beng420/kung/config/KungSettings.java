@@ -359,6 +359,20 @@ public final class KungSettings {
                     .withTooltip("Ticks the Ragnarock Axe on screen, in server ticks: the 60-tick cast first.",
                         "Swapping away or taking damage cancels the cast. The cast timer shows while this is on.",
                         "Move and resize in /kung hud."),
+                new FeatureEntry("Storage HUD", config.misc::storageHudEnabled,
+                    config.misc::setStorageHudEnabled,
+                    List.of(
+                        SettingEntry.toggle("Background", config.misc::storageHudBackground,
+                            config.misc::setStorageHudBackground)
+                            .withTooltip("Draws a dark panel behind the blocks."),
+                        SettingEntry.slider("Scale (%)", config.misc::storageHudScale,
+                            config.misc::setStorageHudScale, 25, 300, 5)
+                    ))
+                    .withTooltip("Shows what is in your Builder's Ruler, Basket of Seeds or Nether Wart Basket while you hold it.",
+                        "Open the storage once (left-click) to read it. The ruler then counts down by its",
+                        "\"You built N blocks!\" line; a basket by the soil row it plants ahead of you.",
+                        "Open the storage again if the numbers drift. An Infinidirt Wand in the ruler is never",
+                        "used up. Move and resize in /kung hud."),
                 new FeatureEntry("Hitboxes", config.hitboxes::enabled,
                     config.hitboxes::setEnabled, new HitboxSettings(config.hitboxes))
                     .withTooltip("Show colored hitboxes for selected entity types.", "Right-click to add entities and edit their colors.",
