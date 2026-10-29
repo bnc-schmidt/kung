@@ -55,6 +55,7 @@ public final class DungeonConfig extends ConfigCategory {
     private boolean dragonSpawnMarkersEnabled = false;
     private boolean dragonStatueBoxesEnabled = true;
     private boolean dragonCountNotificationsEnabled = true;
+    private boolean dragonHpEnabled = false;
     private boolean devDragonDiagnosticsEnabled = false;
     private boolean coloredPillarsEnabled = false;
     private boolean wishAlertEnabled = false;
@@ -202,6 +203,8 @@ public final class DungeonConfig extends ConfigCategory {
     public void setDragonStatueBoxesEnabled(boolean value) { dragonStatueBoxesEnabled = value; save(); }
     public boolean dragonCountNotificationsEnabled() { return dragonCountNotificationsEnabled; }
     public void setDragonCountNotificationsEnabled(boolean value) { dragonCountNotificationsEnabled = value; save(); }
+    public boolean dragonHpEnabled() { return dragonHpEnabled; }
+    public void setDragonHpEnabled(boolean value) { dragonHpEnabled = value; save(); }
     public boolean devDragonDiagnosticsEnabled() { return devDragonDiagnosticsEnabled && KungDeveloperAccess.allowed(); }
     public void setDevDragonDiagnosticsEnabled(boolean value) { devDragonDiagnosticsEnabled = value; save(); }
     public DragonMarkerMode dragonMarkerMode() { return dragonMarkerMode; }

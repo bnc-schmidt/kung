@@ -926,7 +926,12 @@ public final class KungSettings {
                     "would count (origin inside the estimate), red if not."),
             SettingEntry.toggle("Count Notifications", config.dungeon::dragonCountNotificationsEnabled,
                 config.dungeon::setDragonCountNotificationsEnabled)
-                .withTooltip("Local notifications for server-confirmed dragon counts.")));
+                .withTooltip("Local notifications for server-confirmed dragon counts."),
+            SettingEntry.toggle("Dragon HP", config.dungeon::dragonHpEnabled,
+                config.dungeon::setDragonHpEnabled)
+                .withTooltip("Shows each dragon's HP as text on its body, from the health the server sends.",
+                    "It drops when anyone hurts the dragon. Green above 75% of its highest HP, then yellow, gold, red.",
+                    "Hidden while the server has not sent a value yet. Turn it on before the dragons spawn.")));
         if (developer) settings.add(
             SettingEntry.toggle("Developer Diagnostics", config.dungeon::devDragonDiagnosticsEnabled,
                 config.dungeon::setDevDragonDiagnosticsEnabled)

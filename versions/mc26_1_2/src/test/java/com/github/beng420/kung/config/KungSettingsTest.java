@@ -331,9 +331,9 @@ public final class KungSettingsTest {
             assertEquals(developer.get(index).features().stream().map(FeatureEntry::name).toList(),
                 publicCatalog.get(index).features().stream().map(FeatureEntry::name).toList());
         }
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Developer Diagnostics"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Developer Diagnostics"),
             feature(developer, "Wither Dragons").settings().stream().map(SettingEntry::label).toList());
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP"),
             feature(publicCatalog, "Wither Dragons").settings().stream().map(SettingEntry::label).toList());
     }
 
@@ -396,12 +396,14 @@ public final class KungSettingsTest {
         KungConfig config = new KungConfig(file);
         var helper = feature(KungSettings.categories(config, () -> { }, true), "Wither Dragons");
         assertFalse(helper.enabled());
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Developer Diagnostics"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Developer Diagnostics"),
             helper.settings().stream().map(SettingEntry::label).toList());
         assertFalse(setting(helper, "Developer Diagnostics").booleanSupplier().getAsBoolean());
         // By name, not by index: the list also holds a slider, which has no boolean supplier.
         assertFalse(setting(helper, "Spawn Markers").booleanSupplier().getAsBoolean());
         setting(helper, "Spawn Markers").toggle().run();
+        assertFalse(setting(helper, "Dragon HP").booleanSupplier().getAsBoolean());
+        setting(helper, "Dragon HP").toggle().run();
         for (String label : List.of("Statue Boxes", "Count Notifications")) {
             var setting = setting(helper, label);
             assertTrue(label, setting.booleanSupplier().getAsBoolean());
@@ -414,6 +416,7 @@ public final class KungSettingsTest {
         assertTrue(restored.dungeon.witherDragonsEnabled());
         assertTrue(restored.dungeon.m7DragonHelperEnabled());
         assertTrue(restored.dungeon.dragonSpawnMarkersEnabled());
+        assertTrue(restored.dungeon.dragonHpEnabled());
         assertFalse(restored.dungeon.dragonStatueBoxesEnabled());
         assertFalse(restored.dungeon.dragonCountNotificationsEnabled());
         assertFalse(restored.dungeon.devDragonDiagnosticsEnabled());

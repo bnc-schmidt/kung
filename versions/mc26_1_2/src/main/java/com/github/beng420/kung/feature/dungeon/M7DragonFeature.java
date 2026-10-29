@@ -55,6 +55,9 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     public static final M7DragonFeature INSTANCE = new M7DragonFeature();
     private final M7DragonTracker tracker = new M7DragonTracker();
     private final Map<UUID, EnderDragon> entities = new LinkedHashMap<>();
+    /** Last health and highest health seen per dragon, from its entity data; any dragon, identified or not. */
+    private record HpSeen(EnderDragon dragon, float last, float peak) { }
+    private final Map<UUID, HpSeen> hpSeen = new java.util.HashMap<>();
     private final Map<Statue, Boolean> statuePresent = new EnumMap<>(Statue.class);
     /** Resolved statues awaiting one shared title; EnumMap dedupes and keeps arena order. */
     private final Map<Statue, M7DragonTracker.Outcome> pendingTitles = new EnumMap<>(Statue.class);
@@ -111,6 +114,9 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST,
             Identifier.fromNamespaceAndPath("kung", "dragon_prio"), (graphics, delta) -> renderPrioHud(graphics));
+        HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST,
+            Identifier.fromNamespaceAndPath("kung", "dragon_hp"),
+            (graphics, delta) -> renderHp(graphics, delta.getGameTimeDeltaPartialTick(false)));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> onReset());
         DungeonServerTickEvents.register(() -> { if (ready()) publish(tracker.advance()); });
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
@@ -138,6 +144,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         else if (!developerSamples.isEmpty()) lastDeveloperReport = currentDeveloperReport();
         tracker.reset();
         entities.clear();
+        hpSeen.clear();
         statuePresent.clear();
         pendingMessages.clear();
         developerSamples.clear();
@@ -221,7 +228,25 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     }
 
     public void observeData(Entity entity) {
-        if (entity instanceof EnderDragon dragon && dragon.getHealth() <= 0) observeDeath(entity);
+        if (!(entity instanceof EnderDragon dragon)) return;
+        if (dragon.getHealth() <= 0) observeDeath(entity);
+        else noteHealth(dragon);
+    }
+
+    /**
+     * Remembers the health the server just set, so Dragon HP can colour by what is left, and logs
+     * every change with the server tick: that series shows how often Hypixel really updates it.
+     */
+    private void noteHealth(EnderDragon dragon) {
+        float health = dragon.getHealth();
+        if (!config().dragonHpEnabled() || !M7DragonHp.known(health) || !ready()) return;
+        UUID uuid = dragon.getUUID();
+        HpSeen seen = hpSeen.get(uuid);
+        if (seen != null && seen.last() == health) return;
+        hpSeen.put(uuid, new HpSeen(dragon, health, seen == null ? health : Math.max(seen.peak(), health)));
+        var attempt = tracker.attempt(uuid);
+        KungDebugRecorder.event("m7-dragon", "hp " + (attempt == null ? "unidentified" : attempt.statue().label())
+            + " uuid=" + uuid + " tick=" + tracker.tick() + " hp=" + health);
     }
 
     public void observeDeath(Entity entity) {
@@ -241,6 +266,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
 
     private void tick(Minecraft client) {
         if (!ready()) return;
+        hpSeen.values().removeIf(seen -> seen.dragon().isRemoved());
         var iterator = entities.entrySet().iterator();
         while (iterator.hasNext()) {
             var entry = iterator.next();
@@ -1051,6 +1077,31 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             text.append(Component.literal(prioText((long) -since, config().dragonPrioUnit())).withColor(statue.color() & 0xFFFFFF));
         }
         if (!text.getSiblings().isEmpty()) drawPrio(graphics, config(), text);
+    }
+
+    /**
+     * Dragon HP: each dragon's live health as text on its body, projected like the Mimic ESP label.
+     * Reads the health field the client already holds; no packets, no entity scan - a float and one
+     * projection per dragon, and a dragon only counts once an entity-data packet has named it.
+     */
+    private void renderHp(GuiGraphicsExtractor graphics, float partialTick) {
+        Minecraft client = Minecraft.getInstance();
+        if (!config().dragonHpEnabled() || hpSeen.isEmpty() || !ready() || client.player == null
+            || McCompat.hudHidden(client)) return;
+        for (HpSeen seen : hpSeen.values()) {
+            EnderDragon dragon = seen.dragon();
+            float health = dragon.getHealth();
+            if (dragon.isRemoved() || !M7DragonHp.known(health)) continue;
+            // Same interpolation carry-over as the core markers, or the text steps at 20 Hz.
+            Vec3 core = trailPoint(dragon, DungeonConfig.DragonPart.BODY)
+                .add(dragon.getPosition(partialTick).subtract(dragon.position()));
+            Vec3 screen = client.gameRenderer.projectPointToScreen(core);
+            if (!Double.isFinite(screen.x) || !Double.isFinite(screen.y) || screen.z < -1.0 || screen.z > 1.0) continue;
+            String text = M7DragonHp.format(health);
+            int x = (int) Math.round((screen.x + 1.0) * 0.5 * graphics.guiWidth()) - client.font.width(text) / 2;
+            int y = (int) Math.round((1.0 - screen.y) * 0.5 * graphics.guiHeight()) - client.font.lineHeight / 2;
+            graphics.text(client.font, text, x, y, 0xFF000000 | M7DragonHp.color(health, Math.max(seen.peak(), health)), true);
+        }
     }
 
     private static void drawPrio(GuiGraphicsExtractor graphics, DungeonConfig config, Component text) {
