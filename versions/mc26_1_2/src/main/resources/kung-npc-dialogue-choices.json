@@ -17,6 +17,11 @@
       "choose": "[Sure...]"
     },
     {
+      "npcId": "hideyho",
+      "options": ["[Sure]", "[No thanks...]"],
+      "choose": "[Sure]"
+    },
+    {
       "npc": "Susan",
       "options": ["[Absolutely!]", "[Tell me more about the Safety Squad.]", "[Not right now.]"],
       "choose": "[Absolutely!]"

@@ -83,6 +83,17 @@ public final class NpcDialogueSkipFeatureTest {
     }
 
     @Test
+    public void hideyhoPlaysAgainOnSureNeverOnNoThanks() {
+        var choices = NpcDialogueSkipFeature.loadChoices();
+        // From a Safari trace: "How about it?" with these two answers; [No thanks...] ends the game of hide and seek.
+        Option sure = new Option("[Sure]", answer("hideyho", "r_4_1").getClickEvent());
+        Option no = new Option("[No thanks...]", answer("hideyho", "r_4_2").getClickEvent());
+        assertSame(sure, NpcDialogueSkipFeature.choose(List.of(sure, no), "Hideyho", choices));
+        // Keyed by npcId, so the speaker name does not matter ("[MOB]" lines do not even name him as an [NPC]).
+        assertSame(sure, NpcDialogueSkipFeature.choose(List.of(no, sure), "", choices));
+    }
+
+    @Test
     public void curatedNpcsTakeTheAnswerThatMovesOn() {
         var choices = NpcDialogueSkipFeature.loadChoices();
         // npc, chosen label first, then the answers that refuse, repeat or only explain.
