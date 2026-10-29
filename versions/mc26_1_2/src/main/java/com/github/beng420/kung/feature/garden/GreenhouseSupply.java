@@ -68,7 +68,8 @@ final class GreenhouseSupply {
     /**
      * Counts the layout's cells that already hold the right plant at the last plot scan
      * ({@link GreenhouseHologram#correctlyPlaced}), by the planner's crop name and in plants: one per cell, so a
-     * Pumpkin Seeds stem is 1 here whatever it was planted from. The runner plugs this in with its first pick.
+     * Pumpkin Seeds stem is 1 here whatever it was planted from, except a Snoozling or Noctilume (see
+     * {@link #blockSide}). The runner plugs this in with its first pick.
      */
     static void useScanner() { setPlantedSource(GreenhouseHologram::correctlyPlaced); }
 
@@ -78,10 +79,21 @@ final class GreenhouseSupply {
      */
     static int planted(String crop) {
         int total = 0;
-        for (String name : interchangeable(GreenhouseCrops.canonical(crop == null ? "" : crop))) {
+        String canonical = GreenhouseCrops.canonical(crop == null ? "" : crop);
+        for (String name : interchangeable(canonical)) {
             total += Math.max(0, plantedSource.planted(name));
         }
-        return total;
+        int side = blockSide(canonical);
+        return total / (side * side);
+    }
+
+    /**
+     * Side of the footprint one plant of this crop takes: 3 for a Snoozling, 2 for a Noctilume (a mutation planted
+     * as an ingredient fills its whole footprint with one plant), 1 for everything else.
+     */
+    static int blockSide(String crop) {
+        return GreenhouseMutations.find(crop).filter(mutation -> mutation.width() == mutation.height())
+            .map(GreenhouseMutations.Mutation::width).orElse(1);
     }
 
     /**
@@ -97,7 +109,9 @@ final class GreenhouseSupply {
                 if (cell != null && cell.flag() != GreenhouseGrid.TARGET && wanted.contains(cell.name())) count++;
             }
         }
-        return count;
+        // One plant fills a whole footprint of cells.
+        int side = blockSide(GreenhouseCrops.canonical(crop));
+        return (count + side * side - 1) / (side * side);
     }
 
     /**

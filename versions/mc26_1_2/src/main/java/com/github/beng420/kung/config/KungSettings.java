@@ -687,9 +687,6 @@ public final class KungSettings {
             SettingEntry.color("Wrong Crop Color", hologram::colorWrong,
                     () -> editColor("Wrong Crop Color", hologram.colorWrong(), hologram::setColorWrong))
                 .withTooltip("A different crop stands where the layout wants another one."),
-            SettingEntry.color("Extra Crop Color", hologram::colorExtra,
-                    () -> editColor("Extra Crop Color", hologram.colorExtra(), hologram::setColorExtra))
-                .withTooltip("A crop stands where the layout has nothing."),
             SettingEntry.color("Wrong State Color", hologram::colorWrongState,
                     () -> editColor("Wrong State Color", hologram.colorWrongState(), hologram::setColorWrongState))
                 .withTooltip("The right block in the wrong state, such as dirt where farmland belongs."),

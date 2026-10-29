@@ -333,19 +333,19 @@ public final class GreenhouseScanLogicTest {
     }
 
     @Test
-    public void aRecognisedCropWhereTheLayoutHasNothingIsAnExtraOnceTwoScansSawIt() {
+    public void aRecognisedCropWhereTheLayoutHasNothingIsIgnoredWhereverItStands() {
         List<Footprint> expected = List.of(cell("Carrot", 5, 5));
-        List<Found> found = List.of(at("Carrot", 5.5, 5.5), at("Cactus", 5.5, 6.5));
+        // Right beside the layout, far from it, in a corner of the plot.
+        List<Found> found = List.of(at("Carrot", 5.5, 5.5), at("Cactus", 5.5, 6.5), at("Cactus", 0.5, 0.5),
+            at("Potato", 9.5, 9.5));
 
         Snapshot first = scan(expected, found, null);
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), first.rawExtras());
-        assertTrue("one scan is not enough", first.extras().isEmpty());
-
         Snapshot second = scan(expected, found, first);
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 6, "Cactus")), second.extras());
 
-        // Gone: gone at once.
-        assertTrue(scan(expected, List.of(at("Carrot", 5.5, 5.5)), second).extras().isEmpty());
+        assertTrue(first.rawExtras().isEmpty());
+        assertTrue(second.extras().isEmpty());
+        assertEquals(State.CORRECT, second.raw().getFirst().state());
+        assertEquals("they are still planted somewhere", 2, (int) second.planted().get("Cactus"));
     }
 
     @Test
@@ -388,63 +388,6 @@ public final class GreenhouseScanLogicTest {
     }
 
     @Test
-    public void extrasAreListedOncePerCellAndCropAndKeepTheirOwnNames() {
-        List<Footprint> expected = List.of(cell("Carrot", 5, 4));
-        List<Found> found = List.of(at("Cactus", 5.4, 5.4), at("Cactus", 5.6, 5.6), at("Sunflower", 5.5, 5.5),
-            at("Potato", 6.5, 5.5));
-
-        Snapshot snapshot = scan(expected, found, null);
-
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 5, "Cactus"), new GreenhouseScanLogic.Extra(5, 5, "Sunflower"),
-            new GreenhouseScanLogic.Extra(6, 5, "Potato")), snapshot.rawExtras());
-    }
-
-    @Test
-    public void cropsInLockedCellsAreNotUnplannedButStillCountAsPlanted() {
-        List<Footprint> expected = List.of(cell("Carrot", 4, 4));
-        List<Found> found = List.of(at("Carrot", 4.5, 4.5), at("Cactus", 5.5, 5.5), at("Potato", 5.5, 4.5));
-        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
-        locked[5 * GreenhouseGrid.SIZE + 5] = true;
-
-        Snapshot snapshot = GreenhouseScanLogic.evaluate(expected, found, null, 1, locked);
-
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(5, 4, "Potato")), snapshot.rawExtras());
-        assertEquals(1, (int) snapshot.planted().get("Cactus"));
-        assertEquals("without a mask both are unplanned", 2, scan(expected, found, null).rawExtras().size());
-        assertEquals("a null mask is no mask", 2,
-            GreenhouseScanLogic.evaluate(expected, found, null, 1, null).rawExtras().size());
-    }
-
-    @Test
-    public void aLockedCellInsideAFootprintIsJudgedAsUsual() {
-        List<Footprint> expected = List.of(cell("Carrot", 5, 5));
-        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
-        locked[5 * GreenhouseGrid.SIZE + 5] = true;
-
-        Snapshot snapshot = GreenhouseScanLogic.evaluate(expected, List.of(at("Cactus", 5.5, 5.5)), null, 1, locked);
-
-        assertEquals(State.WRONG, snapshot.raw().getFirst().state());
-    }
-
-    @Test
-    public void aLayoutIsCompleteDespiteCropsGrowingInLockedCells() {
-        GreenhouseGrid grid = new GreenhouseGrid();
-        grid.set(4, 4, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
-        var placements = GreenhouseHologramShapes.build(grid, GreenhouseOrientation.IDENTITY).placements();
-        List<Footprint> expected = GreenhouseScanLogic.footprints(placements);
-        List<Found> found = List.of(at("Carrot", 4.5, 4.5), at("Creambloom", 5.5, 5.5));
-        boolean[] locked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
-        locked[5 * GreenhouseGrid.SIZE + 5] = true;
-
-        Snapshot open = scan(expected, found, null);
-        Snapshot withLock = GreenhouseScanLogic.evaluate(expected, found, null, 1, locked);
-
-        assertFalse("an unplanned crop keeps it open", GreenhouseCompletion.allIngredientsCorrect(placements, open.raw(),
-            open.rawExtras()));
-        assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, withLock.raw(), withLock.rawExtras()));
-    }
-
-    @Test
     public void aPartialLayoutCompletesAlthoughTheRestOfThePlotGrowsOtherPlants() {
         // Kuna's dump (kung 0.6.4): a Turtlellini ring in the top right corner, all eight ingredients right, the spot
         // in the middle still empty, and 40 other plants elsewhere that used to keep the hologram on for ever.
@@ -472,15 +415,21 @@ public final class GreenhouseScanLogicTest {
 
         Snapshot snapshot = scan(expected, found, null);
 
-        assertTrue("far from the layout: no pink box", snapshot.rawExtras().isEmpty());
+        assertTrue("no pink box anywhere", snapshot.rawExtras().isEmpty());
         assertEquals(1, snapshot.raw().stream().filter(verdict -> verdict.state() == State.EMPTY).count());
         assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, snapshot.raw(), snapshot.rawExtras()));
 
-        // A plant right beside the ring is another matter: the recipe may need that cell empty.
+        // Even a plant right beside the ring is nobody's business ...
         found.add(at("Duskbloom", 6.5, 1.5));
         Snapshot beside = scan(expected, found, null);
-        assertEquals(List.of(new GreenhouseScanLogic.Extra(6, 1, "Duskbloom")), beside.rawExtras());
-        assertFalse(GreenhouseCompletion.allIngredientsCorrect(placements, beside.raw(), beside.rawExtras()));
+        assertTrue(GreenhouseCompletion.allIngredientsCorrect(placements, beside.raw(), beside.rawExtras()));
+
+        // ... but a wrong plant on a layout cell is, because it takes the place of an ingredient.
+        List<Found> taken = new ArrayList<>(found);
+        taken.removeIf(item -> item.crop().equals("Choconut") && item.x() == 7.5);
+        taken.add(at("Duskbloom", 7.5, 0.5));
+        Snapshot wrong = scan(expected, taken, null);
+        assertFalse(GreenhouseCompletion.allIngredientsCorrect(placements, wrong.raw(), wrong.rawExtras()));
     }
 
     @Test

@@ -320,6 +320,13 @@ final class GreenhouseSolver {
             Integer index = cropIndex.get(crop);
             if (index != null) cropPriority[index] = value;
         }
+        // A mutation planted as an ingredient (Snoozling 3x3, Noctilume 2x2) takes its whole footprint, and each of
+        // its cells counts in a ring, so the search places it as a block of that many cells.
+        int[] blockSizes = new int[cropIndex.size()];
+        for (Map.Entry<String, Integer> entry : cropIndex.entrySet()) {
+            GreenhouseMutations.Mutation grown = GreenhouseMutations.find(entry.getKey()).orElse(null);
+            blockSizes[entry.getValue()] = grown != null && grown.width() == grown.height() ? grown.width() : 1;
+        }
         long[] cropCost = new long[cropIndex.size()];
         for (Map.Entry<String, Double> entry : new TreeMap<>(request.costs()).entrySet()) {
             String crop = GreenhouseCrops.canonical(entry.getKey());
@@ -331,18 +338,19 @@ final class GreenhouseSolver {
             double value = Double.isNaN(given) ? 0 : Math.max(0, Math.min(COST_CAP, given));
             if (value != given) notes.add("Cost for " + crop + " limited to " + quantity(value));
             Integer index = cropIndex.get(crop);
-            if (index != null) cropCost[index] = Math.round(value * COST_SCALE);
+            // The given cost is one planted item; a block's cells share it.
+            if (index != null) cropCost[index] = Math.round(value * COST_SCALE / (blockSizes[index] * blockSizes[index]));
         }
 
         Plan plan = new Plan(results, resolved, included, includedAt, possible, aims, aimGoal,
-            new ArrayList<>(cropIndex.keySet()), cropCost, List.copyOf(notes), request.unlocked());
+            new ArrayList<>(cropIndex.keySet()), cropCost, blockSizes, List.copyOf(notes), request.unlocked());
         GreenhouseSearch search = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
-            aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
+            aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, blockSizes, seed);
         Consumer<byte[]> preview = null;
         if (options.onBest() != null) {
             // The running search's state must not be disturbed, so snapshots are scored on a twin.
             GreenhouseSearch twin = new GreenhouseSearch(request.unlocked(), cropIndex.size(), recipes,
-                aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, seed);
+                aims.toArray(new GreenhouseSearch.Aim[0]), cropPriority, cropCost, blockSizes, seed);
             preview = labels -> {
                 SolveResult snapshot = plan.build(labels, twin,
                     (options.clock().getAsLong() - started) / 1_000_000L, List.of(), false);
@@ -416,7 +424,7 @@ final class GreenhouseSolver {
     private record Plan(GoalResult[] template, List<GreenhouseMutations.Mutation> resolved, List<Goal> included,
                         List<Integer> includedAt, List<GreenhouseMutations.Mutation> possible,
                         List<GreenhouseSearch.Aim> aims, List<Integer> aimGoal, List<String> cropNames,
-                        long[] cropCost, List<String> baseNotes, boolean[] unlocked) {
+                        long[] cropCost, int[] blockSizes, List<String> baseNotes, boolean[] unlocked) {
 
         /** The grid (crops and every cell of every target footprint) and the targets read off it. */
         private record Layout(GreenhouseGrid grid, List<Target> targets) { }
@@ -491,13 +499,19 @@ final class GreenhouseSolver {
                 counted.merge(cropNames.get(labels[p]), 1, Integer::sum);
                 costUnits += cropCost[labels[p]];
             }
+            // The shopping list counts items: a block of cells is one plant.
+            counted.replaceAll((crop, cells) -> {
+                int side = blockSizes[cropNames.indexOf(crop)];
+                return (cells + side * side - 1) / (side * side);
+            });
             Map<String, Integer> ingredients = new LinkedHashMap<>();
             counted.entrySet().stream()
                 .sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
                 .forEach(entry -> ingredients.put(entry.getKey(), entry.getValue()));
             Map<String, Double> unitCosts = new LinkedHashMap<>();
             for (String crop : ingredients.keySet()) {
-                unitCosts.put(crop, cropCost[cropNames.indexOf(crop)] / (double) COST_SCALE);
+                int side = blockSizes[cropNames.indexOf(crop)];
+                unitCosts.put(crop, cropCost[cropNames.indexOf(crop)] * side * side / (double) COST_SCALE);
             }
 
             Set<String> soils = new LinkedHashSet<>();

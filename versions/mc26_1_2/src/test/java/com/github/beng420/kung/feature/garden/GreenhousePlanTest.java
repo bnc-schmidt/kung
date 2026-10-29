@@ -21,6 +21,54 @@ public final class GreenhousePlanTest {
     }
 
     @Test
+    public void aMutationPlantedAsIngredientIsOnePlantPerFootprint() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        for (int row = 0; row < 6; row++) {
+            for (int column = 0; column < 3; column++) crop(grid, "Snoozling", row, column);
+        }
+        for (int row = 0; row < 2; row++) {
+            for (int column = 5; column < 7; column++) crop(grid, "Noctilume", row, column);
+        }
+        for (int column = 0; column < 6; column++) crop(grid, "Thunderling", 9, column);
+
+        Map<String, Integer> crops = GreenhousePlan.of(grid).crops();
+
+        assertEquals("two 3x3 Snoozlings", 2, (int) crops.get("Snoozling"));
+        assertEquals("one 2x2 Noctilume", 1, (int) crops.get("Noctilume"));
+        assertEquals("Thunderlings are single cells", 6, (int) crops.get("Thunderling"));
+    }
+
+    @Test
+    public void ingredientPlantsAreFootprintsTheGridDrawsAsOneIcon() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        for (int row = 1; row < 4; row++) {
+            for (int column = 4; column < 7; column++) crop(grid, "Snoozling", row, column);
+        }
+        for (int row = 5; row < 7; row++) {
+            for (int column = 0; column < 2; column++) crop(grid, "Noctilume", row, column);
+        }
+        // Eight of nine cells, a single cell and a target are no plant.
+        for (int row = 6; row < 9; row++) {
+            for (int column = 6; column < 9; column++) {
+                if (row != 8 || column != 8) crop(grid, "Snoozling", row, column);
+            }
+        }
+        crop(grid, "Thunderling", 9, 0);
+        target(grid, "PlantBoy Advance", 0, 0, 2);
+
+        GreenhousePlan plan = GreenhousePlan.of(grid);
+
+        assertEquals(List.of(new GreenhousePlan.Block("Snoozling", 1, 4, 3, 3),
+            new GreenhousePlan.Block("Noctilume", 5, 0, 2, 2)), plan.plants());
+        assertEquals(0, plan.plantAt(1, 4));
+        assertEquals(0, plan.plantAt(3, 6));
+        assertEquals(1, plan.plantAt(6, 1));
+        assertEquals("a broken square stays single cells", -1, plan.plantAt(6, 6));
+        assertEquals(-1, plan.plantAt(9, 0));
+        assertEquals("a target is a block, not a plant", -1, plan.plantAt(0, 0));
+    }
+
+    @Test
     public void emptyGridHasNothingToShow() {
         GreenhousePlan plan = GreenhousePlan.of(new GreenhouseGrid());
 

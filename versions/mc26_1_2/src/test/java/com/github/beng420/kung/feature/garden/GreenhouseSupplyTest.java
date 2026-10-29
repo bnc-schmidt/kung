@@ -179,6 +179,31 @@ public final class GreenhouseSupplyTest {
     }
 
     @Test
+    public void aSnoozlingOfNineCellsIsOnePlantToBuyAndToCount() {
+        GreenhouseGrid grid = new GreenhouseGrid();
+        for (int row = 0; row < 3; row++) {
+            for (int column = 0; column < 3; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell("Snoozling", GreenhouseGrid.INGREDIENT));
+            }
+        }
+        for (int row = 3; row < 5; row++) {
+            for (int column = 0; column < 2; column++) {
+                grid.set(row, column, new GreenhouseGrid.Cell("Noctilume", GreenhouseGrid.INGREDIENT));
+            }
+        }
+        grid.set(9, 9, new GreenhouseGrid.Cell("Thunderling", GreenhouseGrid.INGREDIENT));
+
+        assertEquals("3x3 cells, one Snoozling", 1, GreenhouseSupply.required(grid, "Snoozling"));
+        assertEquals("2x2 cells, one Noctilume", 1, GreenhouseSupply.required(grid, "Noctilume"));
+        assertEquals("a Thunderling is a single cell", 1, GreenhouseSupply.required(grid, "Thunderling"));
+        GreenhouseSupply.setPlantedSource(crop -> crop.equals("Snoozling") ? 9 : 4);
+        assertEquals("nine correct cells are one plant", 1, GreenhouseSupply.planted("Snoozling"));
+        assertEquals(1, GreenhouseSupply.planted("Noctilume"));
+        assertEquals(4, GreenhouseSupply.planted("Thunderling"));
+        GreenhouseSupply.setPlantedSource(null);
+    }
+
+    @Test
     public void plantedCountComesFromThePluggedInScanner() {
         assertEquals(0, GreenhouseSupply.planted("Carrot"));
 

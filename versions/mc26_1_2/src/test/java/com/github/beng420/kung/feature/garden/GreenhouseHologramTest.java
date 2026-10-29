@@ -3,7 +3,6 @@ package com.github.beng420.kung.feature.garden;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
-import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.feature.garden.GreenhouseHologramShapes.Shape;
@@ -83,31 +82,6 @@ public final class GreenhouseHologramTest {
         assertEquals(-1, GreenhouseScanner.soilLayer(GreenhouseHologram.version()));
         assertNotEquals(shown, GreenhouseHologram.version());
         assertTrue("a second press does nothing", GreenhouseHologram.unloadMessage().isEmpty());
-    }
-
-    @Test
-    public void lockedCellsFollowThePlannersMaskAndTheOrientation() {
-        boolean[] unlocked = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
-        java.util.Arrays.fill(unlocked, true);
-        assertNull("nothing shown", GreenhouseHologram.lockedCells());
-        GreenhouseHologram.show(cropAt(0, 0, GreenhouseGrid.INGREDIENT, "Carrot"), true, unlocked);
-        assertNull("all open: nothing is locked", GreenhouseHologram.lockedCells());
-
-        unlocked[2 * GreenhouseGrid.SIZE + 3] = false;
-        GreenhouseHologram.show(cropAt(0, 0, GreenhouseGrid.INGREDIENT, "Carrot"), true, unlocked);
-        // North-up: dx = column, dz = row.
-        boolean[] raw = GreenhouseHologram.lockedCells();
-        assertTrue(raw[3 * GreenhouseGrid.SIZE + 2]);
-        assertEquals(1, java.util.stream.IntStream.range(0, raw.length).filter(i -> raw[i]).count());
-
-        GreenhouseHologram.mirror();
-        assertTrue("mirrored: dx = 9 - column", GreenhouseHologram.lockedCells()[6 * GreenhouseGrid.SIZE + 2]);
-
-        GreenhouseHologram.show(cropAt(0, 0, GreenhouseGrid.INGREDIENT, "Carrot"), true);
-        assertNull("a layout without a mask has no locked cells", GreenhouseHologram.lockedCells());
-        GreenhouseHologram.show(cropAt(0, 0, GreenhouseGrid.INGREDIENT, "Carrot"), true, unlocked);
-        GreenhouseHologram.hide();
-        assertNull("hiding forgets the mask", GreenhouseHologram.lockedCells());
     }
 
     @Test

@@ -28,8 +28,6 @@ public final class GreenhouseHologram {
         + " skipped yet; stand in your greenhouse and run /kung greenhouse blueprint here";
 
     private static GreenhouseGrid grid;
-    /** The planner's cell mask of the shown layout (grid orientation, true = open), or null when it came without one. */
-    private static boolean[] lockedMask;
     private static GreenhouseOrientation orientation = GreenhouseOrientation.IDENTITY;
     private static GreenhouseHologramShapes.Layout shown = GreenhouseHologramShapes.Layout.EMPTY;
     private static int version;
@@ -56,29 +54,14 @@ public final class GreenhouseHologram {
 
     /** Shows the layout until {@link #hide()}; it is drawn only while the player is in their greenhouse. */
     static ShowResult show(GreenhouseGrid layout) {
-        return show(layout, (boolean[]) null);
-    }
-
-    /**
-     * {@link #show(GreenhouseGrid)} for a layout from the planner: {@code unlocked} is its cell mask (index
-     * {@code row * 10 + column}, the grid's own orientation; true = open), or null for all open. Crops standing in the
-     * locked cells are not counted as unplanned, as something already grows there.
-     */
-    static ShowResult show(GreenhouseGrid layout, boolean[] unlocked) {
         // Starts the heads' skin downloads: a head draws the default skin until its texture has arrived.
         GreenhouseIcons.warm();
-        return show(layout, GreenhouseLocator.current(Minecraft.getInstance(), true).isPresent(), unlocked);
+        return show(layout, GreenhouseLocator.current(Minecraft.getInstance(), true).isPresent());
     }
 
     /** Test seam: the greenhouse lookup needs a running client. */
     static ShowResult show(GreenhouseGrid layout, boolean insideGreenhouse) {
-        return show(layout, insideGreenhouse, null);
-    }
-
-    /** Test seam with a planner mask, see {@link #show(GreenhouseGrid, boolean[])}. */
-    static ShowResult show(GreenhouseGrid layout, boolean insideGreenhouse, boolean[] unlocked) {
         grid = copyOf(layout);
-        lockedMask = unlocked == null ? null : unlocked.clone();
         visible = true;
         rebuild();
         GreenhouseScanner.reset();
@@ -134,28 +117,8 @@ public final class GreenhouseHologram {
     public static void hide() {
         GreenhouseScanner.reset();
         grid = null;
-        lockedMask = null;
         shown = GreenhouseHologramShapes.Layout.EMPTY;
         version++;
-    }
-
-    /**
-     * The cells the planner locked, as raw offsets from the greenhouse corner (index {@code dx * 10 + dz}, the shown
-     * orientation applied), or null when none is locked.
-     */
-    static boolean[] lockedCells() {
-        if (lockedMask == null) return null;
-        boolean[] raw = new boolean[GreenhouseGrid.SIZE * GreenhouseGrid.SIZE];
-        boolean any = false;
-        for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
-            for (int column = 0; column < GreenhouseGrid.SIZE; column++) {
-                if (lockedMask[row * GreenhouseGrid.SIZE + column]) continue;
-                GreenhouseOrientation.Offset at = orientation.offset(row, column);
-                raw[at.dx() * GreenhouseGrid.SIZE + at.dz()] = true;
-                any = true;
-            }
-        }
-        return any ? raw : null;
     }
 
     /**

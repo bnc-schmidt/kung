@@ -1235,8 +1235,7 @@ public final class GreenhouseScreen extends Screen {
             return true;
         }
         if (inside(mx, my, left, y + HOLO_Y, HOLO_W, HOLO_H)) {
-            perform(GreenhouseActions.showLayout(session.plan().grid(), session.running(),
-                layout -> GreenhouseHologram.show(layout, state.mask())));
+            perform(GreenhouseActions.showLayout(session.plan().grid(), session.running(), GreenhouseHologram::show));
             return true;
         }
         if (GreenhouseHologram.isShowing() && inside(mx, my, left + LW - HOLO_W, y + HOLO_Y, HOLO_W, HOLO_H)) {

@@ -44,6 +44,8 @@ final class GreenhouseSearch {
     /** Share of proposals that shift a region or exchange two crop types; the rest are single, swap and stamp. */
     private static final double SHIFT_SHARE = 0.1;
     private static final double EXCHANGE_SHARE = 0.003;
+    /** Share of proposals that place, remove or move a block, when the plan has block crops. */
+    private static final double BLOCK_SHARE = 0.2;
     private static final int CHECK_MASK = 127;
     /** Compaction rounds are too cold to give up an expected mutation but may still trade crops. */
     private static final double COMPACT_HOT = 0.02;
@@ -170,6 +172,14 @@ final class GreenhouseSearch {
                   boolean stopOnStagnation, Observer observer, Consumer<byte[]> onBest) { }
 
     private final int crops;
+    /** Side of the square block each crop's cells come in (1: single cells), see the constructor. */
+    private final int[] blockSize;
+    private final int[] blockCrops;
+    private final boolean hasBlocks;
+    /** Scratch for the block checks and moves: cells already claimed by a block or a queued change. */
+    private final boolean[] covered = new boolean[CELLS];
+    private final int[] reserved = new int[CELLS];
+    private int reserveStamp;
     private final int stride;
     private final Recipe[] recipes;
     private final int[] recipeTotal;
@@ -269,7 +279,24 @@ final class GreenhouseSearch {
      */
     GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities,
                      long[] costUnits, long seed) {
+        this(unlocked, cropCount, recipes, goals, priorities, costUnits, null, seed);
+    }
+
+    /**
+     * {@code blockSizes} holds, per crop index, the side of the square block its cells must come in: 1 for an
+     * ordinary crop, 3 for a Snoozling (a mutation planted as an ingredient takes its whole footprint, and every
+     * one of its cells counts in a ring). Null means all 1.
+     */
+    GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities,
+                     long[] costUnits, int[] blockSizes, long seed) {
         this.crops = cropCount;
+        this.blockSize = new int[Math.max(1, cropCount)];
+        Arrays.fill(blockSize, 1);
+        if (blockSizes != null) {
+            for (int c = 0; c < Math.min(blockSizes.length, blockSize.length); c++) blockSize[c] = Math.max(1, blockSizes[c]);
+        }
+        this.blockCrops = IntStream.range(0, cropCount).filter(c -> blockSize[c] > 1).toArray();
+        this.hasBlocks = blockCrops.length > 0;
         this.cropPriority = Arrays.copyOf(priorities, Math.max(1, cropCount));
         this.cropCost = Arrays.copyOf(costUnits, Math.max(1, cropCount));
         long dearest = 0;
@@ -686,6 +713,8 @@ final class GreenhouseSearch {
         int p = cellList[random.nextInt(cellList.length)];
         byte next = random.nextInt(5) < 2 ? EMPTY : (byte) random.nextInt(crops);
         if (next == label[p]) return false;
+        // A block crop never comes or goes one cell at a time, see blockMove.
+        if (hasBlocks && (next != EMPTY && blockSize[next] > 1 || label[p] != EMPTY && blockSize[label[p]] > 1)) return false;
         change(p, next);
         return true;
     }
@@ -697,6 +726,7 @@ final class GreenhouseSearch {
         if (!GreenhouseGrid.inside(row, column)) return false;
         int q = row * SIZE + column;
         if (q == p || label[q] == label[p] || !open[q]) return false;
+        if (hasBlocks && (inBlock(label[p]) || inBlock(label[q]))) return false;
         change(p, label[q]);
         change(q, label[p]);
         return true;
@@ -773,6 +803,10 @@ final class GreenhouseSearch {
             lacking += need;
         }
         if (lacking == 0) return changeCount > 0;
+        if (hasBlocks) {
+            lacking = stampBlocks(s, recipe, lacking);
+            if (lacking == 0) return changeCount > 0;
+        }
         int n = around.length;
         System.arraycopy(around, 0, order, 0, n);
         for (int i = n - 1; i > 0; i--) {
@@ -784,6 +818,8 @@ final class GreenhouseSearch {
         for (int i = 0; i < n && lacking > 0; i++) {
             int p = order[i];
             byte current = label[p];
+            // Cells a block was just stamped over, and cells of a block, are not for single crops.
+            if (hasBlocks && (reserved[p] == reserveStamp || inBlock(current))) continue;
             if (current != EMPTY) {
                 // Keep every crop the recipe still needs; only surplus ones may be overwritten.
                 int required = 0;
@@ -807,6 +843,167 @@ final class GreenhouseSearch {
         return lacking == 0 && changeCount > 0;
     }
 
+    // ----- blocks: a mutation planted as an ingredient takes a whole footprint -----
+
+    private boolean inBlock(byte crop) {
+        return crop != EMPTY && blockSize[crop] > 1;
+    }
+
+    /**
+     * Whether the cells of every block crop in {@code labels} form whole blocks: scanned row by row, the first
+     * cell of a block crop not yet taken must be the top-left of a full square of that crop. Equal squares tile a
+     * region in only this way, so the scan is exact.
+     */
+    private boolean blocksValid(byte[] labels) {
+        if (!hasBlocks) return true;
+        Arrays.fill(covered, false);
+        for (int p = 0; p < CELLS; p++) {
+            byte crop = labels[p];
+            if (!inBlock(crop) || covered[p]) continue;
+            int side = blockSize[crop];
+            int row = p / SIZE;
+            int column = p % SIZE;
+            if (row + side > SIZE || column + side > SIZE) return false;
+            for (int dr = 0; dr < side; dr++) {
+                for (int dc = 0; dc < side; dc++) {
+                    int q = (row + dr) * SIZE + column + dc;
+                    if (labels[q] != crop || covered[q]) return false;
+                    covered[q] = true;
+                }
+            }
+        }
+        return true;
+    }
+
+    /** Top-left cells of the blocks of {@code crop} in the current labels, which must be valid. */
+    private int[] anchorsOf(byte crop) {
+        int side = blockSize[crop];
+        Arrays.fill(covered, false);
+        int[] anchors = new int[CELLS];
+        int found = 0;
+        for (int p = 0; p < CELLS; p++) {
+            if (label[p] != crop || covered[p]) continue;
+            anchors[found++] = p;
+            for (int dr = 0; dr < side; dr++) {
+                for (int dc = 0; dc < side; dc++) {
+                    int q = p + dr * SIZE + dc;
+                    if (q < CELLS) covered[q] = true;
+                }
+            }
+        }
+        return Arrays.copyOf(anchors, found);
+    }
+
+    /** The anchor of the block holding cell {@code p}, whose crop is a block crop; -1 when the labels are not valid. */
+    private int anchorOfBlockAt(int p) {
+        for (int anchor : anchorsOf(label[p])) {
+            int side = blockSize[label[p]];
+            int dr = p / SIZE - anchor / SIZE;
+            int dc = p % SIZE - anchor % SIZE;
+            if (dr >= 0 && dr < side && dc >= 0 && dc < side) return anchor;
+        }
+        return -1;
+    }
+
+    /**
+     * Queues a block of {@code crop} with its top-left at (row, column), over cells that are open and hold no
+     * other block; the cells that already hold the crop are left alone. False when it does not fit or changes nothing.
+     */
+    private boolean queueBlock(byte crop, int row, int column) {
+        int side = blockSize[crop];
+        if (row < 0 || column < 0 || row + side > SIZE || column + side > SIZE) return false;
+        int before = changeCount;
+        for (int dr = 0; dr < side; dr++) {
+            for (int dc = 0; dc < side; dc++) {
+                int q = (row + dr) * SIZE + column + dc;
+                if (!open[q] || reserved[q] == reserveStamp || inBlock(label[q]) && label[q] != crop) return false;
+            }
+        }
+        for (int dr = 0; dr < side; dr++) {
+            for (int dc = 0; dc < side; dc++) {
+                int q = (row + dr) * SIZE + column + dc;
+                reserved[q] = reserveStamp;
+                if (label[q] != crop) change(q, crop);
+            }
+        }
+        return changeCount > before;
+    }
+
+    /** Places, removes or moves one block of a random block crop. */
+    private boolean blockMove() {
+        byte crop = (byte) blockCrops[random.nextInt(blockCrops.length)];
+        int side = blockSize[crop];
+        reserveStamp++;
+        int kind = random.nextInt(3);
+        if (kind == 0) {
+            return queueBlock(crop, random.nextInt(SIZE - side + 1), random.nextInt(SIZE - side + 1));
+        }
+        int[] anchors = anchorsOf(crop);
+        if (anchors.length == 0) return false;
+        int anchor = anchors[random.nextInt(anchors.length)];
+        int row = anchor / SIZE;
+        int column = anchor % SIZE;
+        if (kind == 1) {
+            for (int dr = 0; dr < side; dr++) {
+                for (int dc = 0; dc < side; dc++) change((row + dr) * SIZE + column + dc, EMPTY);
+            }
+            return true;
+        }
+        // Move one step: the cells the block leaves go empty, the cells it enters take the crop.
+        int direction = random.nextInt(4);
+        int dr = direction == 0 ? 1 : direction == 1 ? -1 : 0;
+        int dc = direction == 2 ? 1 : direction == 3 ? -1 : 0;
+        int newRow = row + dr;
+        int newColumn = column + dc;
+        if (newRow < 0 || newColumn < 0 || newRow + side > SIZE || newColumn + side > SIZE) return false;
+        for (int r = Math.min(row, newRow); r < Math.max(row, newRow) + side; r++) {
+            for (int c = Math.min(column, newColumn); c < Math.max(column, newColumn) + side; c++) {
+                boolean was = r >= row && r < row + side && c >= column && c < column + side;
+                boolean will = r >= newRow && r < newRow + side && c >= newColumn && c < newColumn + side;
+                int q = r * SIZE + c;
+                if (will && (!open[q] || inBlock(label[q]) && !was)) return false;
+                if (will && !was) change(q, crop);
+                else if (was && !will) change(q, EMPTY);
+            }
+        }
+        return changeCount > 0;
+    }
+
+    /**
+     * For a stamped site: places blocks of every block crop the recipe still lacks, each over a ring cell and clear
+     * of the site's footprint, until the ring cells they cover make up the count. Returns what is still lacking
+     * of the ordinary crops; the block crops' shortfall is dropped (the next stamp may do better).
+     */
+    private int stampBlocks(int s, Recipe recipe, int lacking) {
+        reserveStamp++;
+        for (int p : footprint[s]) reserved[p] = reserveStamp;
+        for (int i = 0; i < changeCount; i++) reserved[changeCell[i]] = reserveStamp;
+        int[] around = ring[s];
+        for (int k = 0; k < recipe.crops().length; k++) {
+            byte crop = (byte) recipe.crops()[k];
+            if (!inBlock(crop)) continue;
+            int side = blockSize[crop];
+            int originally = missing[crop];
+            for (int attempt = 0; attempt < 12 && missing[crop] > 0 && around.length > 0; attempt++) {
+                int p = around[random.nextInt(around.length)];
+                int row = p / SIZE - random.nextInt(side);
+                int column = p % SIZE - random.nextInt(side);
+                int before = changeCount;
+                if (!queueBlock(crop, row, column)) continue;
+                int gained = 0;
+                for (int q : around) {
+                    if (reserved[q] == reserveStamp && q / SIZE >= row && q / SIZE < row + side
+                        && q % SIZE >= column && q % SIZE < column + side && label[q] != crop) gained++;
+                }
+                if (changeCount == before) continue;
+                missing[crop] = Math.max(0, missing[crop] - gained);
+            }
+            lacking -= originally;
+            missing[crop] = 0;
+        }
+        return lacking;
+    }
+
     /** Writes the queued changes straight into the labels, for building a start layout. */
     private void commit() {
         for (int i = 0; i < changeCount; i++) label[changeCell[i]] = changeNew[i];
@@ -820,6 +1017,8 @@ final class GreenhouseSearch {
      * leaves just the crop types to settle. Returns false when no goal qualifies.
      */
     private boolean seedLattice() {
+        // A lattice of single ring cells cannot hold blocks; annealing places them instead.
+        if (hasBlocks) return false;
         int[] eligible = new int[goals.length];
         int eligibleCount = 0;
         for (int g = 0; g < goals.length; g++) {
@@ -877,7 +1076,8 @@ final class GreenhouseSearch {
     private boolean propose() {
         changeCount = 0;
         double kind = random.nextDouble();
-        boolean moved = kind < EXCHANGE_SHARE ? exchangeMove()
+        boolean moved = hasBlocks && random.nextDouble() < BLOCK_SHARE ? blockMove()
+            : kind < EXCHANGE_SHARE ? exchangeMove()
             : kind < EXCHANGE_SHARE + SHIFT_SHARE ? shiftMove()
             : kind < 0.45 ? singleMove() : kind < 0.65 ? swapMove() : stampMove();
         if (!moved) changeCount = 0;
@@ -891,6 +1091,11 @@ final class GreenhouseSearch {
         if (!propose()) return false;
         valueVector(before, guidance, hard);
         apply(false);
+        // Every other move may cut a block; such a layout is not a plan, so the move is undone unseen.
+        if (hasBlocks && !blocksValid(label)) {
+            apply(true);
+            return false;
+        }
         valueVector(after, guidance, hard);
         double delta = 0;
         for (int t = 0; t < after.length; t++) {
@@ -1037,7 +1242,7 @@ final class GreenhouseSearch {
     /** Re-types {@code layout} exactly and keeps the result when it beats the best plan. */
     private void retypeAndAdopt(byte[] layout, long nodeLimit, long deadline) {
         byte[] retyped = retype(layout, nodeLimit, deadline);
-        if (retyped == null) return;
+        if (retyped == null || !blocksValid(retyped)) return;
         System.arraycopy(retyped, 0, label, 0, CELLS);
         recompute();
         noteBest();
@@ -1080,7 +1285,17 @@ final class GreenhouseSearch {
                 long[] was = new long[key.length];
                 fillKey(was);
                 changeCount = 0;
-                change(p, EMPTY);
+                if (inBlock(label[p])) {
+                    // A block goes whole or not at all.
+                    int anchor = anchorOfBlockAt(p);
+                    if (anchor < 0) continue;
+                    int side = blockSize[label[p]];
+                    for (int dr = 0; dr < side; dr++) {
+                        for (int dc = 0; dc < side; dc++) change(anchor + dr * SIZE + dc, EMPTY);
+                    }
+                } else {
+                    change(p, EMPTY);
+                }
                 apply(false);
                 fillKey(key);
                 if (better(key, was)) removed = true; else apply(true);

@@ -98,8 +98,14 @@ final class GreenhouseGridPainter {
                     if (content == null) continue;
                     int width = cell;
                     int height = cell;
+                    GreenhousePlan.Block block = null;
                     if (content.flag() == GreenhouseGrid.TARGET) {
-                        GreenhousePlan.Block block = plan.blocks().get(plan.blockAt(row, column));
+                        block = plan.blocks().get(plan.blockAt(row, column));
+                    } else if (plan.plantAt(row, column) >= 0) {
+                        // A Snoozling or Noctilume planted as an ingredient is one plant over its whole footprint.
+                        block = plan.plants().get(plan.plantAt(row, column));
+                    }
+                    if (block != null) {
                         if (block.row() != row || block.column() != column) continue;
                         width = block.width() * pitch - layout.gap();
                         height = block.height() * pitch - layout.gap();

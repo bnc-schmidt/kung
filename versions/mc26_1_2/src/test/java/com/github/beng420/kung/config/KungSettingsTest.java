@@ -72,7 +72,7 @@ public final class KungSettingsTest {
         FeatureEntry group = feature(KungSettings.categories(config, () -> { }), "Greenhouse Hologram");
         assertEquals("settings only: the hologram is user-triggered, not switched on", null, group.toggle());
         assertFalse(group.clickable());
-        assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color", "Extra Crop Color",
+        assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color",
             "Wrong State Color", "Deactivate When Complete", "Hide Models Over Wrong Soil", "Crosshair Label",
             "Toggle Key", "Unload Key"),
             group.settings().stream().map(SettingEntry::label).toList());
@@ -92,7 +92,6 @@ public final class KungSettingsTest {
         assertEquals(SettingKind.COLOR, toPlace.kind());
         assertEquals("#4D8DFF", toPlace.choiceSupplier().get());
         assertEquals("#FF3B3B", setting(group, "Wrong Crop Color").choiceSupplier().get());
-        assertEquals("#FF55D8", setting(group, "Extra Crop Color").choiceSupplier().get());
         assertEquals("#FFA126", setting(group, "Wrong State Color").choiceSupplier().get());
 
         SettingEntry hide = setting(group, "Deactivate When Complete");

@@ -18,8 +18,9 @@ import java.util.TreeMap;
  * <p>Only a RECOGNISED crop that differs from the expected one is ever WRONG (red). Anything we cannot name,
  * whether a stand with an unknown head or a block that is not a crop, is UNVERIFIED (a neutral outline): our name
  * tables are not checked against the live game, so a gap in them must not paint a correct greenhouse red. A
- * recognised crop in a cell the layout has no entry for is an {@link Extra} (drawn pink) when the cell is within one
- * cell of the layout's bounding box and not locked in the planner; soil and unrecognised things there are ignored.
+ * recognised crop in a cell the layout has no entry for is ignored, wherever it stands: it is not the layout's
+ * business (the greenhouse is often only partly planned), and it matters only where it takes the place of a layout
+ * cell, which is then a wrong crop. Soil and unrecognised things there are ignored too.
  */
 final class GreenhouseScanLogic {
     /** What is drawn for a footprint. */
@@ -48,13 +49,17 @@ final class GreenhouseScanLogic {
     /** What one scan saw at a footprint, before debouncing; {@code signature} names what was found there. */
     record Verdict(State state, String signature) { }
 
-    /** A recognised crop in a cell where the layout has no entry: its raw cell (grid offsets) and name. */
+    /**
+     * A recognised crop in a cell where the layout has no entry: its raw cell (grid offsets) and name. The scan no
+     * longer produces any (unplanned crops are ignored); the overlay, pick and crosshair code still take lists of them.
+     * ponytail: dead plumbing, delete it together with the "Extra Crop Color" config when someone cleans up.
+     */
     record Extra(int dx, int dz, String crop) { }
 
     /**
      * {@code shown} is what to draw, aligned with {@code footprints}; {@code raw} the latest scan's verdicts;
-     * {@code planted} the recognised things per crop over the whole grid area. {@code extras} are the crops shown as
-     * unplanned (seen in two consecutive scans), {@code rawExtras} the latest scan's.
+     * {@code planted} the recognised things per crop over the whole grid area. {@code extras} and {@code rawExtras}
+     * are always empty now, see {@link Extra}.
      */
     record Snapshot(int layoutVersion, List<Footprint> footprints, List<State> shown, List<Verdict> raw,
                     Map<String, Integer> planted, int unknown, int total, boolean unrecognisedShare,
@@ -139,32 +144,14 @@ final class GreenhouseScanLogic {
      * at once. {@code previous} is the last snapshot, or null; it only counts for the same footprints.
      */
     static Snapshot evaluate(List<Footprint> expected, List<Found> found, Snapshot previous, int layoutVersion) {
-        return evaluate(expected, found, previous, layoutVersion, null);
-    }
-
-    /**
-     * {@link #evaluate(List, List, Snapshot, int)} that does not count a crop as unplanned in the cells the player
-     * locked in the planner because something already grows there. {@code lockedCells} is indexed
-     * {@code dx * 10 + dz} (raw offsets), or null for none; a crop inside a footprint is judged as usual.
-     */
-    static Snapshot evaluate(List<Footprint> expected, List<Found> found, Snapshot previous, int layoutVersion,
-                             boolean[] lockedCells) {
         int unknown = 0;
         Map<String, Integer> planted = new TreeMap<>();
         List<List<Found>> byFootprint = new ArrayList<>(expected.size());
         for (int i = 0; i < expected.size(); i++) byFootprint.add(new ArrayList<>());
-        List<Extra> rawExtras = new ArrayList<>();
         for (Found item : found) {
             if (item.crop() == null) unknown++;
             else planted.merge(item.crop(), 1, Integer::sum);
-            List<Integer> owners = owners(expected, item);
-            for (int index : owners) byFootprint.get(index).add(item);
-            Extra extra = owners.isEmpty() ? extraOf(item) : null;
-            if (extra != null && lockedCells != null && lockedCells[extra.dx() * GreenhouseGrid.SIZE + extra.dz()]) {
-                extra = null;
-            }
-            if (extra != null && !nearLayout(expected, extra)) extra = null;
-            if (extra != null && !rawExtras.contains(extra)) rawExtras.add(extra);
+            for (int index : owners(expected, item)) byFootprint.get(index).add(item);
         }
         boolean samePrevious = previous != null && previous.footprints().equals(expected);
 
@@ -182,38 +169,11 @@ final class GreenhouseScanLogic {
             shown.add(debounced(raw.get(i), samePrevious ? previous.raw().get(i) : null,
                 samePrevious ? previous.shown().get(i) : State.EMPTY));
         }
-        // An unplanned crop is shown once two consecutive scans saw it (or it already was shown).
-        List<Extra> shownExtras = new ArrayList<>();
-        for (Extra extra : rawExtras) {
-            if (previous != null && (previous.rawExtras().contains(extra) || previous.extras().contains(extra))) {
-                shownExtras.add(extra);
-            }
-        }
+        // A crop standing where the layout has none is nobody's business: it is neither drawn nor does it keep the
+        // layout from completing (the snapshot's extras stay empty). It only matters on a layout cell, as a wrong crop.
         return new Snapshot(layoutVersion, List.copyOf(expected), Collections.unmodifiableList(shown),
             Collections.unmodifiableList(raw), Collections.unmodifiableMap(planted), unknown, found.size(),
-            unrecognisedShare(unknown, found.size()), List.copyOf(shownExtras), List.copyOf(rawExtras));
-    }
-
-    /**
-     * Whether an unplanned crop is close enough to the layout to matter: its cell lies within one cell of the
-     * layout's bounding box. A layout often covers only part of the plot (one recipe in a corner, the rest of the
-     * greenhouse growing other mutations); crops far from it are not its business and must neither be marked nor keep
-     * it from completing. Without any footprint there is no box and every crop counts.
-     */
-    static boolean nearLayout(List<Footprint> expected, Extra extra) {
-        if (expected.isEmpty()) return true;
-        double minX = Double.MAX_VALUE;
-        double minZ = Double.MAX_VALUE;
-        double maxX = -Double.MAX_VALUE;
-        double maxZ = -Double.MAX_VALUE;
-        for (Footprint footprint : expected) {
-            minX = Math.min(minX, footprint.minX());
-            minZ = Math.min(minZ, footprint.minZ());
-            maxX = Math.max(maxX, footprint.maxX());
-            maxZ = Math.max(maxZ, footprint.maxZ());
-        }
-        return extra.dx() >= Math.floor(minX) - 1 && extra.dx() <= Math.ceil(maxX)
-            && extra.dz() >= Math.floor(minZ) - 1 && extra.dz() <= Math.ceil(maxZ);
+            unrecognisedShare(unknown, found.size()));
     }
 
     /**
@@ -270,18 +230,6 @@ final class GreenhouseScanLogic {
             for (int dz = 0; dz < depth; dz++) used[(x + dx) * size + z + dz] = true;
         }
         return indices;
-    }
-
-    /**
-     * A recognised crop standing in no footprint, in a cell of the grid: the cell where the layout has nothing.
-     * Unrecognised things there are ignored (a pet, scenery); so is anything outside the 10x10 cells.
-     */
-    static Extra extraOf(Found found) {
-        if (found.crop() == null) return null;
-        int dx = (int) Math.floor(found.x());
-        int dz = (int) Math.floor(found.z());
-        if (dx < 0 || dx >= GreenhouseGrid.SIZE || dz < 0 || dz >= GreenhouseGrid.SIZE) return null;
-        return new Extra(dx, dz, found.crop());
     }
 
     private static Verdict judge(Footprint footprint, List<Found> matches) {
