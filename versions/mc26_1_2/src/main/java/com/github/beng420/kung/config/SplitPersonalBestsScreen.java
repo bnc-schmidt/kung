@@ -1,5 +1,6 @@
 package com.github.beng420.kung.config;
 
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.SplitsConfig;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitTracker;
 import com.github.beng420.kung.ui.UiBounds;
@@ -8,6 +9,7 @@ import com.github.beng420.kung.ui.UiScale;
 import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.ui.UiTextField;
 import com.github.beng420.kung.ui.UiTheme;
+import com.github.beng420.kung.util.KeyCodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -19,7 +21,6 @@ import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
-import org.lwjgl.glfw.GLFW;
 
 public final class SplitPersonalBestsScreen extends Screen {
     private static final UiTheme THEME = UiTheme.menu();
@@ -141,7 +142,7 @@ public final class SplitPersonalBestsScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() != 0) return false;
+        if (McInput.button(event) != 0) return false;
         layout();
         int mx = coordinate(event.x());
         int my = coordinate(event.y());
@@ -191,8 +192,8 @@ public final class SplitPersonalBestsScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == GLFW.GLFW_KEY_ESCAPE) { onClose(); return true; }
-        if (event.key() == GLFW.GLFW_KEY_TAB) {
+        if (McInput.key(event) == KeyCodes.ESCAPE) { onClose(); return true; }
+        if (McInput.key(event) == KeyCodes.TAB) {
             int focused = -1;
             for (int i = 0; i < rows.size(); i++) if (rows.get(i).input().isFocused()) focused = i;
             int next = focused < 0 ? 0 : Math.floorMod(focused + (event.hasShiftDown() ? -1 : 1), rows.size());
@@ -200,7 +201,7 @@ public final class SplitPersonalBestsScreen extends Screen {
             return true;
         }
         for (Row row : rows) if (row.input().isFocused()) {
-            if (event.key() == GLFW.GLFW_KEY_ENTER || event.key() == GLFW.GLFW_KEY_KP_ENTER) save(row);
+            if (McInput.key(event) == KeyCodes.ENTER || McInput.key(event) == KeyCodes.KP_ENTER) save(row);
             else row.input().keyPressed(event);
             return true;
         }

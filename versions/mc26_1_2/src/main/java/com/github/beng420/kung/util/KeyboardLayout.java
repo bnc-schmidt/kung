@@ -2,7 +2,6 @@ package com.github.beng420.kung.util;
 
 import com.github.beng420.kung.config.KungConfig;
 import java.util.Locale;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * What a key is labelled on the player's keyboard. GLFW numbers keys by their US position, and Kung stores keybinds by
@@ -28,8 +27,8 @@ public enum KeyboardLayout {
      */
     public String letterOn(int key) {
         if (this == AUTO) return null;
-        if (key == GLFW.GLFW_KEY_SEMICOLON) return this == AZERTY ? "M" : null;
-        if (key < GLFW.GLFW_KEY_A || key > GLFW.GLFW_KEY_Z) return null;
+        if (key == KeyCodes.SEMICOLON) return this == AZERTY ? "M" : null;
+        if (key < KeyCodes.A || key > KeyCodes.Z) return null;
         char us = (char) key;
         return String.valueOf(switch (this) {
             case QWERTZ -> us == 'Y' ? 'Z' : us == 'Z' ? 'Y' : us;
@@ -49,9 +48,9 @@ public enum KeyboardLayout {
     public int keyLabelled(String letter) {
         if (this == AUTO) return -1;
         String wanted = letter.toUpperCase(Locale.ROOT);
-        for (int key = GLFW.GLFW_KEY_A; key <= GLFW.GLFW_KEY_Z; key++) {
+        for (int key = KeyCodes.A; key <= KeyCodes.Z; key++) {
             if (wanted.equals(letterOn(key))) return key;
         }
-        return letterOn(GLFW.GLFW_KEY_SEMICOLON) != null && wanted.equals(letterOn(GLFW.GLFW_KEY_SEMICOLON)) ? GLFW.GLFW_KEY_SEMICOLON : -1;
+        return letterOn(KeyCodes.SEMICOLON) != null && wanted.equals(letterOn(KeyCodes.SEMICOLON)) ? KeyCodes.SEMICOLON : -1;
     }
 }

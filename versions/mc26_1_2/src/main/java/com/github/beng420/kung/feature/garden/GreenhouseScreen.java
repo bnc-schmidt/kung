@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.feature.garden.GreenhouseSession.Tone;
 import com.github.beng420.kung.message.KungMessages;
@@ -11,6 +12,7 @@ import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.ui.UiTextField;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiTooltip;
+import com.github.beng420.kung.util.KeyCodes;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -28,7 +30,6 @@ import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 /**
  * Greenhouse planner: choose mutation goals, optionally lock plot cells, solve, and read, rotate or share the
@@ -1125,13 +1126,13 @@ public final class GreenhouseScreen extends Screen {
 
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
-        if (event.button() != 0 && event.button() != 1) return false;
+        if (McInput.button(event) != 0 && McInput.button(event) != 1) return false;
         layout();
         int mx = coordinate(event.x());
         int my = coordinate(event.y());
         if (notice.text() != null && inside(mx, my, noticeLeft, noticeTop, noticeWidth, NOTICE_H)) {
             // The popup is a small modal strip: a click on its x closes it, any other click on it is spent.
-            if (event.button() == 0 && inside(mx, my, noticeLeft + noticeWidth - NOTICE_X_W - 2, noticeTop + 2,
+            if (McInput.button(event) == 0 && inside(mx, my, noticeLeft + noticeWidth - NOTICE_X_W - 2, noticeTop + 2,
                 NOTICE_X_W, NOTICE_X_W)) {
                 notice.dismiss();
             }
@@ -1142,7 +1143,7 @@ public final class GreenhouseScreen extends Screen {
         if (dropdownOpen() && !onSearch) {
             if (inDropdown(mx, my)) {
                 int slot = Math.floorDiv(my - (y + DROP_Y + 1), DROP_ROW);
-                if (event.button() == 0 && slot >= 0 && slot < DROP_ROWS) pick(dropdownScroll.offset() + slot);
+                if (McInput.button(event) == 0 && slot >= 0 && slot < DROP_ROWS) pick(dropdownScroll.offset() + slot);
                 return true;
             }
             // A click anywhere else closes the list and then acts normally; the list overlays, so nothing moves.
@@ -1156,7 +1157,7 @@ public final class GreenhouseScreen extends Screen {
             return true;
         }
         link.setFocused(false);
-        if (event.button() != 0) return true;
+        if (McInput.button(event) != 0) return true;
         commitEdit();
         int cell = cellAt(event.x(), event.y());
         if (cell >= 0) {
@@ -1369,9 +1370,9 @@ public final class GreenhouseScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        int key = event.key();
-        boolean enter = key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_KP_ENTER;
-        if (key == GLFW.GLFW_KEY_ESCAPE) {
+        int key = McInput.key(event);
+        boolean enter = key == KeyCodes.ENTER || key == KeyCodes.KP_ENTER;
+        if (key == KeyCodes.ESCAPE) {
             // One Escape per layer: the dropdown, then a number being typed, then the screen.
             if (search.isFocused()) search.setFocused(false);
             else if (numberEdit != null) numberEdit = null;
@@ -1379,8 +1380,8 @@ public final class GreenhouseScreen extends Screen {
             return true;
         }
         if (numberEdit != null) {
-            if (enter || key == GLFW.GLFW_KEY_TAB) commitEdit();
-            else if (key == GLFW.GLFW_KEY_BACKSPACE) numberEdit.backspace();
+            if (enter || key == KeyCodes.TAB) commitEdit();
+            else if (key == KeyCodes.BACKSPACE) numberEdit.backspace();
             return true;
         }
         if (link.isFocused()) {

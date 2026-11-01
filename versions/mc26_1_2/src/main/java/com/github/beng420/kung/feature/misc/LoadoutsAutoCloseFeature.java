@@ -1,11 +1,10 @@
 package com.github.beng420.kung.feature.misc;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.util.KungDebugRecorder;
-import com.mojang.blaze3d.platform.InputConstants;
-import com.mojang.blaze3d.platform.Window;
 import java.util.Locale;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
@@ -18,7 +17,6 @@ import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import org.lwjgl.glfw.GLFW;
 
 public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConfig> {
     public static final LoadoutsAutoCloseFeature INSTANCE = new LoadoutsAutoCloseFeature();
@@ -173,7 +171,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         if (event == null) {
             return "";
         }
-        return "key:" + event.key() + ":" + event.scancode();
+        return "key:" + McInput.key(event) + ":" + McInput.scancode(event);
     }
 
     public static String keybindFromMouseButton(int button) {
@@ -589,9 +587,9 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         int key = parseKeybindPart(keybind, 1, -1);
         int scancode = parseKeybindPart(keybind, 2, 0);
         if (key >= 0) {
-            return key == event.key();
+            return key == McInput.key(event);
         }
-        return scancode != 0 && scancode == event.scancode();
+        return scancode != 0 && scancode == McInput.scancode(event);
     }
 
     public static boolean keybindMatchesMouse(String keybind, int button) {
@@ -601,15 +599,15 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
     }
 
     /** Whether the key or mouse button is down right now; a key bound by scancode alone never reads as down. */
-    public static boolean keybindHeld(String keybind, Window window) {
+    public static boolean keybindHeld(String keybind) {
         if (keybind == null) {
             return false;
         }
         int code = parseKeybindPart(keybind, 1, -1);
         if (keybind.startsWith("mouse:")) {
-            return code >= 0 && GLFW.glfwGetMouseButton(window.handle(), code) == GLFW.GLFW_PRESS;
+            return code >= 0 && McInput.isMouseDown(code);
         }
-        return keybind.startsWith("key:") && code >= 0 && InputConstants.isKeyDown(window, code);
+        return keybind.startsWith("key:") && code >= 0 && McInput.isKeyDown(code);
     }
 
     private static int parseKeybindPart(String keybind, int part, int fallback) {
@@ -641,7 +639,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return String.valueOf((char) key); // a picked layout answers for the letters, not the system
         }
         try {
-            String name = GLFW.glfwGetKeyName(key, 0);
+            String name = McInput.keyName(key);
             if (name == null || name.isEmpty()) {
                 return null;
             }

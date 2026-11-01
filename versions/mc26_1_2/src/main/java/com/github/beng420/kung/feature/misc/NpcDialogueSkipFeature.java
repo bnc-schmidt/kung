@@ -211,10 +211,7 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         // What a right-click on the entity does (Minecraft.startUseItem), aimed at the body's center.
         InteractionResult result = client.gameMode.interact(player, body,
             new EntityHitResult(body, body.getBoundingBox().getCenter()), InteractionHand.MAIN_HAND);
-        if (result instanceof InteractionResult.Success success
-            && success.swingSource() == InteractionResult.SwingSource.CLIENT) {
-            player.swing(InteractionHand.MAIN_HAND);
-        }
+        McCompat.swingForResult(player, InteractionHand.MAIN_HAND, result);
     }
 
     /**

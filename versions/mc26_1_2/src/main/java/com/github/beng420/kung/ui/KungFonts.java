@@ -1,6 +1,7 @@
 package com.github.beng420.kung.ui;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.runtime.KungPaths;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -98,7 +99,7 @@ public final class KungFonts {
             KungMod.LOGGER.warn("Could not create the font folder.", exception);
         }
         refresh();
-        net.minecraft.util.Util.getPlatform().openPath(folder());
+        McCompat.openPath(folder());
     }
 
     public static String libraryChoice() {

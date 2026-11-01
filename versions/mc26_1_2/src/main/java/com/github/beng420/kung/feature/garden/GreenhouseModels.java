@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.feature.garden.GreenhouseCropLook.BlockSpec;
 import com.github.beng420.kung.feature.garden.GreenhouseCropLook.Look;
 import com.github.beng420.kung.feature.garden.GreenhouseCropLook.Rung;
@@ -212,8 +213,8 @@ final class GreenhouseModels {
                         head.z() - 0.5 * scale - camera.z);
                     pose.scale(scale, scale, scale);
                     pose.mulPose(floorHead);
-                    collector.submitModel(model, HEAD_STATE, pose, skinType(head, now), LightCoordsUtil.FULL_BRIGHT,
-                        OverlayTexture.NO_OVERLAY, tint, null, 0, null);
+                    McCompat.submitModel(collector, model, HEAD_STATE, pose, skinType(head, now), LightCoordsUtil.FULL_BRIGHT,
+                        OverlayTexture.NO_OVERLAY, tint);
                 } finally {
                     pose.popPose();
                 }

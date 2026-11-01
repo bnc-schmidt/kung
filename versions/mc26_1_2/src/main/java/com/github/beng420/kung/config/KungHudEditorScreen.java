@@ -1,12 +1,14 @@
 package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungHudLayout.Bounds;
 import com.github.beng420.kung.config.KungHudLayout.Entry;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
 import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
 import com.github.beng420.kung.ui.UiTheme;
+import com.github.beng420.kung.util.KeyCodes;
 import java.util.List;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -83,7 +85,7 @@ public final class KungHudEditorScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         int mouseX = (int) event.x();
         int mouseY = (int) event.y();
-        int button = event.button();
+        int button = McInput.button(event);
 
         if (inMapControls(mouseX, mouseY)) {
             if (button == 0) {
@@ -163,7 +165,7 @@ public final class KungHudEditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 256) {
+        if (McInput.key(event) == KeyCodes.ESCAPE) {
             onClose();
             return true;
         }

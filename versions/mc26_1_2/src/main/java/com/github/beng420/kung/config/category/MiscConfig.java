@@ -1,11 +1,12 @@
 package com.github.beng420.kung.config.category;
 
+import com.github.beng420.kung.compat.McInput;
+import com.github.beng420.kung.util.KeyCodes;
 import com.github.beng420.kung.util.KeyboardLayout;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Predicate;
-import org.lwjgl.glfw.GLFW;
 
 public final class MiscConfig extends ConfigCategory {
     private static String layoutPeekChatKeybind;
@@ -609,8 +610,8 @@ public final class MiscConfig extends ConfigCategory {
         if (picked >= 0) return "key:" + picked + ":0";
         if (layoutPeekChatKeybind == null) {
             try {
-                for (int key = GLFW.GLFW_KEY_A; key <= GLFW.GLFW_KEY_Z && layoutPeekChatKeybind == null; key++) {
-                    if ("y".equals(GLFW.glfwGetKeyName(key, 0))) layoutPeekChatKeybind = "key:" + key + ":0";
+                for (int key = KeyCodes.A; key <= KeyCodes.Z && layoutPeekChatKeybind == null; key++) {
+                    if ("y".equals(McInput.keyName(key))) layoutPeekChatKeybind = "key:" + key + ":0";
                 }
             } catch (Throwable noGlfw) { /* tests run without GLFW */ }
         }

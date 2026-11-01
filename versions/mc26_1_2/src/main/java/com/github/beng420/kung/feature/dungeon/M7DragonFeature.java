@@ -1267,12 +1267,12 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
      * particle type keeps ambient arena effects out - three different types carry the same burst.
      */
     private void observeSpawnHint(ClientboundLevelParticlesPacket packet) {
-        if (packet.getCount() < 40 || packet.getMaxSpeed() != 0.0F) return;
-        if (packet.getXDist() != 2.0F || packet.getYDist() != 3.0F || packet.getZDist() != 2.0F) return;
+        if (McCompat.particleCount(packet) < 40 || McCompat.particleMaxSpeed(packet) != 0.0F) return;
+        if (McCompat.particleXDist(packet) != 2.0F || McCompat.particleYDist(packet) != 3.0F || McCompat.particleZDist(packet) != 2.0F) return;
         for (Statue statue : Statue.values()) {
-            if (Math.abs(packet.getX() - statue.spawn().x) < 0.5
-                && Math.abs(packet.getY() - (statue.spawn().y + 5)) < 0.5
-                && Math.abs(packet.getZ() - statue.spawn().z) < 0.5) {
+            if (Math.abs(McCompat.particleX(packet) - statue.spawn().x) < 0.5
+                && Math.abs(McCompat.particleY(packet) - (statue.spawn().y + 5)) < 0.5
+                && Math.abs(McCompat.particleZ(packet) - statue.spawn().z) < 0.5) {
                 // The burst repeats until the dragon spawns; HINT_TO_SPAWN_TICKS counts from its first
                 // packet. Refreshing on every packet left the countdown stuck ~100 ticks out.
                 Long first = spawnHints.get(statue);
@@ -1288,20 +1288,20 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
 
     public void observeParticles(ClientboundLevelParticlesPacket packet) {
         if (!initialized() || !ready()) return;
-        if (packet.getY() < 0 || packet.getY() > 45 || packet.getX() < 0 || packet.getX() > 120
-            || packet.getZ() < 25 || packet.getZ() > 150) return;
+        if (McCompat.particleY(packet) < 0 || McCompat.particleY(packet) > 45 || McCompat.particleX(packet) < 0 || McCompat.particleX(packet) > 120
+            || McCompat.particleZ(packet) < 25 || McCompat.particleZ(packet) > 150) return;
         observeSpawnHint(packet);
         if (!config().devDragonDiagnosticsEnabled()) return;
-        ParticleType<?> type = packet.getParticle().getType();
+        ParticleType<?> type = McCompat.particleOptions(packet).getType();
         Long previous = particleSamples.get(type);
         // Sample each type once per second so common effects cannot crowd out a rare range signal.
         if (previous != null && tracker.tick() - previous < 20) return;
         if (previous == null && particleSamples.size() >= 16) return;
         particleSamples.put(type, tracker.tick());
         sample("particle=" + BuiltInRegistries.PARTICLE_TYPE.getKey(type)
-            + " pos=" + new Vec3(packet.getX(), packet.getY(), packet.getZ()) + " count=" + packet.getCount()
-            + " spread=" + packet.getXDist() + "," + packet.getYDist() + "," + packet.getZDist()
-            + " speed=" + packet.getMaxSpeed());
+            + " pos=" + new Vec3(McCompat.particleX(packet), McCompat.particleY(packet), McCompat.particleZ(packet)) + " count=" + McCompat.particleCount(packet)
+            + " spread=" + McCompat.particleXDist(packet) + "," + McCompat.particleYDist(packet) + "," + McCompat.particleZDist(packet)
+            + " speed=" + McCompat.particleMaxSpeed(packet));
     }
 
     private void capturePositions() {

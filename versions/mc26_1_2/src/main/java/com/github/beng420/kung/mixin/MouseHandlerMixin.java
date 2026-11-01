@@ -1,14 +1,15 @@
 package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.feature.garden.GreenhouseHologramSettings;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.PeekChatFeature;
+import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.MouseHandler;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.client.input.MouseButtonInfo;
-import org.lwjgl.glfw.GLFW;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -24,16 +25,16 @@ public abstract class MouseHandlerMixin {
      */
     @Inject(method = "onButton", at = @At("HEAD"), cancellable = true)
     private void kung$beforeButton(long window, MouseButtonInfo info, int action, CallbackInfo callbackInfo) {
-        if (action == GLFW.GLFW_PRESS
+        if (action == InputConstants.PRESS
             && McCompat.screen(Minecraft.getInstance()) instanceof AbstractContainerScreen<?> screen
-            && LoadoutsAutoCloseFeature.handleLoadoutMouseHotkey(screen, info.button())) {
+            && LoadoutsAutoCloseFeature.handleLoadoutMouseHotkey(screen, McInput.button(info))) {
             callbackInfo.cancel();
             return;
         }
         // The Greenhouse hologram's toggle key may be a mouse button; it only observes, the click still goes on.
         Minecraft client = Minecraft.getInstance();
-        if (action == GLFW.GLFW_PRESS && client.player != null && McCompat.screen(client) == null) {
-            GreenhouseHologramSettings.onMousePress(info.button());
+        if (action == InputConstants.PRESS && client.player != null && McCompat.screen(client) == null) {
+            GreenhouseHologramSettings.onMousePress(McInput.button(info));
         }
     }
 

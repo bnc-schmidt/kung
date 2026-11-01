@@ -9,6 +9,8 @@ def javaRelease = property("java_release_${mc}").toInteger()
 def fabricApiVersion = property("fabric_api_version_${mc}")
 def modMenuVersion = property("modmenu_version_${mc}")
 def oneConfigPlatform = property("oneconfig_platform_${mc}")
+// 26.3's Fabric API needs a newer loader than the other versions; fabric_loader_version_<mc> overrides the default.
+def loaderVersion = hasProperty("fabric_loader_version_${mc}") ? property("fabric_loader_version_${mc}") : fabric_loader_version
 def flavor = hasProperty("modrinth") ? "modrinth" : "full"
 def sharedSrc = rootProject.file("versions/mc26_1_2/src")
 
@@ -53,7 +55,7 @@ repositories {
 dependencies {
   testImplementation "junit:junit:4.13.2"
   minecraft "com.mojang:minecraft:${minecraftVersion}"
-  implementation "net.fabricmc:fabric-loader:${fabric_loader_version}"
+  implementation "net.fabricmc:fabric-loader:${loaderVersion}"
   implementation "net.fabricmc.fabric-api:fabric-api:${fabricApiVersion}"
   // Optional screen entrypoint; neither Mod Menu nor OneConfig is bundled or required.
   compileOnly("com.terraformersmc:modmenu:${modMenuVersion}") { transitive = false }
@@ -139,13 +141,13 @@ tasks.register("syncLocalDungeonRoomData") {
 processResources {
   inputs.property "version", project.version
   inputs.property "minecraft_version", minecraftVersion
-  inputs.property "loader_version", fabric_loader_version
+  inputs.property "loader_version", loaderVersion
 
   filesMatching("fabric.mod.json") {
     expand(
       version: project.version,
       minecraft_version: minecraftVersion,
-      loader_version: fabric_loader_version,
+      loader_version: loaderVersion,
       mod_id: mod_id,
       mod_name: mod_name,
       mod_description: mod_description,

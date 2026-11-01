@@ -105,7 +105,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         if (!isEnabled() || level == null || client.player == null) {
             return;
         }
-        boolean crit = packet.getParticle().getType() == ParticleTypes.CRIT;
+        boolean crit = McCompat.particleOptions(packet).getType() == ParticleTypes.CRIT;
         if (!crit && tracker.isEmpty()) {
             return;
         }
@@ -117,16 +117,16 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         }
         syncLevel(level);
 
-        double x = packet.getX();
-        double y = packet.getY();
-        double z = packet.getZ();
+        double x = McCompat.particleX(packet);
+        double y = McCompat.particleY(packet);
+        double z = McCompat.particleZ(packet);
         if (!crit) {
-            noteNearBug(level, String.valueOf(BuiltInRegistries.PARTICLE_TYPE.getKey(packet.getParticle().getType())), x, y, z);
+            noteNearBug(level, String.valueOf(BuiltInRegistries.PARTICLE_TYPE.getKey(McCompat.particleOptions(packet).getType())), x, y, z);
             return;
         }
 
         critPackets++;
-        critParticles += packet.getCount();
+        critParticles += McCompat.particleCount(packet);
         // Generous box around the spot below the particle; source() applies the exact limits.
         double aside = InvisibugTracker.PARTICLE_MAX_SIDEWAYS + 0.5;
         List<Stand> stands = new ArrayList<>();
@@ -153,7 +153,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
                 "found id=%d stand=(%.2f %.2f %.2f) height=%.2f particle=(%.2f %.2f %.2f) distance=%.2f"
                     + " count=%d spread=%.2f,%.2f,%.2f speed=%.2f bugs=%d",
                 hit.id(), hit.x(), hit.y(), hit.z(), entity == null ? -1.0 : entity.getBbHeight(), x, y, z, distance,
-                packet.getCount(), packet.getXDist(), packet.getYDist(), packet.getZDist(), packet.getMaxSpeed(),
+                McCompat.particleCount(packet), McCompat.particleXDist(packet), McCompat.particleYDist(packet), McCompat.particleZDist(packet), McCompat.particleMaxSpeed(packet),
                 tracker.ids().size()));
         }
     }

@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.misc;
 
 import com.github.beng420.kung.KungBuild;
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.feature.dungeon.DungeonServerTickEvents;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.runtime.KungFileLayout;
@@ -320,14 +321,14 @@ public final class FrozenBlazeCapture {
     }
 
     private static void particle(Player self, ClientLevel level, ClientboundLevelParticlesPacket packet) {
-        double dx = packet.getX() - self.getX(), dy = packet.getY() - self.getY(), dz = packet.getZ() - self.getZ();
+        double dx = McCompat.particleX(packet) - self.getX(), dy = McCompat.particleY(packet) - self.getY(), dz = McCompat.particleZ(packet) - self.getZ();
         if (dx * dx + dy * dy + dz * dz > RANGE * RANGE) return;
-        String id = String.valueOf(BuiltInRegistries.PARTICLE_TYPE.getKey(packet.getParticle().getType()));
+        String id = String.valueOf(BuiltInRegistries.PARTICLE_TYPE.getKey(McCompat.particleOptions(packet).getType()));
         if (!budget.room("PARTICLE " + id, PER_KIND_PER_SECOND)) return;
         add(String.format(Locale.ROOT, "PARTICLE %s opt=%s n=%d dist=(%.2f,%.2f,%.2f) speed=%.3f limiter=%d always=%d %s near=%s",
-            id, options(packet.getParticle()), packet.getCount(), packet.getXDist(), packet.getYDist(), packet.getZDist(),
-            packet.getMaxSpeed(), packet.isOverrideLimiter() ? 1 : 0, packet.alwaysShow() ? 1 : 0,
-            relative(dx, dy, dz), closest(self, level, packet.getX(), packet.getY(), packet.getZ())));
+            id, options(McCompat.particleOptions(packet)), McCompat.particleCount(packet), McCompat.particleXDist(packet), McCompat.particleYDist(packet), McCompat.particleZDist(packet),
+            McCompat.particleMaxSpeed(packet), McCompat.particleOverrideLimiter(packet) ? 1 : 0, packet.alwaysShow() ? 1 : 0,
+            relative(dx, dy, dz), closest(self, level, McCompat.particleX(packet), McCompat.particleY(packet), McCompat.particleZ(packet))));
     }
 
     private static void sound(Player self, ClientboundSoundPacket packet) {

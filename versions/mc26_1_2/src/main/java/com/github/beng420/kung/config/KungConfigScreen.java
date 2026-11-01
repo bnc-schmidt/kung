@@ -1,6 +1,7 @@
 package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungSettings.CategoryEntry;
 import com.github.beng420.kung.config.KungSettings.FeatureEntry;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
@@ -18,6 +19,7 @@ import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.update.KungUpdater;
 import com.github.beng420.kung.update.KungReleaseNotesPopup;
 import java.util.ArrayList;
+import com.github.beng420.kung.util.KeyCodes;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -217,7 +219,7 @@ public final class KungConfigScreen extends Screen {
         tooltipDelay.reset();
         int mouseX = toMenuCoordinate(event.x());
         int mouseY = toMenuCoordinate(event.y());
-        int button = event.button();
+        int button = McInput.button(event);
 
         if (releaseNotesPopup != null) {
             if (releaseNotesPopup.click(this, mouseX, mouseY, button)) releaseNotesPopup = null;
@@ -320,7 +322,7 @@ public final class KungConfigScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (releaseNotesPopup != null) {
-            if (releaseNotesPopup.key(event.key())) releaseNotesPopup = null;
+            if (releaseNotesPopup.key(McInput.key(event))) releaseNotesPopup = null;
             return true;
         }
         if (dropdown != null) {
@@ -331,12 +333,12 @@ public final class KungConfigScreen extends Screen {
             return textEditor.keyPressed(event);
         }
         if (capturingSetting != null) {
-            if (event.key() == 256) {
+            if (McInput.key(event) == KeyCodes.ESCAPE) {
                 capturingSetting.setText("");
                 capturingSetting = null;
                 return true;
             }
-            if (event.key() == 259 || event.key() == 261) {
+            if (McInput.key(event) == KeyCodes.BACKSPACE || McInput.key(event) == KeyCodes.DELETE) {
                 capturingSetting.setText("");
                 capturingSetting = null;
                 return true;
@@ -345,10 +347,10 @@ public final class KungConfigScreen extends Screen {
             capturingSetting = null;
             return true;
         }
-        if (searchField.isFocused() && event.key() != 256 && searchField.keyPressed(event)) {
+        if (searchField.isFocused() && McInput.key(event) != KeyCodes.ESCAPE && searchField.keyPressed(event)) {
             return true;
         }
-        if (event.key() == 256) {
+        if (McInput.key(event) == KeyCodes.ESCAPE) {
             onClose();
             return true;
         }
@@ -1014,11 +1016,11 @@ public final class KungConfigScreen extends Screen {
 
         private boolean mouseClicked(MouseButtonEvent event, int mouseX, int mouseY, boolean doubleClick) {
             layout();
-            if (event.button() == 0 && inside(mouseX, mouseY, saveX, buttonsY, BUTTON_WIDTH, BUTTON_HEIGHT)) {
+            if (McInput.button(event) == 0 && inside(mouseX, mouseY, saveX, buttonsY, BUTTON_WIDTH, BUTTON_HEIGHT)) {
                 save();
                 return true;
             }
-            if (event.button() == 0 && inside(mouseX, mouseY, cancelX, buttonsY, BUTTON_WIDTH, BUTTON_HEIGHT)) {
+            if (McInput.button(event) == 0 && inside(mouseX, mouseY, cancelX, buttonsY, BUTTON_WIDTH, BUTTON_HEIGHT)) {
                 close();
                 return true;
             }
@@ -1039,11 +1041,11 @@ public final class KungConfigScreen extends Screen {
         }
 
         private boolean keyPressed(KeyEvent event) {
-            if (event.key() == 256) {
+            if (McInput.key(event) == KeyCodes.ESCAPE) {
                 close();
                 return true;
             }
-            if (event.key() == 257 || event.key() == 335) {
+            if (McInput.key(event) == KeyCodes.ENTER || McInput.key(event) == KeyCodes.KP_ENTER) {
                 save();
                 return true;
             }

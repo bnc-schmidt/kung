@@ -250,8 +250,7 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
 
     static Vec3 matchingPosition(Entity entity) {
         // Packet observations must not compare a new marker with a mob still interpolating behind it.
-        var interpolation = entity.getInterpolation();
-        return interpolation == null ? entity.position() : interpolation.position();
+        return McCompat.interpolatedPosition(entity);
     }
 
     static DungeonDebuffTracker.Target matchingTarget(Entity entity) {

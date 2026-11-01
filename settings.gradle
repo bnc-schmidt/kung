@@ -21,4 +21,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "kung"
 
-include("versions:mc26_1_2", "versions:mc26_2")
+include("versions:mc26_1_2", "versions:mc26_2", "versions:mc26_3")

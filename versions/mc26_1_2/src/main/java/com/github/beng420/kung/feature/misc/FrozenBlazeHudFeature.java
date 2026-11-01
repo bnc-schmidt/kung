@@ -142,12 +142,12 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
 
     public void observeParticles(ClientboundLevelParticlesPacket packet) {
         var player = Minecraft.getInstance().player;
-        if (set != null && player != null && packet.getParticle().getType() == ParticleTypes.FLAME && packet.getCount() == 8
-            && (atPlayer(packet.getX() - player.getX(), packet.getY() - player.getY(), packet.getZ() - player.getZ())
-                || atPlayerRecently(trail, packet.getX(), packet.getY(), packet.getZ())))
+        if (set != null && player != null && McCompat.particleOptions(packet).getType() == ParticleTypes.FLAME && McCompat.particleCount(packet) == 8
+            && (atPlayer(McCompat.particleX(packet) - player.getX(), McCompat.particleY(packet) - player.getY(), McCompat.particleZ(packet) - player.getZ())
+                || atPlayerRecently(trail, McCompat.particleX(packet), McCompat.particleY(packet), McCompat.particleZ(packet))))
             sincePulse = 0;
-        near("particle " + BuiltInRegistries.PARTICLE_TYPE.getKey(packet.getParticle().getType()), packet.getCount(),
-            packet.getX(), packet.getY(), packet.getZ());
+        near("particle " + BuiltInRegistries.PARTICLE_TYPE.getKey(McCompat.particleOptions(packet).getType()), McCompat.particleCount(packet),
+            McCompat.particleX(packet), McCompat.particleY(packet), McCompat.particleZ(packet));
     }
 
     public void observeSound(ClientboundSoundPacket packet) {

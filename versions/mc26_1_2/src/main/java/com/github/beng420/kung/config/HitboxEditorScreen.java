@@ -1,6 +1,7 @@
 package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.feature.misc.HitboxesFeature;
 import com.github.beng420.kung.ui.UiBounds;
@@ -10,6 +11,7 @@ import com.github.beng420.kung.ui.UiScrollList;
 import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.ui.UiTextField;
 import com.github.beng420.kung.ui.UiTheme;
+import com.github.beng420.kung.util.KeyCodes;
 import com.mojang.blaze3d.platform.NativeImage;
 import java.awt.Color;
 import java.util.List;
@@ -208,7 +210,7 @@ final class HitboxEditorScreen extends Screen {
         layout();
         int mx = coordinate(event.x());
         int my = coordinate(event.y());
-        if (event.button() != 0) return true;
+        if (McInput.button(event) != 0) return true;
         if (cancelBounds().contains(mx, my)) { onClose(); return true; }
         if (entityId == null) {
             refreshSearch();
@@ -256,16 +258,16 @@ final class HitboxEditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 256) { onClose(); return true; }
+        if (McInput.key(event) == KeyCodes.ESCAPE) { onClose(); return true; }
         if (entityId == null) {
             refreshSearch();
-            if (event.key() == 264 || event.key() == 265) {
-                selected = Math.clamp(selected + (event.key() == 264 ? 1 : -1), 0, Math.max(0, matches.size() - 1));
+            if (McInput.key(event) == KeyCodes.DOWN || McInput.key(event) == KeyCodes.UP) {
+                selected = Math.clamp(selected + (McInput.key(event) == KeyCodes.DOWN ? 1 : -1), 0, Math.max(0, matches.size() - 1));
                 scroll.setOffset(Math.clamp(scroll.offset(), selected - VISIBLE_ROWS + 1, selected), matches.size(), VISIBLE_ROWS);
                 return true;
             }
         }
-        if (event.key() == 257 || event.key() == 335) {
+        if (McInput.key(event) == KeyCodes.ENTER || McInput.key(event) == KeyCodes.KP_ENTER) {
             if (entityId == null) { if (!matches.isEmpty()) choose(matches.get(selected)); }
             else save();
             return true;

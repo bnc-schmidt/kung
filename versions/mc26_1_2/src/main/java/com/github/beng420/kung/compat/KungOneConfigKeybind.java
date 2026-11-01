@@ -27,9 +27,12 @@ final class KungOneConfigKeybind implements Supplier<OneConfigKeybind>, Consumer
         if (parts.length >= 2) {
             try {
                 int code = Integer.parseInt(parts[1]);
+                // OneConfig numbers inputs like the running Minecraft; Kung stores GLFW numbers.
+                int key = McInput.platformKey(code);
+                int button = McInput.platformButton(code);
                 if (code >= 0) {
-                    if (parts[0].equals("key")) keys = new int[] {code};
-                    if (parts[0].equals("mouse")) mouse = new int[] {code};
+                    if (parts[0].equals("key") && key >= 0) keys = new int[] {key};
+                    if (parts[0].equals("mouse") && button >= 0) mouse = new int[] {button};
                 }
             } catch (NumberFormatException ignored) {
                 // Legacy/unrecognized encodings stay intact until the user chooses a new input.
@@ -48,13 +51,15 @@ final class KungOneConfigKeybind implements Supplier<OneConfigKeybind>, Consumer
         int mouseCount = mouse == null ? 0 : mouse.length;
         if (keyCount + mouseCount > 1) return;
         String raw;
-        if (keyCount == 1 && keys[0] >= 0) {
+        int glfwKey = keyCount == 1 ? McInput.glfwKey(keys[0]) : -1;
+        int glfwButton = mouseCount == 1 ? McInput.glfwButton(mouse[0]) : -1;
+        if (glfwKey >= 0) {
             // GLFW key codes are sufficient for Kung; retain an existing physical scan code when unchanged.
             String current = setting.rawKeybindSupplier().get();
-            raw = current != null && current.startsWith("key:" + keys[0] + ":")
-                ? current : "key:" + keys[0] + ":0";
-        } else if (mouseCount == 1 && mouse[0] >= 0) {
-            raw = "mouse:" + mouse[0];
+            raw = current != null && current.startsWith("key:" + glfwKey + ":")
+                ? current : "key:" + glfwKey + ":0";
+        } else if (glfwButton >= 0) {
+            raw = "mouse:" + glfwButton;
         } else if (keyCount + mouseCount == 0) {
             raw = "";
         } else return;

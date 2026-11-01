@@ -2,8 +2,8 @@
 setlocal EnableExtensions EnableDelayedExpansion
 
 rem Builds and tests every release jar, then collects them in release\<mod_version>:
-rem   github\    kung-26.1.2 and kung-26.2 - attach both to the GitHub release
-rem   modrinth\  kung-modrinth-26.1.2 and -26.2 - one Modrinth version each, never on GitHub
+rem   github\    kung-26.1.2, kung-26.2 and kung-26.3 - attach all to the GitHub release
+rem   modrinth\  kung-modrinth-26.1.2, -26.2 and -26.3 - one Modrinth version each, never on GitHub
 rem Then it installs both flavors into the test packs below. Whichever Kung a pack runs stays
 rem active (the Modrinth or the GitHub jar); the other one is added as .disabled.
 
@@ -29,8 +29,10 @@ if exist "%OUT%" rmdir /S /Q "%OUT%"
 mkdir "%OUT%\github" "%OUT%\modrinth"
 copy /Y "versions\mc26_1_2\build\libs\kung-26.1.2-%MOD_VERSION%.jar" "%OUT%\github\" >nul || goto failed
 copy /Y "versions\mc26_2\build\libs\kung-26.2-%MOD_VERSION%.jar" "%OUT%\github\" >nul || goto failed
+copy /Y "versions\mc26_3\build\libs\kung-26.3-%MOD_VERSION%.jar" "%OUT%\github\" >nul || goto failed
 copy /Y "versions\mc26_1_2\build\modrinth\libs\kung-modrinth-26.1.2-%MOD_VERSION%.jar" "%OUT%\modrinth\" >nul || goto failed
 copy /Y "versions\mc26_2\build\modrinth\libs\kung-modrinth-26.2-%MOD_VERSION%.jar" "%OUT%\modrinth\" >nul || goto failed
+copy /Y "versions\mc26_3\build\modrinth\libs\kung-modrinth-26.3-%MOD_VERSION%.jar" "%OUT%\modrinth\" >nul || goto failed
 popd
 
 echo.

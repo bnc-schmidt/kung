@@ -2,6 +2,7 @@ package com.github.beng420.kung.update;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungConfigScreen;
 import com.github.beng420.kung.ui.UiBounds;
 import com.github.beng420.kung.ui.UiTheme;
@@ -152,7 +153,7 @@ final class KungUpdateToast {
         if (!canDisplay(client) || drawnLayout == null || drawnScreen != screen
             || drawnWidth != client.getWindow().getGuiScaledWidth()
             || drawnHeight != client.getWindow().getGuiScaledHeight()) return false;
-        var action = state.hitTest(drawnLayout, event.x() / drawnScale, event.y() / drawnScale, event.button());
+        var action = state.hitTest(drawnLayout, event.x() / drawnScale, event.y() / drawnScale, McInput.button(event));
         switch (action) {
             case NONE -> { return false; }
             case BLOCK -> { return true; }

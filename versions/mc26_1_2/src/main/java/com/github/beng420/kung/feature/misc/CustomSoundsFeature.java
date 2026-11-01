@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.misc;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -123,7 +124,7 @@ public final class CustomSoundsFeature extends ConfigurableFeature<MiscConfig> {
     /** Opens the folder in the system file browser (Explorer on Windows). */
     public static void openSoundsFolder() {
         refreshSoundIndex();
-        net.minecraft.util.Util.getPlatform().openPath(soundsDirectory());
+        McCompat.openPath(soundsDirectory());
     }
 
     public static void refreshSoundIndex() {

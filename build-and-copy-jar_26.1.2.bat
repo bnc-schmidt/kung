@@ -12,6 +12,8 @@ if not defined MOD_VERSION (
 )
 set "SOURCE_JAR=%ROOT%versions\mc26_1_2\build\libs\kung-%MINECRAFT_VERSION%-%MOD_VERSION%.jar"
 set "SOURCE_JAR_26_2=%ROOT%versions\mc26_2\build\libs\kung-26.2-%MOD_VERSION%.jar"
+rem 26.3 is built and checked here, but no test pack runs it, so its jar stays in the build folder.
+set "SOURCE_JAR_26_3=%ROOT%versions\mc26_3\build\libs\kung-26.3-%MOD_VERSION%.jar"
 set "DEFAULT_PROFILE=Dungeons 26.1.2"
 set "SECONDARY_PROFILE=Here We Go Again (2)"
 rem The "Dungeons 26.1.2" folder is now the 26.2 pack (only its folder name is old), so with no
@@ -60,9 +62,9 @@ if exist "!RESOURCE_SCAN_DIR!\known-rooms.json" (
 )
 
 :after_room_sync
-echo Building kung jars for 26.1.2 and 26.2...
+echo Building kung jars for 26.1.2, 26.2 and 26.3...
 pushd "!ROOT!" >nul
-call "!ROOT!gradlew.bat" :versions:mc26_1_2:build :versions:mc26_2:build
+call "!ROOT!gradlew.bat" :versions:mc26_1_2:build :versions:mc26_2:build :versions:mc26_3:build
 set "BUILD_RESULT=%ERRORLEVEL%"
 popd >nul
 
@@ -73,7 +75,7 @@ if not "!BUILD_RESULT!"=="0" (
     exit /b !BUILD_RESULT!
 )
 
-for %%J in ("!SOURCE_JAR!" "!SOURCE_JAR_26_2!") do if not exist "%%~J" (
+for %%J in ("!SOURCE_JAR!" "!SOURCE_JAR_26_2!" "!SOURCE_JAR_26_3!") do if not exist "%%~J" (
     echo.
     echo Built jar was not found:
     echo %%~J
@@ -115,6 +117,7 @@ echo Done.
 echo.
 certutil -hashfile "!SOURCE_JAR!" SHA256
 certutil -hashfile "!SOURCE_JAR_26_2!" SHA256
+certutil -hashfile "!SOURCE_JAR_26_3!" SHA256
 pause
 exit /b 0
 

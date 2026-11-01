@@ -1,6 +1,7 @@
 package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.CustomSoundsFeature;
 import com.github.beng420.kung.ui.UiBounds;
@@ -9,6 +10,7 @@ import com.github.beng420.kung.ui.UiScale;
 import com.github.beng420.kung.ui.UiScrollList;
 import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.ui.UiTheme;
+import com.github.beng420.kung.util.KeyCodes;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -186,7 +188,7 @@ final class CustomSoundsScreen extends Screen {
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         int mx = coordinate(event.x());
         int my = coordinate(event.y());
-        if (event.button() != 0) return true;
+        if (McInput.button(event) != 0) return true;
         if (picking != null) {
             UiBounds panel = pickerBounds();
             if (!panel.contains(mx, my)) { picking = null; return true; }
@@ -249,7 +251,7 @@ final class CustomSoundsScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 256) {
+        if (McInput.key(event) == KeyCodes.ESCAPE) {
             if (picking != null) picking = null;
             else onClose();
             return true;

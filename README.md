@@ -9,15 +9,15 @@ Official Discord Server: [KUNG](https://discord.com/invite/EDD4ujq3NM)
 
 ## Requirements
 
-- Minecraft **26.1.2** or **26.2** with **Java 25**
-- Fabric Loader 0.19.2 or newer, and Fabric API
+- Minecraft **26.1.2**, **26.2** or **26.3** with **Java 25**
+- Fabric Loader 0.19.2 or newer (0.19.3 on 26.3), and Fabric API
 - Optional: OneConfig and Mod Menu. Kung shows the same settings natively in both when
   they are installed, and works the same without them.
 
 ## Install
 
-Drop the jar for your Minecraft version (`kung-26.1.2-<version>.jar` or
-`kung-26.2-<version>.jar`) into your `mods` folder. Every feature ships switched
+Drop the jar for your Minecraft version (`kung-26.1.2-<version>.jar`,
+`kung-26.2-<version>.jar` or `kung-26.3-<version>.jar`) into your `mods` folder. Every feature ships switched
 off, so a fresh install changes nothing until you turn something on.
 
 ## Using it

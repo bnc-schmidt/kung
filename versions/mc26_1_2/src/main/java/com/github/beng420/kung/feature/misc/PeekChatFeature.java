@@ -28,7 +28,7 @@ public final class PeekChatFeature extends ConfigurableFeature<MiscConfig> {
     public static boolean peeking() {
         Minecraft client = Minecraft.getInstance();
         return INSTANCE.isEnabled() && client.player != null && McCompat.screen(client) == null
-            && LoadoutsAutoCloseFeature.keybindHeld(INSTANCE.config().peekChatKeybind(), client.getWindow());
+            && LoadoutsAutoCloseFeature.keybindHeld(INSTANCE.config().peekChatKeybind());
     }
 
     /** Whether {@link #asFocusedChat} is running; ChatComponent then answers isChatFocused with yes. */

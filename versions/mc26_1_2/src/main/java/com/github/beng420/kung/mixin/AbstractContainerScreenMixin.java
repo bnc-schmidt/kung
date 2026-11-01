@@ -25,7 +25,9 @@ public abstract class AbstractContainerScreenMixin {
     @Unique
     private Slot kung$extractingSlot;
 
-    @Inject(method = "slotClicked", at = @At("TAIL"))
+    // 26.3 adds a private slotClicked(Slot, int, MouseButtonEvent, ContainerInput) that delegates here, so name the overload.
+    @Inject(method = "slotClicked(Lnet/minecraft/world/inventory/Slot;IILnet/minecraft/world/inventory/ContainerInput;)V",
+        at = @At("TAIL"))
     private void kung$afterSlotClicked(Slot slot, int slotId, int button, ContainerInput input, CallbackInfo callbackInfo) {
         LoadoutsAutoCloseFeature.observeSlotClick(
             (AbstractContainerScreen<?>) (Object) this,

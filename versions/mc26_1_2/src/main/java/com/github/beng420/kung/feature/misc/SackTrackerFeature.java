@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.misc;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
@@ -102,7 +103,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             ScreenEvents.beforeExtract(screen).register((current, graphics, mouseX, mouseY, delta) -> tooltip.beginFrame());
             ScreenEvents.afterExtract(screen).register(this::renderOverScreen);
             ScreenMouseEvents.allowMouseClick(screen).register((current, event) ->
-                !click(current, event) && !trackHovered(current, event.button()));
+                !click(current, event) && !trackHovered(current, McInput.button(event)));
             // Runs before the screen's own keyPressed, so a digit over a row never swaps the slot below with the hotbar.
             ScreenKeyboardEvents.allowKeyPress(screen).register((current, event) ->
                 !typeGoal(current, event) && !trackHovered(current, event));
@@ -120,7 +121,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
 
     public static boolean handleMouse(AbstractContainerScreen<?> screen, Slot hovered, MouseButtonEvent event) {
         return INSTANCE.isEnabled() && event != null
-            && LoadoutsAutoCloseFeature.keybindMatchesMouse(INSTANCE.config().sackTrackerKeybind(), event.button())
+            && LoadoutsAutoCloseFeature.keybindMatchesMouse(INSTANCE.config().sackTrackerKeybind(), McInput.button(event))
             && INSTANCE.toggle(screen, hovered);
     }
 
@@ -431,7 +432,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         List<SackItem> items = config().sackTrackerItems();
         if (line < 1 || line > items.size()) return false;
         SackItem item = items.get(line - 1);
-        Long goal = nextGoal(item.goal(), event.key(), (event.modifiers() & MOD_CONTROL) != 0);
+        Long goal = nextGoal(item.goal(), McInput.key(event), (event.modifiers() & MOD_CONTROL) != 0);
         if (goal == null) return false;
         config().setSackTrackerGoal(item, goal);
         return true;

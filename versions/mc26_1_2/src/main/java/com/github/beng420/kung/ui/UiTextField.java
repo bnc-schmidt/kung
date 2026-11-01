@@ -1,5 +1,6 @@
 package com.github.beng420.kung.ui;
 
+import com.github.beng420.kung.compat.McInput;
 import java.util.function.BooleanSupplier;
 import java.util.function.Predicate;
 import net.minecraft.client.gui.Font;
@@ -113,7 +114,7 @@ public final class UiTextField {
 
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         // Right click clears the whole field, as in most mod menus.
-        if (event.button() == 1 && contains((int) event.x(), (int) event.y())) {
+        if (McInput.button(event) == 1 && contains((int) event.x(), (int) event.y())) {
             control.setValue("");
             control.setFocused(true);
             return true;

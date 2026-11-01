@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.dungeon;
 import static com.github.beng420.kung.util.CatacombsAverageCalculator.levelFromXp;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.util.CatacombsAverageCalculator;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.Breakdown;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
@@ -19,6 +20,7 @@ import com.github.beng420.kung.ui.UiSpacing;
 import com.github.beng420.kung.ui.UiTextStyle;
 import com.github.beng420.kung.ui.UiNumberField;
 import com.github.beng420.kung.ui.UiToggle;
+import com.github.beng420.kung.util.KeyCodes;
 import java.text.NumberFormat;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -152,7 +154,7 @@ public final class CatacombsCalculatorScreen extends Screen {
         for (int index = clickRegions.size() - 1; index >= 0; index--) {
             ClickRegion region = clickRegions.get(index);
             if (region.bounds().contains(mouseX, mouseY)) {
-                region.action().click(mouseX, mouseY, event.button());
+                region.action().click(mouseX, mouseY, McInput.button(event));
                 return true;
             }
         }
@@ -171,12 +173,12 @@ public final class CatacombsCalculatorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
-        if (event.key() == 256) {
+        if (McInput.key(event) == KeyCodes.ESCAPE) {
             onClose();
             return true;
         }
         if (usernameBox != null && usernameBox.isFocused()) {
-            if (event.key() == 257 || event.key() == 335) {
+            if (McInput.key(event) == KeyCodes.ENTER || McInput.key(event) == KeyCodes.KP_ENTER) {
                 loadPlayer(usernameBox.value());
                 return true;
             }
