@@ -5,22 +5,27 @@ import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
-import net.minecraft.ChatFormatting;
 import net.minecraft.network.chat.Component;
-import net.minecraft.network.chat.TextColor;
 import org.junit.Test;
 import static org.junit.Assert.*;
 
 public class SafariOverlayTest {
     @Test
-    public void missingIsRedAndCaughtIsGrayWithStrikethrough() {
-        Component missing = SafariOverlayFeature.critterText("Flitter", false);
-        Component caught = SafariOverlayFeature.critterText("Flitter", true);
-        assertEquals(TextColor.fromLegacyFormat(ChatFormatting.RED), missing.getStyle().getColor());
-        assertFalse(missing.getStyle().isStrikethrough());
-        assertEquals(TextColor.fromLegacyFormat(ChatFormatting.GRAY), caught.getStyle().getColor());
-        assertTrue(caught.getStyle().isStrikethrough());
-        assertEquals(missing.getString(), caught.getString());
+    public void everyZoneHasItsOwnColor() {
+        var colors = java.util.Arrays.stream(SafariCritters.Region.values())
+            .map(SafariOverlayFeature::zoneColor).collect(java.util.stream.Collectors.toSet());
+        assertEquals(SafariCritters.Region.values().length, colors.size());
+    }
+
+    @Test
+    public void editorFrameMatchesThePreviewLayoutInBothModes() {
+        SafariConfig config = new SafariConfig();
+        var stacked = SafariOverlayFeature.overlayBounds(config);
+        assertEquals(Math.round(SafariLayout.COLUMN_WIDTH * 0.75F), stacked.width());
+        config.setAllZones(true);
+        var columns = SafariOverlayFeature.overlayBounds(config);
+        assertEquals(stacked.width() * 4, columns.width());
+        assertTrue(columns.height() < stacked.height());
     }
 
     @Test

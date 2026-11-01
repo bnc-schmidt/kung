@@ -16,6 +16,15 @@ public class SafariConfigTest {
     }
 
     @Test
+    public void panelIsOnAndOnlyTheCurrentZoneOpensUnlessSaved() {
+        assertTrue(read("{}").safari.background());
+        assertFalse(read("{}").safari.allZones());
+        assertTrue(read("{\"safari\":{\"scale\":80}}").safari.background());
+        assertFalse(read("{\"safari\":{\"background\":false,\"allZones\":true}}").safari.background());
+        assertTrue(read("{\"safari\":{\"background\":false,\"allZones\":true}}").safari.allZones());
+    }
+
+    @Test
     public void categorySettersPersistWithoutChangingFeastOrExistingHudPositions() throws Exception {
         var path = Files.createTempDirectory("kung-safari-config").resolve("kung.json");
         Files.writeString(path, """

@@ -24,6 +24,7 @@ public final class SafariSession {
     private Set<String> snapshot = Set.of();
     private long epoch = Long.MIN_VALUE;
     private String location = "";
+    private SafariCritters.Region region;
     private boolean active;
     private boolean finished;
 
@@ -35,6 +36,9 @@ public final class SafariSession {
         String cleaned = HypixelLocation.clean(nextLocation);
         if (cleaned.equals(location)) return;
         location = cleaned;
+        // Leaving a biome keeps the last one, so the open zone does not jump between biomes.
+        SafariCritters.Region biome = regionOf(location);
+        if (biome != null) region = biome;
         // Missing location rows and walking between biomes never reset a run.
         if (!location.isBlank()) active = !finished && safariLocation(location);
     }
@@ -62,22 +66,28 @@ public final class SafariSession {
 
     public boolean active() { return active; }
     public Set<String> caught() { return snapshot; }
+    /** The biome the player stood in last this run, or null before the first one. */
+    public SafariCritters.Region region() { return region; }
 
     public void reset() {
         caught.clear();
         snapshot = Set.of();
         epoch = Long.MIN_VALUE;
         location = "";
+        region = null;
         active = false;
         finished = false;
     }
 
     static boolean safariLocation(String name) {
-        if (name.equalsIgnoreCase("Safari") || name.equalsIgnoreCase("Critter Safari")) return true;
+        return name.equalsIgnoreCase("Safari") || name.equalsIgnoreCase("Critter Safari") || regionOf(name) != null;
+    }
+
+    static SafariCritters.Region regionOf(String name) {
         for (SafariCritters.Region region : SafariCritters.Region.values()) {
-            if (name.equalsIgnoreCase(region.title() + " Biome")) return true;
+            if (name.equalsIgnoreCase(region.title() + " Biome")) return region;
         }
-        return false;
+        return null;
     }
 
     static String capturedCritter(String raw) {

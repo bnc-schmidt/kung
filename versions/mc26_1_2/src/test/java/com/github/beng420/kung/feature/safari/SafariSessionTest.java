@@ -18,8 +18,8 @@ public class SafariSessionTest {
         assertFalse(session.observeMessage("[22:44:55] CAPTURE! You caught a Flitter and gained a Flitter Shard!", "Beng114"));
         assertTrue(session.observeMessage("[22:46:04] CAPTURE! You caught a Chuckwalla and gained a Chuckwalla Shard!", "Beng114"));
         assertEquals(Set.of("Scrappy", "Driftling", "Flitter", "Cavernfish", "Chuckwalla"), session.caught());
-        assertEquals(5, SafariOverlayFeature.count(SafariCritters.Region.CAVERN, session.caught()));
-        assertEquals(0, SafariOverlayFeature.count(SafariCritters.Region.FOREST, session.caught()));
+        assertEquals(5, SafariLayout.count(SafariCritters.Region.CAVERN, session.caught()));
+        assertEquals(0, SafariLayout.count(SafariCritters.Region.FOREST, session.caught()));
     }
 
     @Test
@@ -91,6 +91,23 @@ public class SafariSessionTest {
     }
 
     @Test
+    public void theLastBiomeStaysTheCurrentZoneUntilTheNextOneOrANewRun() {
+        SafariSession session = new SafariSession();
+        assertNull(session.region());
+        session.select(1, "Critter Safari");
+        assertNull(session.region());
+        session.select(1, "Icy Biome");
+        assertEquals(SafariCritters.Region.ICY, session.region());
+        session.select(1, "");
+        session.select(1, "Critter Safari");
+        assertEquals(SafariCritters.Region.ICY, session.region());
+        session.select(1, "Haunted Biome");
+        assertEquals(SafariCritters.Region.HAUNTED, session.region());
+        session.select(2, "Critter Safari");
+        assertNull(session.region());
+    }
+
+    @Test
     public void suppliedSafariTabContextActivatesHudAndCountsTraceUniques() {
         HypixelInstanceState instance = new HypixelInstanceState();
         SafariSession session = new SafariSession();
@@ -135,8 +152,8 @@ public class SafariSessionTest {
         assertEquals(Set.of("Nozzlenose", "Tepid", "Mantis Shrimp", "Gazer", "Polaris", "Troodon",
             "Strongarm", "Hideonwall", "Shuddersquid", "Billygoat", "Bloodbat", "Wumpa", "Duplico",
             "Hideyho", "Solsnatcher", "Doomspiral"), session.caught());
-        assertEquals(9, SafariOverlayFeature.count(SafariCritters.Region.ICY, session.caught()));
-        assertEquals(7, SafariOverlayFeature.count(SafariCritters.Region.HAUNTED, session.caught()));
+        assertEquals(9, SafariLayout.count(SafariCritters.Region.ICY, session.caught()));
+        assertEquals(7, SafariLayout.count(SafariCritters.Region.HAUNTED, session.caught()));
     }
 
     @Test
