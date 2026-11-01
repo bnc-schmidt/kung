@@ -38,7 +38,7 @@ import org.joml.Vector4f;
 
 /**
  * A line from the crosshair to the nearest Invisibug on Moonglade Marsh. An Invisibug has no name and no model: it is an
- * empty armor stand that gives off crit particles, so a crit particle near a blank stand marks that stand, and the
+ * empty marker armor stand that gives off crit particles, so a crit right above such a stand marks it, and the
  * stand stays found while crits keep coming. The line follows the stand's interpolated position and is drawn in the HUD
  * at the projected point, like {@link BlazeSlayerFeature}'s text: particles, fire and water drawn after a world line
  * would paint over it.
@@ -132,7 +132,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         List<Stand> stands = new ArrayList<>();
         for (ArmorStand stand : level.getEntitiesOfClass(ArmorStand.class,
             new AABB(x - aside, y - InvisibugTracker.PARTICLE_MAX_ABOVE - 0.5, z - aside, x + aside, y, z + aside),
-            InvisibugLineFeature::blank)) {
+            InvisibugLineFeature::bugStand)) {
             stands.add(new Stand(stand.getId(), stand.getX(), stand.getY(), stand.getZ()));
         }
         Stand hit = InvisibugTracker.source(x, y, z, stands);
@@ -158,9 +158,13 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         }
     }
 
-    /** An armor stand with no name and nothing in any slot. */
-    private static boolean blank(ArmorStand stand) {
-        if (stand.getCustomName() != null) {
+    /**
+     * An armor stand with no name, nothing in any slot, and the marker flag: every Invisibug stand in the traces is
+     * one (bounding box height 0). A Phanflare caught by fishing is a plain stand 1.98 tall with crits 1.3 above it,
+     * which the geometry alone would take for a bug.
+     */
+    private static boolean bugStand(ArmorStand stand) {
+        if (!stand.isMarker() || stand.getCustomName() != null) {
             return false;
         }
         for (EquipmentSlot slot : EquipmentSlot.values()) {

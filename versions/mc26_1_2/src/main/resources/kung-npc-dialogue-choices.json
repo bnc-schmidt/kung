@@ -22,6 +22,11 @@
       "choose": "[Sure]"
     },
     {
+      "npcId": "vincent",
+      "options": ["[Yes...]", "[No, what are they?]"],
+      "choose": "[Yes...]"
+    },
+    {
       "npc": "Susan",
       "options": ["[Absolutely!]", "[Tell me more about the Safety Squad.]", "[Not right now.]"],
       "choose": "[Absolutely!]"
@@ -90,6 +95,33 @@
       "npc": "\"Hunter\" Tobias",
       "options": ["[Nice!]", "[Suuuuuure...]"],
       "choose": "[Nice!]"
+    },
+    {
+      "npc": "Brigette",
+      "options": [
+        "It can lead you to lose a lot of items and money.",
+        "It can lead you to lose access to your Minecraft account.",
+        "It can lead you to lose your Hypixel SkyBlock profile."
+      ],
+      "choose": "It can lead you to lose a lot of items and money."
+    },
+    {
+      "npc": "Brigette",
+      "options": [
+        "Manually type the invite link in the browser and join the discord.",
+        "Leave the party and report the player.",
+        "Add the player on discord and ask for the invite link there."
+      ],
+      "choose": "Leave the party and report the player."
+    },
+    {
+      "npc": "Brigette",
+      "options": [
+        "Register for an account and log in.",
+        "Use a linked account (Google, Facebook etc.) to log in.",
+        "Look for signs of your friend getting hacked, and don't click on that website any further."
+      ],
+      "choose": "Look for signs of your friend getting hacked, and don't click on that website any further."
     }
   ]
 }

@@ -55,15 +55,22 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
      * character, so gaps of 4-5 s are normal mid-dialogue; 3 s let Kung re-click Ryan while he was still talking.
      */
     static final long QUIET_MILLIS = 8_000L;
+    /** Brigette paused 8.4 s before her last prompt, so a lone answer counts as part of the dialogue well beyond QUIET_MILLIS. */
+    static final long LONE_ANSWER_WINDOW_MILLIS = 30_000L;
     /** The click that starts a dialogue lands well within this of the NPC's first line (about 0.2 s). */
     private static final long CLICK_TO_LINE_MILLIS = 3_000L;
     private static final Pattern NPC_LINE = Pattern.compile("^\\[NPC] (.+?): ");
     /** Labels that name coins or an amount; the wiki lists no button labels, so this errs on the side of the player. */
     private static final Pattern COSTS = Pattern.compile("(?i)coin|pay|buy|\\d");
     private static final Pattern CLICK_OBJECTIVE =Pattern.compile("^(?:Give|Talk to|Check on) ", Pattern.CASE_INSENSITIVE);
+    /** "TRIAL OF FIRE! Completed Trial of Fire III!": Ryan has the next badge, but no sidebar objective says so. */
+    private static final Pattern TRIAL_DONE = Pattern.compile("^TRIAL OF FIRE! Completed Trial of Fire \\w+!");
+    private static final String TRIAL_OBJECTIVE = "Talk to Ryan";
     private static final List<Choice> CHOICES = loadChoices();
 
     private final ClickGuard clickGuard = new ClickGuard();
+    /** A trial was completed and Ryan has not spoken since. */
+    private boolean ryanDue;
     private String lastNpcName = "";
     private long lastNpcLineMillis;
     /** Entity id of the body the last [NPC] speaker was clicked on, for NPCs without a name stand (Romero). */
@@ -116,6 +123,12 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
                 else if (!npcLine.group(1).equals(lastNpcName)) speakerBodyId = -1;
                 lastNpcName = npcLine.group(1);
                 lastNpcLineMillis = System.currentTimeMillis();
+                if (lastNpcName.equals("Ryan")) ryanDue = false;
+            }
+            if (trialDone(line)) {
+                ryanDue = true;
+                clickGuard.forget();
+                KungDebugRecorder.event(AREA, "trial done, Ryan is due");
             }
             if (objectiveNext) {
                 chatObjective = line;
@@ -161,6 +174,7 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         if (!active(client)) {
             pending = null;
             notice = null;
+            ryanDue = false;
             return;
         }
         if (notice != null) {
@@ -192,7 +206,7 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         // Every tick, before the early returns: a hand-in mid-dialogue must be absorbed, not saved up as a re-arm.
         clickGuard.inventory(inventory, sinceNpcLine);
         if (McCompat.screen(client) != null || pending != null || sinceNpcLine < QUIET_MILLIS) return;
-        String objective = sidebarObjective(HypixelInstanceTracker.INSTANCE.sidebarLines());
+        String objective = ryanDue ? TRIAL_OBJECTIVE : sidebarObjective(HypixelInstanceTracker.INSTANCE.sidebarLines());
         if (objective.isEmpty()) objective = chatObjective;
         boolean clickable = CLICK_OBJECTIVE.matcher(objective).find();
         if (!objective.isEmpty() && !objective.equals(loggedObjective)) {
@@ -303,20 +317,32 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
      * prompt stays the player's, and never when its label reads like a payment: Hypixel's key is "pay" for items too.
      */
     static boolean loneAnswerable(Option option, long sinceNpcLineMillis) {
-        return sinceNpcLineMillis < QUIET_MILLIS && !COSTS.matcher(option.label()).find();
+        return sinceNpcLineMillis < LONE_ANSWER_WINDOW_MILLIS && !COSTS.matcher(option.label()).find();
     }
 
     /** The only option, or the curated one for this NPC and exactly these labels; null means leave it to the player. */
     static Option choose(List<Option> options, String npcName, List<Choice> choices) {
         if (options.size() == 1) return options.getFirst();
-        Set<String> labels = options.stream().map(Option::label).collect(Collectors.toSet());
+        Set<String> labels = options.stream().map(option -> plain(option.label())).collect(Collectors.toSet());
         String npcId = options.getFirst().npcId().orElse(null);
         for (Choice choice : choices) {
             boolean npc = choice.npcId() != null ? choice.npcId().equals(npcId) : choice.npc().equals(npcName);
             if (!npc || !Set.copyOf(choice.options()).equals(labels)) continue;
-            return options.stream().filter(option -> option.label().equals(choice.choose())).findFirst().orElse(null);
+            return options.stream().filter(option -> plain(option.label()).equals(choice.choose())).findFirst().orElse(null);
         }
         return null;
+    }
+
+    /**
+     * Brigette's quiz answers read "@ answer" on the wiki, and no trace shows yet whether the marker is part of the
+     * clickable label. Curated labels never carry it, so both forms match the same entry.
+     */
+    private static String plain(String label) {
+        return label.startsWith("@ ") ? label.substring(2) : label;
+    }
+
+    static boolean trialDone(String line) {
+        return TRIAL_DONE.matcher(line).find();
     }
 
     /** The line under the sidebar's "Objective" heading, or "" when the sidebar shows none. */
@@ -382,6 +408,11 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
             if (stamp == inventory) return;
             inventory = stamp;
             if (sinceNpcLineMillis >= QUIET_MILLIS) rearmed = true;
+        }
+
+        /** A new reason to talk to the same NPC again (the next trial is done). */
+        void forget() {
+            clicked = "";
         }
 
         boolean allows(String objective) {

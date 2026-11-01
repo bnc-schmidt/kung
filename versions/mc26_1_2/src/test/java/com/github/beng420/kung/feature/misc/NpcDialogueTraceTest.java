@@ -50,6 +50,10 @@ public final class NpcDialogueTraceTest {
             NpcDialogueTrace.describe(message, false));
         assertEquals("chat \"[NPC] Kaus: Hello!\"", NpcDialogueTrace.describe(Component.literal("[NPC] Kaus: Hello!"), false));
         assertNull(NpcDialogueTrace.describe(Component.literal("Lobby chatter"), false));
+        // Brigette's quiz may use another click event than dialogue answers; the question text alone gets it logged.
+        assertEquals("chat \"Question #2 @ Leave the party\" | \"Leave the party\" RUN_COMMAND=/quiz 2",
+            NpcDialogueTrace.describe(Component.literal("Question #2 @ ").append(Component.literal("Leave the party")
+                .withStyle(Style.EMPTY.withClickEvent(new ClickEvent.RunCommand("/quiz 2")))), false));
         // Clickable chat is logged only when the click belongs to an NPC prompt.
         assertNull(NpcDialogueTrace.describe(Component.literal("Steve joined the lobby!").withStyle(Style.EMPTY
             .withClickEvent(new ClickEvent.RunCommand("/viewprofile Steve"))), false));

@@ -94,6 +94,16 @@ public final class NpcDialogueSkipFeatureTest {
     }
 
     @Test
+    public void vincentAnswersYesInsteadOfAskingWhatDyesAre() {
+        var choices = NpcDialogueSkipFeature.loadChoices();
+        // From a trace: "have you ever heard of dyes?" with these two answers.
+        Option yes = new Option("[Yes...]", answer("vincent", "r_3_1").getClickEvent());
+        Option no = new Option("[No, what are they?]", answer("vincent", "r_3_2").getClickEvent());
+        assertSame(yes, NpcDialogueSkipFeature.choose(List.of(yes, no), "Vincent", choices));
+        assertSame(yes, NpcDialogueSkipFeature.choose(List.of(no, yes), "", choices));
+    }
+
+    @Test
     public void curatedNpcsTakeTheAnswerThatMovesOn() {
         var choices = NpcDialogueSkipFeature.loadChoices();
         // npc, chosen label first, then the answers that refuse, repeat or only explain.
@@ -114,6 +124,15 @@ public final class NpcDialogueSkipFeatureTest {
             {"Swoop", "[Yes]", "[No]"},
             {"Honey", "[No]", "[Yes]"},
             {"Archie", "[Yes]", "[No]"},
+            // Brigette's quiz (wiki): question 1 accepts every answer; on 2 and 3 a wrong answer only repeats the question.
+            {"Brigette", "It can lead you to lose a lot of items and money.",
+                "It can lead you to lose access to your Minecraft account.",
+                "It can lead you to lose your Hypixel SkyBlock profile."},
+            {"Brigette", "Leave the party and report the player.",
+                "Manually type the invite link in the browser and join the discord.",
+                "Add the player on discord and ask for the invite link there."},
+            {"Brigette", "Look for signs of your friend getting hacked, and don't click on that website any further.",
+                "Register for an account and log in.", "Use a linked account (Google, Facebook etc.) to log in."},
         };
         for (String[] row : curated) {
             List<Option> options = java.util.stream.IntStream.range(1, row.length)
@@ -127,6 +146,32 @@ public final class NpcDialogueSkipFeatureTest {
         Option no = new Option("[No]", answer("coral", "r_2").getClickEvent());
         assertNull(NpcDialogueSkipFeature.choose(List.of(yes, no), "Coral", choices));
         assertNull(NpcDialogueSkipFeature.choose(List.of(yes, no), "Hunter Billy", choices));
+    }
+
+    @Test
+    public void brigetteQuizTakesTheRightAnswerInAnyOrderAndWithOrWithoutTheMarker() {
+        var choices = NpcDialogueSkipFeature.loadChoices();
+        String right = "Leave the party and report the player.";
+        String[] labels = {"Manually type the invite link in the browser and join the discord.", right,
+            "Add the player on discord and ask for the invite link there."};
+        for (String marker : new String[] {"", "@ "}) {
+            List<Option> options = new java.util.ArrayList<>();
+            for (int index = 0; index < labels.length; index++) {
+                options.add(new Option(marker + labels[index], answer("brigette", "q2_" + index).getClickEvent()));
+            }
+            for (int turn = 0; turn < labels.length; turn++) {
+                java.util.Collections.rotate(options, 1);
+                assertEquals(marker + right, NpcDialogueSkipFeature.choose(options, "Brigette", choices).label());
+            }
+            // One wrong or unknown label in the set: nothing is clicked.
+            options.set(0, new Option(marker + "Join the party's Discord.", answer("brigette", "q2_x").getClickEvent()));
+            assertNull(NpcDialogueSkipFeature.choose(options, "Brigette", choices));
+        }
+        // Only for Brigette.
+        Option a = new Option(labels[0], answer("x", "r_1").getClickEvent());
+        Option b = new Option(right, answer("x", "r_2").getClickEvent());
+        Option c = new Option(labels[2], answer("x", "r_3").getClickEvent());
+        assertNull(NpcDialogueSkipFeature.choose(List.of(a, b, c), "Ryan", choices));
     }
 
     @Test
@@ -144,9 +189,11 @@ public final class NpcDialogueSkipFeatureTest {
         assertSame(give, NpcDialogueSkipFeature.choose(options, "Professor Wynd", choices));
         // It lands right after the last "[NPC] Professor Wynd: ✆ ..." line.
         assertTrue(NpcDialogueSkipFeature.loneAnswerable(give, 2));
-        assertTrue(NpcDialogueSkipFeature.loneAnswerable(give, NpcDialogueSkipFeature.QUIET_MILLIS - 1));
+        // Brigette's last prompt came 8.4 s after her previous line; that is still the dialogue.
+        assertTrue(NpcDialogueSkipFeature.loneAnswerable(give, 8_410));
+        assertTrue(NpcDialogueSkipFeature.loneAnswerable(give, NpcDialogueSkipFeature.LONE_ANSWER_WINDOW_MILLIS - 1));
         // A stray one, no NPC line for a while (or ever), stays with the player.
-        assertFalse(NpcDialogueSkipFeature.loneAnswerable(give, NpcDialogueSkipFeature.QUIET_MILLIS));
+        assertFalse(NpcDialogueSkipFeature.loneAnswerable(give, NpcDialogueSkipFeature.LONE_ANSWER_WINDOW_MILLIS));
         assertFalse(NpcDialogueSkipFeature.loneAnswerable(give, System.currentTimeMillis()));
     }
 
@@ -189,6 +236,21 @@ public final class NpcDialogueSkipFeatureTest {
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Complete Trial of Fire I", "Fire"));
         assertEquals("Talk to Kelly", NpcDialogueSkipFeature.sidebarObjective(
             List.of("SKYBLOCK", " ⏣ The Park", "", "Objective", "§eTalk to Kelly")));
+    }
+
+    @Test
+    public void everyCompletedTrialSendsKungBackToRyan() {
+        // From a trace: no sidebar objective, only this line.
+        assertTrue(NpcDialogueSkipFeature.trialDone("TRIAL OF FIRE! Completed Trial of Fire III!"));
+        assertTrue(NpcDialogueSkipFeature.trialDone("TRIAL OF FIRE! Completed Trial of Fire I!"));
+        assertFalse(NpcDialogueSkipFeature.trialDone("[NPC] Ryan: Complete the Trial of Fire III and I'll upgrade your badge!"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to Ryan", "Ryan"));
+
+        ClickGuard guard = new ClickGuard();
+        guard.clicked("Talk to Ryan", 1);
+        assertFalse(guard.allows("Talk to Ryan"));
+        guard.forget();
+        assertTrue("the next trial is a new reason", guard.allows("Talk to Ryan"));
     }
 
     @Test

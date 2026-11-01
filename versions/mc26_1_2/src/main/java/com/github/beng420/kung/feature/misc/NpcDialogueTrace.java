@@ -45,7 +45,7 @@ import net.minecraft.world.item.ItemStack;
 public final class NpcDialogueTrace {
     private static final String AREA = "npc-dialogue";
     private static final Pattern DIALOGUE = Pattern.compile(
-        "^(?:\\[NPC] |\\[Sacks] |You claimed .*!)|Select an option|\\[YES]|\\[NO]|NEW OBJECTIVE|QUEST COMPLETE");
+        "^(?:\\[NPC] |\\[Sacks] |You claimed .*!)|Select an option|\\[YES]|\\[NO]|NEW OBJECTIVE|QUEST COMPLETE|Question #\\d");
     private static final Pattern OBJECTIVE = Pattern.compile("NEW OBJECTIVE|QUEST COMPLETE");
     static final Identifier DIALOGUE_RESPONSE = Identifier.parse("skyblock:dialogue_response");
     private static final Pattern NPC_COMMAND = Pattern.compile("/(?:selectnpcoption|chatprompt|cb) ");
