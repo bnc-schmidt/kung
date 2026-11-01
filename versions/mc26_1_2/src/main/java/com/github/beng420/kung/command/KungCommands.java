@@ -25,6 +25,7 @@ public final class KungCommands {
             UserCommandGroup.register(root, tracker);
             DeveloperCommandGroup.register(root);
             dispatcher.register(root);
+            DungeonJoinCommands.register(dispatcher);
         });
     }
 }
