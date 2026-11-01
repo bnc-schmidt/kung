@@ -164,7 +164,8 @@ tasks.named("test") {
   }
 }
 
-// Blood Rush, Mimic ESP, Skip NPC Dialogue and the Greenhouse supply's inventory swap are not in the Modrinth jar.
+// Blood Rush, Mimic ESP, Skip NPC Dialogue, the Greenhouse supply's inventory swap and the experiment auto clicking
+// (Chronomatron, Ultrasequencer, Superpairs Auto Reveal) and Auto Harp are not in the Modrinth jar.
 // Every use of these classes sits in if (!KungBuild.MODRINTH), which javac drops; the check fails the build if
 // one slips through.
 def modrinthCut = [
@@ -174,6 +175,9 @@ def modrinthCut = [
   "feature/dungeon/DungeonStaticChestCatalog", "feature/dungeon/DungeonStaticChestPattern",
   "feature/misc/NpcDialogueSkipFeature",
   "feature/garden/GreenhouseSupplySwap",
+  "feature/experiment/ExperimentAutoClicker", "feature/experiment/AutoPacer",
+  "feature/misc/SuperpairsAutoReveal",
+  "feature/misc/AutoHarpFeature", "feature/misc/HarpPlanner",
   "command/MimicCommandGroup"
 ].collect { "com/github/beng420/kung/${it}" }
 def modrinthCutResources = ["kung-dungeon-scans/static-trapped-chests.json", "kung-npc-dialogue-choices.json"]

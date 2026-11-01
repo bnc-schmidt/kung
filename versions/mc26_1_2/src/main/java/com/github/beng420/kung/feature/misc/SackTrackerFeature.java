@@ -27,6 +27,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.item.v1.ItemTooltipCallback;
+import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -53,7 +54,9 @@ import net.minecraft.world.item.component.ItemLore;
 
 /**
  * Tracks chosen sack items: the track key over an item in a sack adds it, SkyBlock's own [Sacks]
- * messages move the counts, and an open sack sets them to what it shows.
+ * messages move the counts, and an open sack sets them to what it shows. Every Minecraft account and SkyBlock
+ * profile has its own items; none is tracked while the profile is unknown (see
+ * {@link com.github.beng420.kung.config.category.SackProfiles}).
  */
 public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     public static final SackTrackerFeature INSTANCE = new SackTrackerFeature();
@@ -80,6 +83,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
      */
     private final Set<SackItem> approximate = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
     private long seenEpoch = Long.MIN_VALUE;
+    /** A world change happened while the profile was unknown: its rows get the "~" once the profile is known again. */
+    private boolean markOnIdentify;
     private int ticksUntilSync;
 
     private SackTrackerFeature() { super(config -> config.misc); }
@@ -88,6 +93,14 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     protected void onInitialize() {
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay) observeMessage(message);
+        });
+        // ALLOW_GAME sees the profile lines even when another mod hides them from the chat.
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            if (!overlay) observeProfile(message.getString());
+            return true;
+        });
+        ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
+            if (initialized()) config().leaveSackTrackerProfile();
         });
         ClientTickEvents.END_CLIENT_TICK.register(this::syncOpenSack);
         // Every mod that shows an item (inventory, REI, JEI, ...) builds its tooltip through this event.
@@ -113,6 +126,23 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     @Override
     public boolean isEnabled() { return initialized() && config().sackTrackerEnabled(); }
 
+    /** Enabled and the profile is known: only then are there items to show, count or edit. */
+    private boolean tracking() { return isEnabled() && config().sackTrackerProfileKnown(); }
+
+    /** The "Profile ID:" line names the profile; the lines around it (name, switch) move it in and out of "unknown". */
+    private void observeProfile(String text) {
+        if (!initialized() || !text.contains("rofile")) return;
+        var player = Minecraft.getInstance().player;
+        if (!config().observeSackTrackerProfile(text, player == null ? null : player.getUUID().toString())) return;
+        // The previous profile's sack reads say nothing about these rows.
+        syncedAt.clear();
+        approximate.clear();
+        if (markOnIdentify && config().sackTrackerProfileKnown()) approximate.addAll(config().sackTrackerItems());
+        markOnIdentify = false;
+        KungDebugRecorder.event("sack-tracker", "profile " + (config().sackTrackerProfileKnown()
+            ? config().sackTrackerProfileName() + " items=" + config().sackTrackerItems().size() : "unknown"));
+    }
+
     /** The track key over an item in a sack: tracks it, or stops tracking it when it already is. */
     public static boolean handleKey(AbstractContainerScreen<?> screen, Slot hovered, KeyEvent event) {
         return INSTANCE.isEnabled() && LoadoutsAutoCloseFeature.keybindMatchesKey(INSTANCE.config().sackTrackerKeybind(), event)
@@ -126,7 +156,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private boolean toggle(AbstractContainerScreen<?> screen, Slot hovered) {
-        if (hovered == null || !isSack(plain(screen.getTitle()))) return false;
+        if (!tracking() || hovered == null || !isSack(plain(screen.getTitle()))) return false;
         ItemStack stack = hovered.getItem();
         if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) return toggleGemstone(screen, stack);
         Long stored = stored(lore(stack));
@@ -200,7 +230,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
      * table does nothing. The amount is unknown until the sack is opened once.
      */
     private boolean trackOutsideSack(Screen screen) {
-        if (screen.getFocused() instanceof EditBox
+        if (!tracking() || screen.getFocused() instanceof EditBox
             || screen instanceof AbstractContainerScreen<?> container && isSack(plain(container.getTitle()))) return false;
         ItemStack stack = tooltip.hovered();
         if (stack == null || stack.isEmpty()) return false;
@@ -230,18 +260,20 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (epoch != seenEpoch) {
             boolean first = seenEpoch == Long.MIN_VALUE;
             seenEpoch = epoch;
-            if (!first && isEnabled()) {
+            if (!first && tracking()) {
                 // One notice per stretch without a sack read, not one per world change (every dungeon run is one).
                 boolean notify = shouldWarnAfterWorldChange(config().sackTrackerItems(), approximate);
                 approximate.addAll(config().sackTrackerItems());
                 if (notify) KungMessages.send(client, KungMessages.Type.WARNING, "Sack Tracker",
                     "Counts may be off after a world change (marked ~): Hypixel drops finds it had not reported yet. "
                         + "Open the sack for exact values.");
+            } else if (!first && isEnabled()) {
+                markOnIdentify = true; // the profile is not known yet: its rows get the "~" once it is
             }
         }
         if (--ticksUntilSync > 0) return;
         ticksUntilSync = SYNC_TICKS;
-        if (!isEnabled() || config().sackTrackerItems().isEmpty()
+        if (!tracking() || config().sackTrackerItems().isEmpty()
             || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen) || !isSack(plain(screen.getTitle()))) return;
         if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) {
             syncGemstoneSack(screen);
@@ -288,7 +320,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private void observeMessage(Component message) {
-        if (!isEnabled() || config().sackTrackerItems().isEmpty()) return;
+        // Until the profile is known the pick-ups cannot be placed: they are dropped, not counted into a guess.
+        if (!tracking() || config().sackTrackerItems().isEmpty()) return;
         String text = plain(message);
         if (!text.startsWith("[Sacks] ")) return;
         // "+130 items" and "-10 items" each carry their item list as hover text.
@@ -387,13 +420,15 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private void render(GuiGraphicsExtractor graphics) {
-        if (visible() && McCompat.screen(Minecraft.getInstance()) == null) draw(graphics, config(), lines(config().sackTrackerItems(), false, approximate));
+        if (visible() && McCompat.screen(Minecraft.getInstance()) == null) {
+            draw(graphics, config(), lines(config().sackTrackerItems(), false, approximate, config().sackTrackerProfileName()));
+        }
     }
 
     /** In a world only: menus over the title screen or while joining have no game to track. */
     private boolean visible() {
         var client = Minecraft.getInstance();
-        return isEnabled() && !config().sackTrackerItems().isEmpty() && client.level != null
+        return tracking() && !config().sackTrackerItems().isEmpty() && client.level != null
             && !McCompat.hudHidden(client) && !KungHudEditorState.externalEditing();
     }
 
@@ -402,12 +437,15 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return visible() && config().sackTrackerInMenus() && vanilla(screen.getClass());
     }
 
-    static boolean vanilla(Class<?> screenClass) { return screenClass.getName().startsWith("net.minecraft."); }
+    /** Vanilla screens and every container screen: a mod that replaces the inventory (SkyblockInventoryScreen) still is one. */
+    static boolean vanilla(Class<?> screenClass) {
+        return screenClass.getName().startsWith("net.minecraft.") || AbstractContainerScreen.class.isAssignableFrom(screenClass);
+    }
 
     private void renderOverScreen(Screen screen, GuiGraphicsExtractor graphics, int mouseX, int mouseY, float delta) {
         if (!overScreen(screen)) return;
         graphics.nextStratum();
-        draw(graphics, config(), lines(config().sackTrackerItems(), true, approximate));
+        draw(graphics, config(), lines(config().sackTrackerItems(), true, approximate, config().sackTrackerProfileName()));
         int line = lineAt(mouseX, mouseY);
         if (line >= 1 && line <= config().sackTrackerItems().size()) {
             List<String> tooltip = typesGoals(screen)
@@ -478,10 +516,16 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return lines(items, interactive, Set.of());
     }
 
-    /** Rows in {@code approximate} get a "~" in front of the count. */
     static List<Component> lines(List<SackItem> items, boolean interactive, Set<SackItem> approximate) {
+        return lines(items, interactive, approximate, "");
+    }
+
+    /** Rows in {@code approximate} get a "~" in front of the count; a known profile is named in the title. */
+    static List<Component> lines(List<SackItem> items, boolean interactive, Set<SackItem> approximate, String profile) {
         List<Component> lines = new ArrayList<>();
-        lines.add(Component.literal("Sack Tracker").withColor(0xFFFF55).withStyle(ChatFormatting.BOLD));
+        MutableComponent title = Component.literal("Sack Tracker").withColor(0xFFFF55).withStyle(ChatFormatting.BOLD);
+        if (!profile.isBlank()) title.append(Component.literal(" " + profile).withColor(0xAAAAAA).withStyle(style -> style.withBold(false)));
+        lines.add(title);
         for (SackItem item : items) {
             MutableComponent line = Component.literal(item.name()).withColor(item.color())
                 .append(Component.literal(": ").withColor(0xFFFFFF));
@@ -519,7 +563,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private static List<Component> previewLines(MiscConfig config) {
         return lines(config.sackTrackerItems().isEmpty()
             ? List.of(new SackItem("Enchanted Wheat", 0x55FF55, 1234, 10000), new SackItem("Wheat", 0xFFFFFF, 56789, 0))
-            : config.sackTrackerItems(), false);
+            : config.sackTrackerItems(), false, Set.of(), config.sackTrackerProfileName());
     }
 
     public static void drawPreview(GuiGraphicsExtractor graphics, MiscConfig config) {

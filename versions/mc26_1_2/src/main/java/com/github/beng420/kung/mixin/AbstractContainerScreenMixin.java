@@ -1,6 +1,8 @@
 package com.github.beng420.kung.mixin;
 
+import com.github.beng420.kung.feature.experiment.ExperimentSolverFeature;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
@@ -36,6 +38,7 @@ public abstract class AbstractContainerScreenMixin {
             button,
             input
         );
+        ExperimentSolverFeature.observeSlotClick((AbstractContainerScreen<?>) (Object) this, slotId);
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
@@ -79,6 +82,8 @@ public abstract class AbstractContainerScreenMixin {
         CallbackInfo callbackInfo
     ) {
         kung$extractingSlot = null;
+        SuperpairsHelperFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
+        ExperimentSolverFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
     }
 
     @ModifyArg(

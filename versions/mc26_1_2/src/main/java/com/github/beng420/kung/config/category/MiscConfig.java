@@ -52,7 +52,9 @@ public final class MiscConfig extends ConfigCategory {
     private int sackTrackerX = 6;
     private int sackTrackerY = 240;
     private int sackTrackerScale = 100;
+    /** Before profiles existed this was the one shared list; now it only waits for the first profile to take it over. */
     private List<SackItem> sackTrackerItems = new ArrayList<>();
+    private SackProfiles sackTrackerProfiles = new SackProfiles();
     private boolean peekChatEnabled = false;
     /** Null until the player picks a key, so the default can follow the keyboard layout. */
     private String peekChatKeybind;
@@ -72,51 +74,61 @@ public final class MiscConfig extends ConfigCategory {
     private boolean c50GuildCommandsEnabled = true;
     private boolean c50AllChatCommandsEnabled = false;
     private boolean c50PrivateCommandsEnabled = false;
+    private boolean c50CoopCommandsEnabled = true;
     private boolean ca50ChatCommandEnabled = true;
     private boolean ca50PartyCommandsEnabled = true;
     private boolean ca50GuildCommandsEnabled = true;
     private boolean ca50AllChatCommandsEnabled = false;
     private boolean ca50PrivateCommandsEnabled = false;
+    private boolean ca50CoopCommandsEnabled = true;
     private boolean tpsChatCommandEnabled = true;
     private boolean tpsPartyCommandsEnabled = true;
     private boolean tpsGuildCommandsEnabled = true;
     private boolean tpsAllChatCommandsEnabled = false;
     private boolean tpsPrivateCommandsEnabled = false;
+    private boolean tpsCoopCommandsEnabled = true;
     private boolean jerryChatCommandEnabled = true;
     private boolean jerryPartyCommandsEnabled = true;
     private boolean jerryGuildCommandsEnabled = true;
     private boolean jerryAllChatCommandsEnabled = false;
     private boolean jerryPrivateCommandsEnabled = false;
+    private boolean jerryCoopCommandsEnabled = true;
     private boolean scorpChatCommandEnabled = true;
     private boolean scorpPartyCommandsEnabled = true;
     private boolean scorpGuildCommandsEnabled = true;
     private boolean scorpAllChatCommandsEnabled = false;
     private boolean scorpPrivateCommandsEnabled = false;
+    private boolean scorpCoopCommandsEnabled = true;
     private boolean derpyChatCommandEnabled = true;
     private boolean derpyPartyCommandsEnabled = true;
     private boolean derpyGuildCommandsEnabled = true;
     private boolean derpyAllChatCommandsEnabled = false;
     private boolean derpyPrivateCommandsEnabled = false;
+    private boolean derpyCoopCommandsEnabled = true;
     private boolean yotpChatCommandEnabled = true;
     private boolean yotpPartyCommandsEnabled = true;
     private boolean yotpGuildCommandsEnabled = true;
     private boolean yotpAllChatCommandsEnabled = false;
     private boolean yotpPrivateCommandsEnabled = false;
+    private boolean yotpCoopCommandsEnabled = true;
     private boolean yotwChatCommandEnabled = true;
     private boolean yotwPartyCommandsEnabled = true;
     private boolean yotwGuildCommandsEnabled = true;
     private boolean yotwAllChatCommandsEnabled = false;
     private boolean yotwPrivateCommandsEnabled = false;
+    private boolean yotwCoopCommandsEnabled = true;
     private boolean yotsChatCommandEnabled = true;
     private boolean yotsPartyCommandsEnabled = true;
     private boolean yotsGuildCommandsEnabled = true;
     private boolean yotsAllChatCommandsEnabled = false;
     private boolean yotsPrivateCommandsEnabled = false;
+    private boolean yotsCoopCommandsEnabled = true;
     private boolean classLevelChatCommandEnabled = true;
     private boolean classLevelPartyCommandsEnabled = true;
     private boolean classLevelGuildCommandsEnabled = true;
     private boolean classLevelAllChatCommandsEnabled = false;
     private boolean classLevelPrivateCommandsEnabled = false;
+    private boolean classLevelCoopCommandsEnabled = true;
     private boolean specialMayorsChatCommandsEnabled = true;
     private boolean yearlyEventsChatCommandsEnabled = true;
     // The channels every command answers in, unless its own "UseDefaultChannels" is off.
@@ -124,6 +136,7 @@ public final class MiscConfig extends ConfigCategory {
     private boolean defaultGuildCommandsEnabled = true;
     private boolean defaultAllChatCommandsEnabled = false;
     private boolean defaultPrivateCommandsEnabled = false;
+    private boolean defaultCoopCommandsEnabled = true;
     private boolean c50UseDefaultChannels = true;
     private boolean ca50UseDefaultChannels = true;
     private boolean tpsUseDefaultChannels = true;
@@ -141,11 +154,27 @@ public final class MiscConfig extends ConfigCategory {
     private String[] loadoutKeybinds = defaultLoadoutKeybinds();
     private boolean superpairsHelperEnabled = false;
     private boolean superpairsHelperDebugEnabled = false;
+    private boolean superpairsKeepCardsVisible = true;
+    private boolean superpairsPairColors = true;
+    private boolean superpairsPairLetters = true;
+    private boolean superpairsMarkBestClick = true;
+    private boolean superpairsMarkPairs = true;
+    /** Full flavor only, like the other automation: claims the known pairs after Auto Click Main Game is done. */
+    private boolean superpairsAutoClaimEnabled = false;
     /** Full flavor only: the Modrinth jar has no row and no feature reading it. */
     private boolean skipNpcDialogueEnabled = false;
     private int superpairsHelperX = 6;
     private int superpairsHelperY = 34;
     private int superpairsHelperScale = 75;
+    /** Full flavor only: the Modrinth jar has no row and no code reading these three. */
+    private boolean experimentAutoClickEnabled = false;
+    private boolean superpairsAutoRevealEnabled = false;
+    private int experimentAutoClickDelayMillis = 250;
+    /** The add-on round after which the buffs are maxed (0 = read it from the Stakes menu): a chat hint, and the auto mode closes the window. */
+    private int experimentMaxBuffsRound = 0;
+    /** Full flavor only: the Modrinth jar has no row and no feature reading these two. */
+    private boolean autoHarpEnabled = false;
+    private int autoHarpDelayMillis = 60;
 
     // Custom Sounds
     private boolean customSoundsEnabled = false;
@@ -230,7 +259,23 @@ public final class MiscConfig extends ConfigCategory {
     public void setSackTrackerY(int value) { sackTrackerY = value; save(); }
     public int sackTrackerScale() { return sackTrackerScale; }
     public void setSackTrackerScale(int value) { sackTrackerScale = Math.clamp(value, 25, 300); save(); }
-    public List<SackItem> sackTrackerItems() { return Collections.unmodifiableList(sackTrackerItems); }
+    /** The items of the profile the player is on; the old shared list while no profile is known yet. */
+    public List<SackItem> sackTrackerItems() { return Collections.unmodifiableList(activeSackItems()); }
+    public boolean sackTrackerProfileKnown() { return sackTrackerProfiles.known(); }
+    public String sackTrackerProfileName() { return sackTrackerProfiles.name(); }
+    public void leaveSackTrackerProfile() { sackTrackerProfiles.leave(); }
+
+    /** Reads a chat line for profile switches; true when the player is on another profile now. */
+    public boolean observeSackTrackerProfile(String text, String account) {
+        boolean changed = sackTrackerProfiles.observe(text, account, sackTrackerItems);
+        if (changed && sackTrackerProfiles.known()) save();
+        return changed;
+    }
+
+    private List<SackItem> activeSackItems() {
+        var items = sackTrackerProfiles.items();
+        return items == null ? sackTrackerItems : items;
+    }
     public boolean peekChatEnabled() { return peekChatEnabled; }
     public void setPeekChatEnabled(boolean value) { peekChatEnabled = value; save(); }
     public String peekChatKeybind() { return peekChatKeybind == null ? defaultPeekChatKeybind() : peekChatKeybind; }
@@ -242,7 +287,7 @@ public final class MiscConfig extends ConfigCategory {
 
     public SackItem sackTrackerItem(String name) {
         String key = sackKey(name);
-        for (SackItem item : sackTrackerItems) if (sackKey(item.name()).equals(key)) return item;
+        for (SackItem item : activeSackItems()) if (sackKey(item.name()).equals(key)) return item;
         return null;
     }
 
@@ -254,31 +299,31 @@ public final class MiscConfig extends ConfigCategory {
     /** Tracks the item, or stops tracking it when it already is; true when it is tracked now. */
     public boolean toggleSackTrackerItem(String name, int color, long amount) {
         SackItem existing = sackTrackerItem(name);
-        if (existing != null) sackTrackerItems.remove(existing);
-        else sackTrackerItems.add(new SackItem(name, color, amount, 0));
+        if (existing != null) activeSackItems().remove(existing);
+        else activeSackItems().add(new SackItem(name, color, amount, 0));
         save();
         return existing == null;
     }
 
     public void setSackTrackerAmount(SackItem item, long amount) {
-        if (!sackTrackerItems.contains(item) || item.amount == Math.max(0, amount)) return;
+        if (!activeSackItems().contains(item) || item.amount == Math.max(0, amount)) return;
         item.amount = Math.max(0, amount);
         save();
     }
 
     public void setSackTrackerGoal(SackItem item, long goal) {
-        if (!sackTrackerItems.contains(item) || item.goal == Math.max(0, goal)) return;
+        if (!activeSackItems().contains(item) || item.goal == Math.max(0, goal)) return;
         item.goal = Math.max(0, goal);
         save();
     }
 
     public void removeSackTrackerItem(SackItem item) {
-        if (sackTrackerItems.remove(item)) save();
+        if (activeSackItems().remove(item)) save();
     }
 
     public void clearSackTrackerItems() {
-        if (sackTrackerItems.isEmpty()) return;
-        sackTrackerItems.clear();
+        if (activeSackItems().isEmpty()) return;
+        activeSackItems().clear();
         save();
     }
 
@@ -408,6 +453,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setC50AllChatCommandsEnabled(boolean value) { c50AllChatCommandsEnabled = value; save(); }
     public boolean c50PrivateCommandsEnabled() { return c50UseDefaultChannels ? defaultPrivateCommandsEnabled : c50PrivateCommandsEnabled; }
     public void setC50PrivateCommandsEnabled(boolean value) { c50PrivateCommandsEnabled = value; save(); }
+    public boolean c50CoopCommandsEnabled() { return c50UseDefaultChannels ? defaultCoopCommandsEnabled : c50CoopCommandsEnabled; }
+    public void setC50CoopCommandsEnabled(boolean value) { c50CoopCommandsEnabled = value; save(); }
     public boolean ca50ChatCommandEnabled() { return ca50ChatCommandEnabled; }
     public void setCa50ChatCommandEnabled(boolean value) { ca50ChatCommandEnabled = value; save(); }
     public boolean ca50PartyCommandsEnabled() { return ca50UseDefaultChannels ? defaultPartyCommandsEnabled : ca50PartyCommandsEnabled; }
@@ -418,6 +465,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setCa50AllChatCommandsEnabled(boolean value) { ca50AllChatCommandsEnabled = value; save(); }
     public boolean ca50PrivateCommandsEnabled() { return ca50UseDefaultChannels ? defaultPrivateCommandsEnabled : ca50PrivateCommandsEnabled; }
     public void setCa50PrivateCommandsEnabled(boolean value) { ca50PrivateCommandsEnabled = value; save(); }
+    public boolean ca50CoopCommandsEnabled() { return ca50UseDefaultChannels ? defaultCoopCommandsEnabled : ca50CoopCommandsEnabled; }
+    public void setCa50CoopCommandsEnabled(boolean value) { ca50CoopCommandsEnabled = value; save(); }
     public boolean tpsChatCommandEnabled() { return tpsChatCommandEnabled; }
     public void setTpsChatCommandEnabled(boolean value) { tpsChatCommandEnabled = value; save(); }
     public boolean tpsPartyCommandsEnabled() { return tpsUseDefaultChannels ? defaultPartyCommandsEnabled : tpsPartyCommandsEnabled; }
@@ -428,6 +477,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setTpsAllChatCommandsEnabled(boolean value) { tpsAllChatCommandsEnabled = value; save(); }
     public boolean tpsPrivateCommandsEnabled() { return tpsUseDefaultChannels ? defaultPrivateCommandsEnabled : tpsPrivateCommandsEnabled; }
     public void setTpsPrivateCommandsEnabled(boolean value) { tpsPrivateCommandsEnabled = value; save(); }
+    public boolean tpsCoopCommandsEnabled() { return tpsUseDefaultChannels ? defaultCoopCommandsEnabled : tpsCoopCommandsEnabled; }
+    public void setTpsCoopCommandsEnabled(boolean value) { tpsCoopCommandsEnabled = value; save(); }
     public boolean jerryChatCommandEnabled() { return jerryChatCommandEnabled; }
     public void setJerryChatCommandEnabled(boolean value) { jerryChatCommandEnabled = value; save(); }
     public boolean jerryPartyCommandsEnabled() { return jerryUseDefaultChannels ? defaultPartyCommandsEnabled : jerryPartyCommandsEnabled; }
@@ -438,6 +489,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setJerryAllChatCommandsEnabled(boolean value) { jerryAllChatCommandsEnabled = value; save(); }
     public boolean jerryPrivateCommandsEnabled() { return jerryUseDefaultChannels ? defaultPrivateCommandsEnabled : jerryPrivateCommandsEnabled; }
     public void setJerryPrivateCommandsEnabled(boolean value) { jerryPrivateCommandsEnabled = value; save(); }
+    public boolean jerryCoopCommandsEnabled() { return jerryUseDefaultChannels ? defaultCoopCommandsEnabled : jerryCoopCommandsEnabled; }
+    public void setJerryCoopCommandsEnabled(boolean value) { jerryCoopCommandsEnabled = value; save(); }
     public boolean scorpChatCommandEnabled() { return scorpChatCommandEnabled; }
     public void setScorpChatCommandEnabled(boolean value) { scorpChatCommandEnabled = value; save(); }
     public boolean scorpPartyCommandsEnabled() { return scorpUseDefaultChannels ? defaultPartyCommandsEnabled : scorpPartyCommandsEnabled; }
@@ -448,6 +501,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setScorpAllChatCommandsEnabled(boolean value) { scorpAllChatCommandsEnabled = value; save(); }
     public boolean scorpPrivateCommandsEnabled() { return scorpUseDefaultChannels ? defaultPrivateCommandsEnabled : scorpPrivateCommandsEnabled; }
     public void setScorpPrivateCommandsEnabled(boolean value) { scorpPrivateCommandsEnabled = value; save(); }
+    public boolean scorpCoopCommandsEnabled() { return scorpUseDefaultChannels ? defaultCoopCommandsEnabled : scorpCoopCommandsEnabled; }
+    public void setScorpCoopCommandsEnabled(boolean value) { scorpCoopCommandsEnabled = value; save(); }
     public boolean derpyChatCommandEnabled() { return derpyChatCommandEnabled; }
     public void setDerpyChatCommandEnabled(boolean value) { derpyChatCommandEnabled = value; save(); }
     public boolean derpyPartyCommandsEnabled() { return derpyUseDefaultChannels ? defaultPartyCommandsEnabled : derpyPartyCommandsEnabled; }
@@ -458,6 +513,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setDerpyAllChatCommandsEnabled(boolean value) { derpyAllChatCommandsEnabled = value; save(); }
     public boolean derpyPrivateCommandsEnabled() { return derpyUseDefaultChannels ? defaultPrivateCommandsEnabled : derpyPrivateCommandsEnabled; }
     public void setDerpyPrivateCommandsEnabled(boolean value) { derpyPrivateCommandsEnabled = value; save(); }
+    public boolean derpyCoopCommandsEnabled() { return derpyUseDefaultChannels ? defaultCoopCommandsEnabled : derpyCoopCommandsEnabled; }
+    public void setDerpyCoopCommandsEnabled(boolean value) { derpyCoopCommandsEnabled = value; save(); }
     public boolean classLevelChatCommandEnabled() { return classLevelChatCommandEnabled; }
     public void setClassLevelChatCommandEnabled(boolean value) { classLevelChatCommandEnabled = value; save(); }
     public boolean classLevelPartyCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPartyCommandsEnabled : classLevelPartyCommandsEnabled; }
@@ -468,6 +525,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setClassLevelAllChatCommandsEnabled(boolean value) { classLevelAllChatCommandsEnabled = value; save(); }
     public boolean classLevelPrivateCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPrivateCommandsEnabled : classLevelPrivateCommandsEnabled; }
     public void setClassLevelPrivateCommandsEnabled(boolean value) { classLevelPrivateCommandsEnabled = value; save(); }
+    public boolean classLevelCoopCommandsEnabled() { return classLevelUseDefaultChannels ? defaultCoopCommandsEnabled : classLevelCoopCommandsEnabled; }
+    public void setClassLevelCoopCommandsEnabled(boolean value) { classLevelCoopCommandsEnabled = value; save(); }
     public boolean yotpChatCommandEnabled() { return yotpChatCommandEnabled; }
     public void setYotpChatCommandEnabled(boolean value) { yotpChatCommandEnabled = value; save(); }
     public boolean yotpPartyCommandsEnabled() { return yotpUseDefaultChannels ? defaultPartyCommandsEnabled : yotpPartyCommandsEnabled; }
@@ -478,6 +537,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setYotpAllChatCommandsEnabled(boolean value) { yotpAllChatCommandsEnabled = value; save(); }
     public boolean yotpPrivateCommandsEnabled() { return yotpUseDefaultChannels ? defaultPrivateCommandsEnabled : yotpPrivateCommandsEnabled; }
     public void setYotpPrivateCommandsEnabled(boolean value) { yotpPrivateCommandsEnabled = value; save(); }
+    public boolean yotpCoopCommandsEnabled() { return yotpUseDefaultChannels ? defaultCoopCommandsEnabled : yotpCoopCommandsEnabled; }
+    public void setYotpCoopCommandsEnabled(boolean value) { yotpCoopCommandsEnabled = value; save(); }
     public boolean yotwChatCommandEnabled() { return yotwChatCommandEnabled; }
     public void setYotwChatCommandEnabled(boolean value) { yotwChatCommandEnabled = value; save(); }
     public boolean yotwPartyCommandsEnabled() { return yotwUseDefaultChannels ? defaultPartyCommandsEnabled : yotwPartyCommandsEnabled; }
@@ -488,6 +549,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setYotwAllChatCommandsEnabled(boolean value) { yotwAllChatCommandsEnabled = value; save(); }
     public boolean yotwPrivateCommandsEnabled() { return yotwUseDefaultChannels ? defaultPrivateCommandsEnabled : yotwPrivateCommandsEnabled; }
     public void setYotwPrivateCommandsEnabled(boolean value) { yotwPrivateCommandsEnabled = value; save(); }
+    public boolean yotwCoopCommandsEnabled() { return yotwUseDefaultChannels ? defaultCoopCommandsEnabled : yotwCoopCommandsEnabled; }
+    public void setYotwCoopCommandsEnabled(boolean value) { yotwCoopCommandsEnabled = value; save(); }
     public boolean yotsChatCommandEnabled() { return yotsChatCommandEnabled; }
     public void setYotsChatCommandEnabled(boolean value) { yotsChatCommandEnabled = value; save(); }
     public boolean yotsPartyCommandsEnabled() { return yotsUseDefaultChannels ? defaultPartyCommandsEnabled : yotsPartyCommandsEnabled; }
@@ -498,6 +561,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setYotsAllChatCommandsEnabled(boolean value) { yotsAllChatCommandsEnabled = value; save(); }
     public boolean yotsPrivateCommandsEnabled() { return yotsUseDefaultChannels ? defaultPrivateCommandsEnabled : yotsPrivateCommandsEnabled; }
     public void setYotsPrivateCommandsEnabled(boolean value) { yotsPrivateCommandsEnabled = value; save(); }
+    public boolean yotsCoopCommandsEnabled() { return yotsUseDefaultChannels ? defaultCoopCommandsEnabled : yotsCoopCommandsEnabled; }
+    public void setYotsCoopCommandsEnabled(boolean value) { yotsCoopCommandsEnabled = value; save(); }
     public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
     public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled() && ca50PartyCommandsEnabled(); }
     public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled() && ca50GuildCommandsEnabled(); }
@@ -513,6 +578,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setDefaultAllChatCommandsEnabled(boolean value) { defaultAllChatCommandsEnabled = value; save(); }
     public boolean defaultPrivateCommandsEnabled() { return defaultPrivateCommandsEnabled; }
     public void setDefaultPrivateCommandsEnabled(boolean value) { defaultPrivateCommandsEnabled = value; save(); }
+    public boolean defaultCoopCommandsEnabled() { return defaultCoopCommandsEnabled; }
+    public void setDefaultCoopCommandsEnabled(boolean value) { defaultCoopCommandsEnabled = value; save(); }
     public boolean c50UseDefaultChannels() { return c50UseDefaultChannels; }
     public void setC50UseDefaultChannels(boolean value) { c50UseDefaultChannels = value; save(); }
     public boolean ca50UseDefaultChannels() { return ca50UseDefaultChannels; }
@@ -569,8 +636,32 @@ public final class MiscConfig extends ConfigCategory {
     public void setLoadoutsCloseOnlyOnChange(boolean value) { loadoutsCloseOnlyOnChange = value; save(); }
     public boolean superpairsHelperEnabled() { return superpairsHelperEnabled; }
     public void setSuperpairsHelperEnabled(boolean value) { superpairsHelperEnabled = value; save(); }
+    public boolean superpairsPairColors() { return superpairsPairColors; }
+    public void setSuperpairsPairColors(boolean value) { superpairsPairColors = value; save(); }
+    public boolean superpairsPairLetters() { return superpairsPairLetters; }
+    public void setSuperpairsPairLetters(boolean value) { superpairsPairLetters = value; save(); }
+    public boolean superpairsMarkPairs() { return superpairsMarkPairs; }
+    public void setSuperpairsMarkPairs(boolean value) { superpairsMarkPairs = value; save(); }
+    public boolean superpairsAutoClaimEnabled() { return superpairsAutoClaimEnabled; }
+    public void setSuperpairsAutoClaimEnabled(boolean value) { superpairsAutoClaimEnabled = value; save(); }
+    public boolean superpairsMarkBestClick() { return superpairsMarkBestClick; }
+    public void setSuperpairsMarkBestClick(boolean value) { superpairsMarkBestClick = value; save(); }
+    public boolean superpairsKeepCardsVisible() { return superpairsKeepCardsVisible; }
+    public void setSuperpairsKeepCardsVisible(boolean value) { superpairsKeepCardsVisible = value; save(); }
     public boolean superpairsHelperDebugEnabled() { return superpairsHelperDebugEnabled; }
     public void setSuperpairsHelperDebugEnabled(boolean value) { superpairsHelperDebugEnabled = value; save(); }
+    public boolean experimentAutoClickEnabled() { return experimentAutoClickEnabled; }
+    public void setExperimentAutoClickEnabled(boolean value) { experimentAutoClickEnabled = value; save(); }
+    public boolean superpairsAutoRevealEnabled() { return superpairsAutoRevealEnabled; }
+    public void setSuperpairsAutoRevealEnabled(boolean value) { superpairsAutoRevealEnabled = value; save(); }
+    public int experimentAutoClickDelayMillis() { return Math.clamp(experimentAutoClickDelayMillis, 100, 1000); }
+    public void setExperimentAutoClickDelayMillis(int value) { experimentAutoClickDelayMillis = Math.clamp(value, 100, 1000); save(); }
+    public int experimentMaxBuffsRound() { return Math.clamp(experimentMaxBuffsRound, 0, 30); }
+    public void setExperimentMaxBuffsRound(int value) { experimentMaxBuffsRound = Math.clamp(value, 0, 30); save(); }
+    public boolean autoHarpEnabled() { return autoHarpEnabled; }
+    public void setAutoHarpEnabled(boolean value) { autoHarpEnabled = value; save(); }
+    public int autoHarpDelayMillis() { return Math.clamp(autoHarpDelayMillis, 30, 300); }
+    public void setAutoHarpDelayMillis(int value) { autoHarpDelayMillis = Math.clamp(value, 30, 300); save(); }
     public boolean skipNpcDialogueEnabled() { return skipNpcDialogueEnabled; }
     public void setSkipNpcDialogueEnabled(boolean value) { skipNpcDialogueEnabled = value; save(); }
     public int superpairsHelperX() { return superpairsHelperX; }
@@ -663,6 +754,8 @@ public final class MiscConfig extends ConfigCategory {
         sackTrackerScale = Math.clamp(sackTrackerScale, 25, 300);
         sackTrackerItems = sackTrackerItems == null ? new ArrayList<>()
             : new ArrayList<>(sackTrackerItems.stream().filter(item -> item != null && !item.name().isBlank()).toList());
+        if (sackTrackerProfiles == null) sackTrackerProfiles = new SackProfiles();
+        sackTrackerProfiles.sanitize();
         if (bowDrawThresholds == null) bowDrawThresholds = defaultBowDrawThresholds();
         customChatEmotes = customChatEmotes == null ? new ArrayList<>()
             : new ArrayList<>(customChatEmotes.stream().filter(java.util.Objects::nonNull).toList());

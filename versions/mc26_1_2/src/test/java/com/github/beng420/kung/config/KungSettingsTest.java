@@ -30,9 +30,9 @@ public final class KungSettingsTest {
 
         assertEquals(List.of("Dungeon", "Garden", "Hunting", "Slayer", "Util", "Debug"),
             categories.stream().map(CategoryEntry::name).toList());
-        // The Modrinth build has no Blood Rush helper and no Skip NPC Dialogue.
+        // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 16 : 17, 4),
+        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 16 : 18, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {

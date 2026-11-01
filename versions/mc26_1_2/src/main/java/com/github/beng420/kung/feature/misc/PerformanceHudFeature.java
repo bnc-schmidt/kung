@@ -41,6 +41,9 @@ public final class PerformanceHudFeature extends ConfigurableFeature<MiscConfig>
     private int ticksUntilSample;
     /** Round trip of our own ping request; Hypixel's tab list reports a constant instead. */
     private static volatile int ping;
+    private static final long PING_REFRESH_MILLIS = 500;
+    /** Client thread only. */
+    private static long lastRequestMillis;
 
     private PerformanceHudFeature() { super(config -> config.misc); }
 
@@ -85,6 +88,19 @@ public final class PerformanceHudFeature extends ConfigurableFeature<MiscConfig>
     private static void requestPing(Minecraft client) {
         var connection = client.getConnection();
         if (connection != null) connection.send(new ServerboundPingRequestPacket(Util.getMillis()));
+    }
+
+    /**
+     * The latest measured round trip, for features that time their clicks. It asks for a fresh one when the last
+     * request is older than half a second, so it works with the HUD off; 0 until the first answer.
+     */
+    public static int freshPing(Minecraft client) {
+        long now = Util.getMillis();
+        if (now - lastRequestMillis >= PING_REFRESH_MILLIS) {
+            lastRequestMillis = now;
+            requestPing(client);
+        }
+        return ping;
     }
 
     private void render(GuiGraphicsExtractor graphics) {

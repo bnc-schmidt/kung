@@ -282,9 +282,16 @@ public final class KungSettings {
             new CategoryEntry("Hunting", List.of(
                 new FeatureEntry("Safari Uniques", config.safari::enabled,
                     config.safari::setEnabled,
-                    List.of()
-                ).withTooltip("Red: uniques you are still missing. Gray: caught this run.",
-                    "Loot Share catches count too."),
+                    List.of(
+                        SettingEntry.toggle("Background", config.safari::background, config.safari::setBackground)
+                            .withTooltip("Draws a dark panel behind the list."),
+                        SettingEntry.toggle("All Zones Open", config.safari::allZones, config.safari::setAllZones)
+                            .withTooltip("Lists every zone side by side.",
+                                "Off: only the zone you are in lists its critters, the others show a count.")
+                    )
+                ).withTooltip("Green check: caught this run. Red cross: still missing. Loot Share catches count too.",
+                    "The zone you are in lists its critters; the others show a count.",
+                    "Move and resize in /kung hud."),
                 new FeatureEntry("Invisibug Line", config.invisibug::enabled,
                     config.invisibug::setEnabled,
                     List.of(
@@ -442,6 +449,17 @@ public final class KungSettings {
                         "Clicks the NPC a \"Talk to\", \"Check on\" or \"Give\" quest objective names once it is in reach.",
                         "Never clicks in menus, sends chat or moves you. Off in dungeons and Kuudra.",
                         "Automates gameplay, which Hypixel's rules forbid. Use at your own risk."),
+                KungBuild.MODRINTH ? null : new FeatureEntry("Auto Harp", config.misc::autoHarpEnabled,
+                    config.misc::setAutoHarpEnabled,
+                    List.of(
+                        SettingEntry.slider("Click Delay (ms)", config.misc::autoHarpDelayMillis,
+                            config.misc::setAutoHarpDelayMillis, 30, 300, 10)
+                            .withTooltip("Average time from a note lighting up until its click arrives.",
+                                "Your ping counts towards it, so a high ping shortens the wait, down to 20 ms.",
+                                "Every wait varies by up to a quarter either way.")
+                    )
+                ).withTooltip("Melody's Harp: clicks each note's button when it lights up, in every song.",
+                    "Automates gameplay, which Hypixel's rules forbid. Use at your own risk."),
                 new FeatureEntry("Hypixel API", config.misc::hypixelApiEnabled,
                     config.misc::setHypixelApiEnabled,
                     List.of(
@@ -466,6 +484,8 @@ public final class KungSettings {
                                 config.misc::setDefaultPartyCommandsEnabled),
                             SettingEntry.toggle("Guild", config.misc::defaultGuildCommandsEnabled,
                                 config.misc::setDefaultGuildCommandsEnabled),
+                            SettingEntry.toggle("Co-op", config.misc::defaultCoopCommandsEnabled,
+                                config.misc::setDefaultCoopCommandsEnabled),
                             SettingEntry.toggle("All Chat", config.misc::defaultAllChatCommandsEnabled,
                                 config.misc::setDefaultAllChatCommandsEnabled),
                             SettingEntry.toggle("DMs", config.misc::defaultPrivateCommandsEnabled,
@@ -480,6 +500,7 @@ public final class KungSettings {
                             config.misc::c50UseDefaultChannels, config.misc::setC50UseDefaultChannels,
                             config.misc::c50PartyCommandsEnabled, config.misc::setC50PartyCommandsEnabled,
                             config.misc::c50GuildCommandsEnabled, config.misc::setC50GuildCommandsEnabled,
+                            config.misc::c50CoopCommandsEnabled, config.misc::setC50CoopCommandsEnabled,
                             config.misc::c50AllChatCommandsEnabled, config.misc::setC50AllChatCommandsEnabled,
                             config.misc::c50PrivateCommandsEnabled, config.misc::setC50PrivateCommandsEnabled),
                         chatCommand(config.misc, "!ca50", new String[] {"Runs left for class average 50. Add a player name to look up someone else.",
@@ -490,6 +511,7 @@ public final class KungSettings {
                             config.misc::ca50UseDefaultChannels, config.misc::setCa50UseDefaultChannels,
                             config.misc::ca50PartyCommandsEnabled, config.misc::setCa50PartyCommandsEnabled,
                             config.misc::ca50GuildCommandsEnabled, config.misc::setCa50GuildCommandsEnabled,
+                            config.misc::ca50CoopCommandsEnabled, config.misc::setCa50CoopCommandsEnabled,
                             config.misc::ca50AllChatCommandsEnabled, config.misc::setCa50AllChatCommandsEnabled,
                             config.misc::ca50PrivateCommandsEnabled, config.misc::setCa50PrivateCommandsEnabled),
                         chatCommand(config.misc, "Class Level", new String[] {"!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50.",
@@ -499,6 +521,7 @@ public final class KungSettings {
                             config.misc::classLevelUseDefaultChannels, config.misc::setClassLevelUseDefaultChannels,
                             config.misc::classLevelPartyCommandsEnabled, config.misc::setClassLevelPartyCommandsEnabled,
                             config.misc::classLevelGuildCommandsEnabled, config.misc::setClassLevelGuildCommandsEnabled,
+                            config.misc::classLevelCoopCommandsEnabled, config.misc::setClassLevelCoopCommandsEnabled,
                             config.misc::classLevelAllChatCommandsEnabled, config.misc::setClassLevelAllChatCommandsEnabled,
                             config.misc::classLevelPrivateCommandsEnabled, config.misc::setClassLevelPrivateCommandsEnabled),
                         chatCommand(config.misc, "!tps", new String[0],
@@ -506,6 +529,7 @@ public final class KungSettings {
                             config.misc::tpsUseDefaultChannels, config.misc::setTpsUseDefaultChannels,
                             config.misc::tpsPartyCommandsEnabled, config.misc::setTpsPartyCommandsEnabled,
                             config.misc::tpsGuildCommandsEnabled, config.misc::setTpsGuildCommandsEnabled,
+                            config.misc::tpsCoopCommandsEnabled, config.misc::setTpsCoopCommandsEnabled,
                             config.misc::tpsAllChatCommandsEnabled, config.misc::setTpsAllChatCommandsEnabled,
                             config.misc::tpsPrivateCommandsEnabled, config.misc::setTpsPrivateCommandsEnabled),
                         SettingEntry.toggle("Special Mayors", config.misc::specialMayorsChatCommandsEnabled, config.misc::setSpecialMayorsChatCommandsEnabled)
@@ -516,6 +540,7 @@ public final class KungSettings {
                             config.misc::jerryUseDefaultChannels, config.misc::setJerryUseDefaultChannels,
                             config.misc::jerryPartyCommandsEnabled, config.misc::setJerryPartyCommandsEnabled,
                             config.misc::jerryGuildCommandsEnabled, config.misc::setJerryGuildCommandsEnabled,
+                            config.misc::jerryCoopCommandsEnabled, config.misc::setJerryCoopCommandsEnabled,
                             config.misc::jerryAllChatCommandsEnabled, config.misc::setJerryAllChatCommandsEnabled,
                             config.misc::jerryPrivateCommandsEnabled, config.misc::setJerryPrivateCommandsEnabled),
                         chatCommand(config.misc, "!scorp", new String[] {"Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves."},
@@ -523,6 +548,7 @@ public final class KungSettings {
                             config.misc::scorpUseDefaultChannels, config.misc::setScorpUseDefaultChannels,
                             config.misc::scorpPartyCommandsEnabled, config.misc::setScorpPartyCommandsEnabled,
                             config.misc::scorpGuildCommandsEnabled, config.misc::setScorpGuildCommandsEnabled,
+                            config.misc::scorpCoopCommandsEnabled, config.misc::setScorpCoopCommandsEnabled,
                             config.misc::scorpAllChatCommandsEnabled, config.misc::setScorpAllChatCommandsEnabled,
                             config.misc::scorpPrivateCommandsEnabled, config.misc::setScorpPrivateCommandsEnabled),
                         chatCommand(config.misc, "!derpy", new String[] {"Not in office: when Derpy is elected next; in office: when he leaves."},
@@ -530,6 +556,7 @@ public final class KungSettings {
                             config.misc::derpyUseDefaultChannels, config.misc::setDerpyUseDefaultChannels,
                             config.misc::derpyPartyCommandsEnabled, config.misc::setDerpyPartyCommandsEnabled,
                             config.misc::derpyGuildCommandsEnabled, config.misc::setDerpyGuildCommandsEnabled,
+                            config.misc::derpyCoopCommandsEnabled, config.misc::setDerpyCoopCommandsEnabled,
                             config.misc::derpyAllChatCommandsEnabled, config.misc::setDerpyAllChatCommandsEnabled,
                             config.misc::derpyPrivateCommandsEnabled, config.misc::setDerpyPrivateCommandsEnabled)
                         )),
@@ -541,6 +568,7 @@ public final class KungSettings {
                             config.misc::yotpUseDefaultChannels, config.misc::setYotpUseDefaultChannels,
                             config.misc::yotpPartyCommandsEnabled, config.misc::setYotpPartyCommandsEnabled,
                             config.misc::yotpGuildCommandsEnabled, config.misc::setYotpGuildCommandsEnabled,
+                            config.misc::yotpCoopCommandsEnabled, config.misc::setYotpCoopCommandsEnabled,
                             config.misc::yotpAllChatCommandsEnabled, config.misc::setYotpAllChatCommandsEnabled,
                             config.misc::yotpPrivateCommandsEnabled, config.misc::setYotpPrivateCommandsEnabled),
                         chatCommand(config.misc, "!yotw", new String[] {"Year of the Witch: when it is active, or when it starts next."},
@@ -548,6 +576,7 @@ public final class KungSettings {
                             config.misc::yotwUseDefaultChannels, config.misc::setYotwUseDefaultChannels,
                             config.misc::yotwPartyCommandsEnabled, config.misc::setYotwPartyCommandsEnabled,
                             config.misc::yotwGuildCommandsEnabled, config.misc::setYotwGuildCommandsEnabled,
+                            config.misc::yotwCoopCommandsEnabled, config.misc::setYotwCoopCommandsEnabled,
                             config.misc::yotwAllChatCommandsEnabled, config.misc::setYotwAllChatCommandsEnabled,
                             config.misc::yotwPrivateCommandsEnabled, config.misc::setYotwPrivateCommandsEnabled),
                         chatCommand(config.misc, "!yots", new String[] {"Year of the Seal: when it is active, or when it starts next."},
@@ -555,6 +584,7 @@ public final class KungSettings {
                             config.misc::yotsUseDefaultChannels, config.misc::setYotsUseDefaultChannels,
                             config.misc::yotsPartyCommandsEnabled, config.misc::setYotsPartyCommandsEnabled,
                             config.misc::yotsGuildCommandsEnabled, config.misc::setYotsGuildCommandsEnabled,
+                            config.misc::yotsCoopCommandsEnabled, config.misc::setYotsCoopCommandsEnabled,
                             config.misc::yotsAllChatCommandsEnabled, config.misc::setYotsAllChatCommandsEnabled,
                             config.misc::yotsPrivateCommandsEnabled, config.misc::setYotsPrivateCommandsEnabled)
                         ))
@@ -581,15 +611,70 @@ public final class KungSettings {
                 ),
                 new FeatureEntry("Superpairs Helper", config.misc::superpairsHelperEnabled,
                     config.misc::setSuperpairsHelperEnabled,
-                    List.of(
+                    present(
                         SettingEntry.toggle("Debug", config.misc::superpairsHelperDebugEnabled,
                             config.misc::setSuperpairsHelperDebugEnabled)
-                            .withTooltip("Adds packet details to /kung log, without extra overlay text.")
+                            .withTooltip("Adds packet details to /kung log, without extra overlay text."),
+                        SettingEntry.toggle("Keep Cards Visible", config.misc::superpairsKeepCardsVisible,
+                            config.misc::setSuperpairsKeepCardsVisible)
+                            .withTooltip("Superpairs: a card you saw stays on its slot after the game turns it around.",
+                                "It is drawn from what you saw, so the game cannot hide it again."),
+                        SettingEntry.toggle("Pair Colors", config.misc::superpairsPairColors,
+                            config.misc::setSuperpairsPairColors)
+                            .withTooltip("Superpairs: every kind of card gets its own background color, so equal cards",
+                                "are found at a glance. The colors are picked to stay apart for color blindness."),
+                        SettingEntry.toggle("Pair Letters", config.misc::superpairsPairLetters,
+                            config.misc::setSuperpairsPairLetters)
+                            .withTooltip("Superpairs: every kind of card gets a letter in its corner (A, B, C ...),",
+                                "so equal cards can be told apart without any color. Both options can be on."),
+                        SettingEntry.toggle("Mark Pairs", config.misc::superpairsMarkPairs,
+                            config.misc::setSuperpairsMarkPairs)
+                            .withTooltip("Superpairs: a thin white frame on both cards of every pair you can click,",
+                                "that is, both cards are known and the pair is not taken yet."),
+                        SettingEntry.toggle("Mark Best Click", config.misc::superpairsMarkBestClick,
+                            config.misc::setSuperpairsMarkBestClick)
+                            .withTooltip("Superpairs: a green frame shows the next click worth making once nothing unseen",
+                                "is left: the best known pair, its twin, or after an Instant Find a known Titanic or T7.",
+                                "Titanic bottles and T7 enchantments always get a gold frame."),
+                        SettingEntry.slider("Max Buffs Round", config.misc::experimentMaxBuffsRound,
+                            config.misc::setExperimentMaxBuffsRound, 0, 30, 1)
+                            .withTooltip(KungBuild.MODRINTH
+                                ? new String[] {"Chronomatron and Ultrasequencer: the round after which the add-on's buffs are maxed.",
+                                    "0 = automatic: Kung reads it from the Stakes menu of the tier you picked.",
+                                    "A chat hint tells you when you finished it: close the window to keep the buffs."}
+                                : new String[] {"Chronomatron and Ultrasequencer: the round after which the add-on's buffs are maxed.",
+                                    "0 = automatic: Kung reads it from the Stakes menu of the tier you picked.",
+                                    "A chat hint tells you when you finished it: close the window to keep the buffs.",
+                                    "With Auto Click Add-ons on, Kung closes the window for you."}),
+                        KungBuild.MODRINTH ? null : SettingEntry.toggle("Auto Click Main Game", config.misc::superpairsAutoRevealEnabled,
+                            config.misc::setSuperpairsAutoRevealEnabled)
+                            .withTooltip("Superpairs main game only (the add-ons have their own switch):",
+                                "clicks hidden cards for you until Unseen pairs is 0, then stops.",
+                                "Meanwhile it uses an Instant Find on a known Titanic or T7, if there is one.",
+                                "The remaining clicks are yours; the green frame shows the best next one.",
+                                "Automates gameplay, which Hypixel's rules forbid. Use at your own risk."),
+                        KungBuild.MODRINTH ? null : SettingEntry.toggle("Auto Claim Pairs", config.misc::superpairsAutoClaimEnabled,
+                            config.misc::setSuperpairsAutoClaimEnabled)
+                            .withTooltip("Superpairs main game: after Auto Click Main Game is done, also claims",
+                                "the known pairs, best first:",
+                                "Titanic bottles, T7 enchantments, other enchantments, bottles, then XP.",
+                                "It uses up the remaining clicks. Automates gameplay: use at your own risk."),
+                        KungBuild.MODRINTH ? null : SettingEntry.toggle("Auto Click Add-ons", config.misc::experimentAutoClickEnabled,
+                            config.misc::setExperimentAutoClickEnabled)
+                            .withTooltip("Clicks the solution of Chronomatron and Ultrasequencer for you.",
+                                "The Superpairs main game stays yours.",
+                                "Automates gameplay, which Hypixel's rules forbid. Use at your own risk."),
+                        KungBuild.MODRINTH ? null : SettingEntry.slider("Click Delay (ms)", config.misc::experimentAutoClickDelayMillis,
+                            config.misc::setExperimentAutoClickDelayMillis, 100, 1000, 25)
+                            .withTooltip("Average wait before each automatic click, for Auto Click Main Game and Auto Click Add-ons.",
+                                "Every click varies by up to a quarter either way; the first of a round waits twice.")
                     )
                 ).withTooltip("Lists enchantments first; individual Enchanting XP rewards are hidden.",
                     "Unseen pairs have neither card revealed. Known singles are excluded.",
                     "Up to marks an upper bound because hidden fields may contain bonuses.",
-                    "1/2 and 2/2 mean cards seen, not confirmed claimed rewards.")
+                    "1/2 and 2/2 mean cards seen, not confirmed claimed rewards.",
+                    "Also marks the next click in the Chronomatron and Ultrasequencer add-ons.",
+                    "Turn it on before an add-on starts: it learns the pattern while the game shows it.")
             )),
             new CategoryEntry("Debug", List.of(
                 new FeatureEntry(
@@ -741,6 +826,7 @@ public final class KungSettings {
         BooleanSupplier useDefault, Consumer<Boolean> setUseDefault,
         BooleanSupplier party, Consumer<Boolean> setParty,
         BooleanSupplier guild, Consumer<Boolean> setGuild,
+        BooleanSupplier coop, Consumer<Boolean> setCoop,
         BooleanSupplier allChat, Consumer<Boolean> setAllChat,
         BooleanSupplier direct, Consumer<Boolean> setDirect
     ) {
@@ -754,6 +840,7 @@ public final class KungSettings {
                     if (!on) {
                         setParty.accept(misc.defaultPartyCommandsEnabled());
                         setGuild.accept(misc.defaultGuildCommandsEnabled());
+                        setCoop.accept(misc.defaultCoopCommandsEnabled());
                         setAllChat.accept(misc.defaultAllChatCommandsEnabled());
                         setDirect.accept(misc.defaultPrivateCommandsEnabled());
                     }
@@ -762,6 +849,7 @@ public final class KungSettings {
                     "Turn it off to pick this command's channels yourself.").withVisibleWhen(useDefault),
                 SettingEntry.toggle("Party", party, setParty).withVisibleWhen(ownChannels),
                 SettingEntry.toggle("Guild", guild, setGuild).withVisibleWhen(ownChannels),
+                SettingEntry.toggle("Co-op", coop, setCoop).withVisibleWhen(ownChannels),
                 SettingEntry.toggle("All Chat", allChat, setAllChat).withVisibleWhen(ownChannels),
                 SettingEntry.toggle("DMs", direct, setDirect).withVisibleWhen(ownChannels)
             ));

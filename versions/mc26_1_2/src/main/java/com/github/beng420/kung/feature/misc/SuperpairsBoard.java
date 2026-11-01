@@ -18,6 +18,8 @@ public final class SuperpairsBoard {
     private final Set<Integer> boardSlots = new HashSet<>();
     private final Map<Integer, Card> rewards = new LinkedHashMap<>();
     private final Set<Integer> bonuses = new HashSet<>();
+    /** The kinds of card seen, numbered in the order they first showed up; a kind keeps its number. */
+    private final Map<String, Integer> legend = new LinkedHashMap<>();
     private long revision;
     private long cachedRevision = -1;
     private List<CardCount> cachedCards = List.of();
@@ -81,6 +83,7 @@ public final class SuperpairsBoard {
         boolean changed = boardSlots.add(slot);
         if (kind == Kind.REWARD) {
             Card card = card(itemId, label, count);
+            legend.putIfAbsent(card.key(), legend.size());
             changed |= !card.equals(rewards.put(slot, card));
             changed |= bonuses.remove(slot);
         } else if (kind == Kind.BONUS) {
@@ -91,6 +94,52 @@ public final class SuperpairsBoard {
             revision++;
         }
         return kind;
+    }
+
+    /** The label of the card seen in a slot (with " xN" for stacks), or null. */
+    public String labelAt(int slot) {
+        Card card = rewards.get(slot);
+        return card == null ? null : card.label();
+    }
+
+    /** The slots of each kind of card seen, in the order the kinds were first seen. */
+    public Map<String, List<Integer>> slotsByKind() {
+        Map<String, List<Integer>> groups = new LinkedHashMap<>();
+        for (String key : legend.keySet()) {
+            groups.put(key, new java.util.ArrayList<>());
+        }
+        rewards.forEach((slot, card) -> groups.get(card.key()).add(slot));
+        groups.values().forEach(java.util.Collections::sort);
+        groups.values().removeIf(List::isEmpty);
+        return groups;
+    }
+
+    /** 0, 1, 2 ... for the kind of card in a slot in the order the kinds were first seen, or -1. */
+    public int legendIndexAt(int slot) {
+        Card card = rewards.get(slot);
+        Integer index = card == null ? null : legend.get(card.key());
+        return index == null ? -1 : index;
+    }
+
+    /** The label of a kind of card from {@link #slotsByKind()}. */
+    public String labelOfKind(String key) {
+        for (Card card : rewards.values()) {
+            if (card.key().equals(key)) return card.label();
+        }
+        return null;
+    }
+
+    /** Playable slots no card has been seen in yet, in slot order. */
+    public List<Integer> unseenSlots() {
+        return boardSlots.stream().filter(slot -> !rewards.containsKey(slot) && !bonuses.contains(slot)).sorted().toList();
+    }
+
+    /** True for the prompts a hidden card carries while the server takes a click. */
+    public static boolean acceptsClick(String prompt) {
+        String name = clean(prompt).toLowerCase(Locale.ROOT);
+        name = name.endsWith("!") ? name.substring(0, name.length() - 1) : name;
+        return name.equals("click any button") || name.equals("click a second button")
+            || name.equals("next button is instantly rewarded");
     }
 
     public int boardSlotCount() {
@@ -123,6 +172,7 @@ public final class SuperpairsBoard {
         boardSlots.clear();
         rewards.clear();
         bonuses.clear();
+        legend.clear();
         revision++;
     }
 

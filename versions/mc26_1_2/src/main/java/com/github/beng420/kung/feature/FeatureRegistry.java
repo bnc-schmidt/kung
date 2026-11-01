@@ -29,6 +29,8 @@ import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.LobbyHopHelperFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueSkipFeature;
 import com.github.beng420.kung.feature.misc.HitboxesFeature;
+import com.github.beng420.kung.feature.experiment.ExperimentSolverFeature;
+import com.github.beng420.kung.feature.misc.AutoHarpFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.slayer.BlazeSlayerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
@@ -66,7 +68,9 @@ public final class FeatureRegistry {
         register(LobbyHopHelperFeature.INSTANCE);
         register(new HitboxesFeature());
         register(SuperpairsHelperFeature.INSTANCE);
+        register(ExperimentSolverFeature.INSTANCE);
         if (!KungBuild.MODRINTH) register(NpcDialogueSkipFeature.INSTANCE);
+        if (!KungBuild.MODRINTH) register(AutoHarpFeature.INSTANCE);
         register(BowDrawIndicatorFeature.INSTANCE);
         register(FrozenBlazeHudFeature.INSTANCE);
         register(RagTickTimerFeature.INSTANCE);
