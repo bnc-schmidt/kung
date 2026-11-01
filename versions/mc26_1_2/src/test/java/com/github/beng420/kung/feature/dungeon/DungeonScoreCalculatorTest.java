@@ -26,8 +26,24 @@ public final class DungeonScoreCalculatorTest {
 
     @Test
     public void capsBonusScoreComponents() {
-        assertEquals(9, DungeonScoreCalculator.bonusScore(8, true, false, true, true));
-        assertEquals(2, DungeonScoreCalculator.bonusScore(0, false, true, false, false));
+        assertEquals(9, DungeonScoreCalculator.bonusScore(8, true, false, true, 1));
+        assertEquals(2, DungeonScoreCalculator.bonusScore(0, false, true, false, 0));
+        assertEquals(10, DungeonScoreCalculator.bonusScore(5, false, false, false, 9)); // five players, five Bats
+    }
+
+    /** M4 runs of 2026-11-01, "Team Score" against the components the trace logged at 100% Cleared. */
+    @Test
+    public void reproducesTheMasterFloorFourTraceRunsOnceEveryPlayersBatCounts() {
+        long grace = DungeonScoreCalculator.speedGraceSeconds(4, true);
+        // 01:35:47-01:38:21: 33/40 secrets (82.5%), 4 Crypts, Prince, Bat reported before and during the window.
+        assertEquals(33, DungeonScoreCalculator.secretScoreFromPercent(82.5, 100.0));
+        assertEquals(100, DungeonScoreCalculator.speedScore(148, grace));
+        assertEquals(299, 100 + 60 + 33 + 100 + DungeonScoreCalculator.bonusScore(4, false, false, true, 1));
+        assertEquals(300, 100 + 60 + 33 + 100 + DungeonScoreCalculator.bonusScore(4, false, false, true, 2)); // real 300
+        // 01:38:34-01:41:08: 34/42 (81.0%), 7 Crypts, Prince; EinArtxr and ALonelyDancer each killed a Bat.
+        assertEquals(32, DungeonScoreCalculator.secretScoreFromPercent(81.0, 100.0));
+        assertEquals(299, 100 + 60 + 32 + 100 + DungeonScoreCalculator.bonusScore(7, false, false, true, 1));
+        assertEquals(300, 100 + 60 + 32 + 100 + DungeonScoreCalculator.bonusScore(7, false, false, true, 2)); // real 301
     }
 
     @Test

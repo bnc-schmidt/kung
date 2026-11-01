@@ -48,17 +48,34 @@ public final class DungeonScoreCalculator {
         return Math.clamp((int) Math.floor(40.0 * Math.max(0, foundSecrets) / requiredSecrets), 0, 40);
     }
 
+    /**
+     * The Murkbat shard text says "+1 per run", but the wiki's Dungeon Score page documents a cap of one trigger per
+     * player and run, up to five (apparently a bug). The Prince really stays at one per run.
+     */
+    public static final int MAX_BAT_KILLS = 5;
+
     public static int bonusScore(
         int cryptsOpened,
         boolean mimicKilled,
         boolean mimicRequiredAndAllSecrets,
         boolean princeKilled,
-        boolean batScoreKilled
+        int batKills
     ) {
         return Math.min(5, Math.max(0, cryptsOpened))
             + (mimicKilled || mimicRequiredAndAllSecrets ? 2 : 0)
             + (princeKilled ? 1 : 0)
-            + (batScoreKilled ? 1 : 0);
+            + Math.clamp(batKills, 0, MAX_BAT_KILLS);
+    }
+
+    /**
+     * Hypixel's sidebar score while rooms are still open: the room and speed terms grow with the cleared percent,
+     * and the 20-point skill base only arrives with the last room. Fitted on M4 traces, within about 2 points.
+     */
+    public static double runningSidebarScore(
+        int clearedPercent, int speedScore, int secretScore, int bonus, int unfinishedPuzzles
+    ) {
+        return 1.0 + (1.4 + speedScore / 100.0) * clearedPercent + secretScore + bonus
+            - 10.0 * Math.max(0, unfinishedPuzzles);
     }
 
     public static int speedScore(long elapsedSeconds, long graceSeconds) {

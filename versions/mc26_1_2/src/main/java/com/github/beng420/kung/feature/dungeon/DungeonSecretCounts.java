@@ -39,4 +39,30 @@ final class DungeonSecretCounts {
     }
 
     record Fraction(int found, int total) { }
+
+    /**
+     * The secret totals whose found/total the tab shows as this one-decimal percentage. A single reading leaves
+     * a few (1 found at 2.4% fits 41 and 42); the next reading narrows it (2 found at 4.9% fits only 41).
+     */
+    record TotalRange(int min, int max) {
+        static final TotalRange ANY = new TotalRange(1, 250);
+
+        static TotalRange of(int found, double percent) {
+            // Hypixel shows one decimal, so any total within half a step of the shown percentage fits.
+            if (found <= 0 || percent < 0.1 || percent > 100.0) return new TotalRange(1, 0);
+            int min = (int) Math.ceil(100.0 * found / (percent + 0.05) - 1e-9);
+            int max = (int) Math.floor(100.0 * found / (percent - 0.05) + 1e-9);
+            return new TotalRange(Math.max(min, found), Math.min(max, ANY.max));
+        }
+
+        boolean isEmpty() { return min > max; }
+
+        boolean contains(int total) { return total >= min && total <= max; }
+
+        TotalRange intersect(TotalRange other) {
+            return new TotalRange(Math.max(min, other.min), Math.min(max, other.max));
+        }
+
+        int closestTo(double ideal) { return Math.clamp(Math.round(ideal), min, max); }
+    }
 }

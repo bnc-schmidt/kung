@@ -40,6 +40,13 @@ public enum DungeonBonusContribution {
         return passive.matches() ? new Claim(passive.group(2), bonus(passive.group(1))) : null;
     }
 
+    /** The party member who sent this chat line, or null for any other message. */
+    static String partySender(String message) {
+        if (message == null || message.contains("[Kung]")) return null;
+        var party = PARTY.matcher(message);
+        return party.matches() ? party.group(1) : null;
+    }
+
     private static DungeonBonusContribution bonus(String name) {
         return valueOf(name.toUpperCase(Locale.ROOT));
     }

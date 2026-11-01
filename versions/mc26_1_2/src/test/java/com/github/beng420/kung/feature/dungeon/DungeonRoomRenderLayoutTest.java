@@ -31,6 +31,31 @@ public final class DungeonRoomRenderLayoutTest {
     );
 
     @Test
+    public void theCornerCellIsAlwaysACellOfTheRoomEvenWhenTheBoundsCornerIsEmpty() {
+        // Withermancer-like L shape missing its bottom-right cell: the bounds' corner (5, 1) belongs to the next room.
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(4, 1, 0), cornerCellOf(cells(4, 0, 5, 0, 4, 1)));
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(5, 1, 0), cornerCellOf(cells(4, 0, 4, 1, 5, 1)));
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(5, 1, 0), cornerCellOf(cells(5, 0, 4, 1, 5, 1)));
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(6, 0, 0), cornerCellOf(cells(4, 0, 5, 0, 6, 0)));
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(4, 1, 0), cornerCellOf(cells(4, 0, 4, 1)));
+        assertEquals(new DungeonKnownRoomCatalog.MatchedComponent(2, 2, 0), cornerCellOf(cells(1, 1, 2, 1, 1, 2, 2, 2)));
+    }
+
+    private static List<DungeonKnownRoomCatalog.MatchedComponent> cells(int... xz) {
+        List<DungeonKnownRoomCatalog.MatchedComponent> cells = new ArrayList<>();
+        for (int i = 0; i < xz.length; i += 2) {
+            cells.add(new DungeonKnownRoomCatalog.MatchedComponent(xz[i], xz[i + 1], 0));
+        }
+        return cells;
+    }
+
+    private static DungeonKnownRoomCatalog.MatchedComponent cornerCellOf(
+        List<DungeonKnownRoomCatalog.MatchedComponent> cells
+    ) {
+        return new DungeonKnownRoomCatalog.MatchedRoom(LAYERS, cells).cornerCell();
+    }
+
+    @Test
     public void layersSplitByAnOpenScanHasOneConnectedRenderRoomAndOneSecretLabel() {
         DungeonMapSnapshot snapshot = layersSnapshot(DungeonDoorKind.OPEN);
         snapshot.observePlayerGrid(0, 0);

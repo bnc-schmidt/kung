@@ -2715,6 +2715,14 @@ public final class DungeonKnownRoomCatalog {
             }
             return new RoomBounds(minX, maxX, minZ, maxZ);
         }
+
+        /** The room's cell nearest the bottom-right of its bounds: the bounds' own corner can be empty in an L shape. */
+        public MatchedComponent cornerCell() {
+            return components.stream()
+                .max(Comparator.comparingInt((MatchedComponent cell) -> cell.roomGridX() + cell.roomGridZ())
+                    .thenComparingInt(MatchedComponent::roomGridZ))
+                .orElseThrow();
+        }
     }
 
     public record RoomBounds(int minX, int maxX, int minZ, int maxZ) {

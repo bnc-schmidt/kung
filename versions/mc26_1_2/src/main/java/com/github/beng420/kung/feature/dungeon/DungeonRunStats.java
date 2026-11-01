@@ -47,6 +47,15 @@ public final class DungeonRunStats {
     private static final long ROOM_CLEAR_PLAYER_STALE_TICKS = 40;
     private static final long RUN_SECRET_FINAL_TIMEOUT_TICKS = 60;
     private static final long SCORE_CALC_LOG_INTERVAL_MILLIS = 1_000L;
+    // Found and percent come from separate tab lines; a pair caught between two updates must last this long to count.
+    private static final long SECRET_TOTAL_CONFLICT_TICKS = 20L;
+    // A sidebar score above the fitted running score means bonus points nobody told us about (players without Kung).
+    // Early in the clear the fit and the puzzle state are too loose, so only later readings count, twice in a row.
+    private static final int HIDDEN_BONUS_MIN_CLEARED = 60;
+    private static final int HIDDEN_BONUS_MIN_RESIDUAL = 3;
+    private static final int HIDDEN_BONUS_LAG_NOISE = 3;
+    private static final int HIDDEN_BONUS_READINGS = 2;
+    private static final int HIDDEN_BONUS_MAX = 12;
     // The parenthesized number is Hypixel's own running dungeon score (wiki: "to the right of 'Cleared:'").
     private static final Pattern CLEARED_PATTERN = Pattern.compile("^Cleared:\\s*(\\d+(?:\\.\\d+)?)%(?:\\s*\\((\\d+)\\))?\\s*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern FLOOR_NAME_PATTERN = Pattern.compile(
@@ -92,7 +101,7 @@ public final class DungeonRunStats {
     private final DungeonPuzzleProgress puzzles = new DungeonPuzzleProgress();
     private final Map<RoomKey, Integer> roomSecretsFound = new HashMap<>();
     private final Map<RoomKey, Long> lastRoomPresenceTick = new HashMap<>();
-    private final Map<Integer, Integer> derivedSecretsTotalHistogram = new HashMap<>();
+    private final Set<String> batKillers = new HashSet<>();
     private final Set<String> debugClearedRooms = new HashSet<>();
     private final Set<String> debugCompletedRooms = new HashSet<>();
     private final DungeonApiEnrichment apiEnrichment = new DungeonApiEnrichment();
@@ -101,6 +110,8 @@ public final class DungeonRunStats {
     private int secretsAvailable = -1;
     private int secretsTotalAvailable = -1;
     private int derivedSecretsTotalAvailable = -1;
+    private DungeonSecretCounts.TotalRange derivedTotalRange = DungeonSecretCounts.TotalRange.ANY;
+    private long derivedTotalConflictTick = -1L;
     private double secretsPercent = -1.0;
     private double clearedPercent = -1.0;
     private int completedRooms;
@@ -112,6 +123,12 @@ public final class DungeonRunStats {
     private int serverScore = -1;
     private String serverScoreSource = "";
     private int sidebarScore = -1;
+    private long sidebarScoreTick = -1L;
+    private long roomsCreditedTick = -1L;
+    private int hiddenBonusReadings;
+    private int hiddenBonusResidual;
+    private int inferredBonusTotal;
+    private int inferredBonusPuzzles;
     private String lastLoggedClearedLine = "";
     private int estimatedScore = -1;
     private int floor;
@@ -176,7 +193,9 @@ public final class DungeonRunStats {
         cachedCatalogSecretTotal = -1;
         roomSecretsFound.clear();
         lastRoomPresenceTick.clear();
-        derivedSecretsTotalHistogram.clear();
+        batKillers.clear();
+        derivedTotalRange = DungeonSecretCounts.TotalRange.ANY;
+        derivedTotalConflictTick = -1L;
         debugClearedRooms.clear();
         debugCompletedRooms.clear();
         secretsFound = 0;
@@ -196,6 +215,12 @@ public final class DungeonRunStats {
         serverScore = -1;
         serverScoreSource = "";
         sidebarScore = -1;
+        sidebarScoreTick = -1L;
+        roomsCreditedTick = -1L;
+        hiddenBonusReadings = 0;
+        hiddenBonusResidual = 0;
+        inferredBonusTotal = 0;
+        inferredBonusPuzzles = 0;
         lastLoggedClearedLine = "";
         estimatedScore = -1;
         if (!keepPreparation) {
@@ -277,13 +302,18 @@ public final class DungeonRunStats {
         return !apiEnrichment.hasPendingFinalFetches();
     }
 
+    /** Every sidebar and tab change read from here on belongs to this tick. */
+    void beginObservation(long nowTick) {
+        currentObserveTick = nowTick;
+    }
+
     public void observePlayers(Minecraft client, long nowTick) {
         if (client.level == null || client.player == null) {
             return;
         }
 
         rememberSelf(client.player.getUUID(), client.player.getName().getString());
-        currentObserveTick = nowTick;
+        beginObservation(nowTick);
         announcements.flush(client);
         observeScoreboard(client);
         observeTabList(client);
@@ -353,11 +383,23 @@ public final class DungeonRunStats {
     /**
      * Hypixel's final Team Score, else its sidebar score once every room is credited. Before that the
      * sidebar counts only finished rooms, so the estimate's Blood/boss forecast stays the better number.
+     * The sidebar score refreshes only every ~10 s, after "Cleared: 100%" already shows. A value that was
+     * on the sidebar before the last room was credited is stale and must not pull the display down.
      */
     private int observedScore() {
         if (serverScore >= 0) return serverScore;
+        if (!allRoomsCredited()) return -1;
+        boolean fresh = sidebarScoreTick >= roomsCreditedTick || sidebarScore >= estimatedScore(null, bestSecretsAvailable(0));
+        return fresh ? sidebarScore : -1;
+    }
+
+    /** Also remembers the observation tick at which the last room got credited. */
+    private boolean allRoomsCredited() {
         int totalRooms = scoreRoomCellTotal(null);
-        return totalRooms > 0 && completedRooms >= totalRooms ? sidebarScore : -1;
+        boolean credited = totalRooms > 0 && completedRooms >= totalRooms;
+        if (!credited) roomsCreditedTick = -1L;
+        else if (roomsCreditedTick < 0L) roomsCreditedTick = currentObserveTick;
+        return credited;
     }
 
     private String observedScoreSource() {
@@ -468,6 +510,7 @@ public final class DungeonRunStats {
             + ",secret=" + secret
             + ") speed=" + speed
             + " bonus=" + bonus
+            + " inferredBonus=" + inferredBonusTotal
             + " paul=" + paul
             + " paulActive=" + paulScoreBonusActive()
             + " paulForce=" + KungConfig.get().dungeon.forcePaulScoreEnabled()
@@ -499,7 +542,8 @@ public final class DungeonRunStats {
             + " crypts=" + cryptsOpened + "/" + cryptsAvailable
             + " mimic=" + mimicKilled
             + " prince=" + princeKilled
-            + " bat=" + batScoreKilled;
+            + " bat=" + batScoreKilled
+            + " bats=" + batKills();
         if (!state.equals(lastLoggedScoreCalcState)) {
             lastLoggedScoreCalcState = state;
             KungDebugRecorder.event("score-calc", state);
@@ -516,6 +560,14 @@ public final class DungeonRunStats {
 
     public boolean batScoreKilled() {
         return batScoreKilled;
+    }
+
+    /**
+     * Each player's Bat kill is its own point. Named reports count once per player; a report that names
+     * nobody (Skyblocker sync, pattern chat) proves only one.
+     */
+    public int batKills() {
+        return Math.min(DungeonScoreCalculator.MAX_BAT_KILLS, Math.max(batKillers.size(), batScoreKilled ? 1 : 0));
     }
 
     public int floor() {
@@ -1073,7 +1125,14 @@ public final class DungeonRunStats {
         boolean clearedMatched = cleared.matches();
         if (clearedMatched) {
             clearedPercent = Double.parseDouble(cleared.group(1));
-            if (cleared.group(2) != null) sidebarScore = Integer.parseInt(cleared.group(2));
+            if (cleared.group(2) != null) {
+                int score = Integer.parseInt(cleared.group(2));
+                if (score != sidebarScore) {
+                    sidebarScoreTick = currentObserveTick;
+                    sidebarScore = score;
+                    calibrateHiddenBonus((int) clearedPercent, score);
+                }
+            }
         }
         if (line.regionMatches(true, 0, "Cleared:", 0, 8) && !line.equals(lastLoggedClearedLine)) {
             // Proves the live sidebar format in the next trace, matched or not.
@@ -1272,23 +1331,22 @@ public final class DungeonRunStats {
             return;
         }
 
-        int candidate = (int) Math.floor(secretsFound * 100.0 / secretsPercent + 0.5);
-        if (candidate < secretsFound || candidate <= 0 || candidate > 250) {
+        var reading = DungeonSecretCounts.TotalRange.of(secretsFound, secretsPercent);
+        if (reading.isEmpty()) {
             return;
         }
 
-        double reconstructedPercent = 100.0 * secretsFound / candidate;
-        if (Math.abs(reconstructedPercent - secretsPercent) > 0.15) {
-            return;
+        var narrowed = derivedTotalRange.intersect(reading);
+        if (narrowed.isEmpty()) {
+            if (derivedTotalConflictTick < 0L) derivedTotalConflictTick = currentObserveTick;
+            if (currentObserveTick - derivedTotalConflictTick < SECRET_TOTAL_CONFLICT_TICKS) {
+                return;
+            }
+            narrowed = reading;
         }
-
-        derivedSecretsTotalHistogram.merge(candidate, 1, Integer::sum);
-        derivedSecretsTotalAvailable = derivedSecretsTotalHistogram.entrySet().stream()
-            .max(Comparator
-                .comparingInt((Map.Entry<Integer, Integer> entry) -> entry.getValue())
-                .thenComparingInt(Map.Entry::getKey))
-            .map(Map.Entry::getKey)
-            .orElse(derivedSecretsTotalAvailable);
+        derivedTotalConflictTick = -1L;
+        derivedTotalRange = narrowed;
+        derivedSecretsTotalAvailable = narrowed.closestTo(100.0 * secretsFound / secretsPercent);
     }
 
     private void observeServerSecretsAvailable(int observedAvailable) {
@@ -1812,6 +1870,7 @@ public final class DungeonRunStats {
     }
 
     private void updateEstimatedScore() {
+        allRoomsCredited(); // Time-stamp the credit even when no frame asks for the score.
         estimatedScore = estimatedScore(null, bestSecretsAvailable(0));
     }
 
@@ -1871,13 +1930,49 @@ public final class DungeonRunStats {
     }
 
     private int bonusScore() {
+        int known = knownBonusScore();
+        // The inferred total belongs to the puzzle state it was measured in; a solved puzzle shifts the comparison.
+        return inferredBonusTotal > 0 && tabUnfinishedPuzzles() == inferredBonusPuzzles
+            ? Math.max(known, inferredBonusTotal) : known;
+    }
+
+    private int knownBonusScore() {
         return DungeonScoreCalculator.bonusScore(
             cryptsOpened,
             mimicKilled,
             hasMimic() && secretsPercent >= 100.0,
             princeKilled,
-            batScoreKilled
+            batKills()
         );
+    }
+
+    private int tabUnfinishedPuzzles() {
+        return puzzles.unfinished(0, 0);
+    }
+
+    /**
+     * Hypixel's sidebar score counts every player's bonus, our known bonus only what Kung users report. A sidebar
+     * score well above the fitted running score, reading after reading, is bonus nobody told us about.
+     */
+    private void calibrateHiddenBonus(int clearedNow, int score) {
+        if (clearedNow < HIDDEN_BONUS_MIN_CLEARED || clearedNow >= 100 || deaths > 0 || secretsPercent < 0.0) return;
+        int puzzlesOpen = tabUnfinishedPuzzles();
+        int known = knownBonusScore();
+        double running = DungeonScoreCalculator.runningSidebarScore(
+            clearedNow, speedScore(), secretScore(0), known + paulScoreBonus(), puzzlesOpen);
+        int residual = (int) Math.floor(score - running);
+        // The sidebar was computed before something we already counted: no evidence either way.
+        if (residual < -HIDDEN_BONUS_LAG_NOISE) return;
+        if (residual < HIDDEN_BONUS_MIN_RESIDUAL) {
+            hiddenBonusReadings = 0;
+            inferredBonusTotal = 0;
+            return;
+        }
+        hiddenBonusResidual = hiddenBonusReadings == 0 ? residual : Math.min(hiddenBonusResidual, residual);
+        if (++hiddenBonusReadings >= HIDDEN_BONUS_READINGS) {
+            inferredBonusTotal = known + Math.min(hiddenBonusResidual, HIDDEN_BONUS_MAX);
+            inferredBonusPuzzles = puzzlesOpen;
+        }
     }
 
     private int paulScoreBonus() {
@@ -2088,18 +2183,24 @@ public final class DungeonRunStats {
 
     public int bestSecretsAvailable(int estimatedSecretsAvailable) {
         int observedServerTotal = Math.max(secretsTotalAvailable, secretsAvailable);
-        int observedTabTotal = Math.max(observedServerTotal, derivedSecretsTotalAvailable);
+        int observedTabTotal = Math.max(observedServerTotal, derivedSecretsTotal(estimatedSecretsAvailable));
         if (observedTabTotal > 0) {
             return observedTabTotal;
         }
         return Math.max(0, estimatedSecretsAvailable);
     }
 
+    /** The percentage leaves a range of totals; the room catalogue picks within it, so the total does not flip. */
+    private int derivedSecretsTotal(int estimatedSecretsAvailable) {
+        if (derivedSecretsTotalAvailable <= 0) return -1;
+        return derivedTotalRange.contains(estimatedSecretsAvailable) ? estimatedSecretsAvailable : derivedSecretsTotalAvailable;
+    }
+
     private String secretsTotalSource(int totalSecrets, int estimatedSecretsAvailable) {
         if (totalSecrets > 0 && totalSecrets == Math.max(secretsTotalAvailable, secretsAvailable)) {
             return secretsTotalAvailable > 0 ? "server-total" : "server-fraction";
         }
-        if (totalSecrets > 0 && totalSecrets == derivedSecretsTotalAvailable) {
+        if (totalSecrets > 0 && totalSecrets == derivedSecretsTotal(estimatedSecretsAvailable)) {
             return "derived-percent";
         }
         if (estimatedSecretsAvailable > 0) {
@@ -2191,7 +2292,7 @@ public final class DungeonRunStats {
         switch (bonus) {
             case MIMIC -> markMimicKilled(null, false, "skyblocker");
             case PRINCE -> markPrinceKilled(null, false);
-            case BAT -> markBatScoreKilled(null, false);
+            case BAT -> markBatScoreKilled(null, false, null);
         }
         KungDebugRecorder.event("score-bonus", "source=skyblocker bonus=" + bonus);
         updateEstimatedScore();
@@ -2208,7 +2309,7 @@ public final class DungeonRunStats {
                 switch (claim.bonus()) {
                     case PRINCE -> markPrinceKilled(client, false);
                     case MIMIC -> markMimicKilled(client, false, "chat");
-                    case BAT -> markBatScoreKilled(client, false);
+                    case BAT -> markBatScoreKilled(client, false, claim.name());
                 }
             }
         }
@@ -2222,12 +2323,16 @@ public final class DungeonRunStats {
         }
         if (BAT_KILL_PATTERN.matcher(message).matches() || message.equals(HYPIXEL_BAT_KILL_MESSAGE)) {
             recognized = true;
-            markBatScoreKilled(client, message.equals(HYPIXEL_BAT_KILL_MESSAGE));
+            // Hypixel's own line goes to the killer, so it is this player. Of two mod users in one party, only
+            // the killer's mod reports a Prince or Bat, so a party report's sender is the killer too.
+            boolean own = message.equals(HYPIXEL_BAT_KILL_MESSAGE);
+            markBatScoreKilled(client, own,
+                own ? (selfName.isBlank() ? "<self>" : selfName) : DungeonBonusContribution.partySender(message));
         }
         // Keep overlapping inputs as evidence, even when another source set the flag first.
         if (recognized) {
             KungDebugRecorder.event("score-bonus", "prince=" + princeKilled + " bat=" + batScoreKilled
-                + " mimic=" + mimicKilled
+                + " bats=" + batKills() + " mimic=" + mimicKilled
                 + " message=\"" + KungDebugRecorder.compact(message) + "\"");
         }
     }
@@ -2274,7 +2379,8 @@ public final class DungeonRunStats {
         }
     }
 
-    private void markBatScoreKilled(Minecraft client, boolean announce) {
+    private void markBatScoreKilled(Minecraft client, boolean announce, String killer) {
+        if (killer != null) batKillers.add(killer.toLowerCase(Locale.ROOT));
         if (batScoreKilled) {
             return;
         }

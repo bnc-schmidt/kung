@@ -156,6 +156,158 @@ public final class DungeonScoreReadinessTest {
         assertTrue(stats.score(null, 40) < 300);
     }
 
+    /** M4 run 4 of 2026-11-01: 1 found showed 2.4% (41 or 42 secrets), 2 found showed 4.9% (only 41). */
+    @Test public void secretTotalStaysInsideWhatTheShownPercentagesAllow() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.observeTabLine(null, "Secrets Found: 1", null);
+        stats.observeTabLine(null, "Secrets Found: 2.4%", null);
+        assertEquals(41, stats.bestSecretsAvailable(41)); // the room catalogue picks within the range
+        assertEquals(42, stats.bestSecretsAvailable(42));
+        assertEquals(42, stats.bestSecretsAvailable(0));
+        stats.observeTabLine(null, "Secrets Found: 2", null);
+        stats.observeTabLine(null, "Secrets Found: 4.9%", null);
+        assertEquals(41, stats.bestSecretsAvailable(42)); // the catalogue is outside the range now
+        assertEquals(41, stats.bestSecretsAvailable(0)); // the old vote ended 42-41 and kept the larger 42
+    }
+
+    /** M4 run 3 of 2026-11-01 really had 42: 1 found at 2.4%, 3 found at 7.1%, 34 found at 81.0%. */
+    @Test public void laterReadingsOverrideAWrongRoomCatalogueTotal() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.observeTabLine(null, "Secrets Found: 1", null);
+        stats.observeTabLine(null, "Secrets Found: 2.4%", null);
+        assertEquals(41, stats.bestSecretsAvailable(41));
+        stats.observeTabLine(null, "Secrets Found: 3", null);
+        stats.observeTabLine(null, "Secrets Found: 7.1%", null);
+        assertEquals(42, stats.bestSecretsAvailable(41));
+        stats.observeTabLine(null, "Secrets Found: 34", null);
+        stats.observeTabLine(null, "Secrets Found: 81.0%", null);
+        assertEquals(42, stats.bestSecretsAvailable(41));
+    }
+
+    @Test public void aSecretReadingThatDisagreesOnlyCountsOnceItLasts() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.beginObservation(0L);
+        stats.observeTabLine(null, "Secrets Found: 10", null);
+        stats.observeTabLine(null, "Secrets Found: 25.0%", null);
+        assertEquals(40, stats.bestSecretsAvailable(0));
+        stats.beginObservation(10L);
+        stats.observeTabLine(null, "Secrets Found: 27.0%", null); // found 10 fits 37 now: a tab update half applied
+        assertEquals(40, stats.bestSecretsAvailable(0));
+        stats.beginObservation(30L);
+        stats.observeTabLine(null, "Secrets Found: 27.0%", null);
+        assertEquals(37, stats.bestSecretsAvailable(0));
+    }
+
+    /** M4 run 4 of 2026-11-01 01:42:56-01:43:06: "Cleared: 100% (265)" was the score of five seconds earlier. */
+    @Test public void staleSidebarScoreCannotPullTheClearedDisplayBelowTheEstimate() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.observeSkyblockerBonus(DungeonBonusContribution.PRINCE);
+        stats.observeSkyblockerBonus(DungeonBonusContribution.BAT);
+        stats.beginObservation(100L);
+        stats.observeTabLine(null, "Completed Rooms: 35/36", null);
+        stats.observeTabLine(null, "Crypts: 5", null);
+        stats.observeTabLine(null, "Secrets Found: 33", null);
+        stats.observeTabLine(null, "Secrets Found: 80.5%", null);
+        stats.observeScoreboardLine(null, "Cleared: 97% (265)");
+        stats.beginObservation(200L);
+        stats.observeTabLine(null, "Completed Rooms: 36/36", null);
+        stats.observeScoreboardLine(null, "Cleared: 100% (265)");
+        // 100 + 60 + 32 + 100 + 7. The server shows its 10-second-old 265 for another few seconds.
+        assertEquals(299, stats.score(null, 41));
+        stats.beginObservation(400L);
+        stats.observeScoreboardLine(null, "Cleared: 100% (298)"); // refreshed after the last room: the server wins
+        assertEquals(298, stats.score(null, 41));
+        stats.observeScoreboardLine(null, "Cleared: 100% (301)");
+        assertEquals(301, stats.score(null, 41));
+    }
+
+    /** M4 run 3: the score and "Cleared: 100%" arrived in the same refresh, 301 against our 299. */
+    @Test public void sidebarScoreThatArrivesWithTheLastRoomIsFresh() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.beginObservation(100L);
+        stats.observeTabLine(null, "Completed Rooms: 35/36", null);
+        stats.observeScoreboardLine(null, "Cleared: 97% (262)");
+        stats.beginObservation(300L);
+        stats.observeScoreboardLine(null, "Cleared: 100% (298)"); // lower than the estimate, fresh from the server
+        stats.observeTabLine(null, "Completed Rooms: 36/36", null);
+        assertEquals(298, stats.score(null, 42));
+    }
+
+    /**
+     * M4 run 4 of 2026-11-01: sidebar refreshes at 90% (228) and 97% (258). {@code unseenBonus} adds the points of
+     * players whose Bat/Prince reports Kung never gets; a negative value leaves the sidebar scores out.
+     */
+    private static DungeonRunStats runWithSidebarRefreshes(int unseenBonus) {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.observeTabLine(null, "Puzzles: (1)", null);
+        stats.observeTabLine(null, "Blaze: [✦]", null);
+        stats.observeTabLine(null, "Crypts: 3", null);
+        stats.observeTabLine(null, "Secrets Found: 21", null);
+        stats.observeTabLine(null, "Secrets Found: 51.2%", null);
+        stats.observeScoreboardLine(null, "Cleared: 90%" + sidebarScore(228, unseenBonus));
+        stats.observeTabLine(null, "Blaze: [✔]", null);
+        stats.observeTabLine(null, "Crypts: 4", null);
+        stats.observeTabLine(null, "Secrets Found: 23", null);
+        stats.observeTabLine(null, "Secrets Found: 56.1%", null);
+        stats.observeScoreboardLine(null, "Cleared: 97%" + sidebarScore(258, unseenBonus));
+        return stats;
+    }
+
+    private static String sidebarScore(int score, int unseenBonus) {
+        return unseenBonus < 0 ? "" : " (" + (score + unseenBonus) + ")";
+    }
+
+    @Test public void sidebarScoreThatMatchesOurBonusInfersNothing() {
+        // Both refreshes sit 2 below the fitted running score, the usual rounding: no hidden bonus.
+        assertEquals(runWithSidebarRefreshes(-1).score(null, 41), runWithSidebarRefreshes(0).score(null, 41));
+    }
+
+    @Test public void sidebarScoreAboveOurBonusReadingAfterReadingIsBonusWeNeverHeardOf() {
+        int plain = runWithSidebarRefreshes(-1).score(null, 41);
+        // Six points of someone else's Bat and Prince: both refreshes sit 4 over the fit, kept conservatively.
+        assertEquals(plain + 4, runWithSidebarRefreshes(6).score(null, 41));
+        assertEquals(plain + 12, runWithSidebarRefreshes(30).score(null, 41)); // capped
+    }
+
+    @Test public void aLaterBonusReportIsAbsorbedByWhatWeInferredNotAddedTwice() {
+        var stats = runWithSidebarRefreshes(6);
+        int inferred = stats.score(null, 41);
+        stats.observeSkyblockerBonus(DungeonBonusContribution.BAT);
+        assertEquals(inferred, stats.score(null, 41));
+    }
+
+    @Test public void anInferredBonusEndsWithThePuzzleStateItWasMeasuredIn() {
+        var stats = runWithSidebarRefreshes(6);
+        var plain = runWithSidebarRefreshes(-1);
+        for (var run : List.of(stats, plain)) {
+            run.observeTabLine(null, "Puzzles: (2)", null);
+            run.observeTabLine(null, "Water Board: [✦]", null);
+        }
+        assertEquals(plain.score(null, 41), stats.score(null, 41));
+    }
+
+    @Test public void aSingleHighSidebarReadingIsNotEnough() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        stats.observeTabLine(null, "Crypts: 3", null);
+        stats.observeTabLine(null, "Secrets Found: 21", null);
+        stats.observeTabLine(null, "Secrets Found: 51.2%", null);
+        stats.observeScoreboardLine(null, "Cleared: 90% (240)");
+        var plain = new DungeonRunStats();
+        plain.configureForFloor(4, true);
+        plain.observeTabLine(null, "Crypts: 3", null);
+        plain.observeTabLine(null, "Secrets Found: 21", null);
+        plain.observeTabLine(null, "Secrets Found: 51.2%", null);
+        plain.observeScoreboardLine(null, "Cleared: 90%");
+        assertEquals(plain.score(null, 41), stats.score(null, 41));
+    }
+
     /** Floor 1 run of 2026-10-03 19:40-19:41: three deaths, tab and sidebar as logged by score-calc. */
     private static DungeonRunStats floorOneRun(int completedRooms, double clearedPercent, int secrets, double secretsPercent, int crypts) {
         var stats = new DungeonRunStats();

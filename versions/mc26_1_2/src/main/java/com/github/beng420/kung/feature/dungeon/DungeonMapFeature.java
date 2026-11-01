@@ -729,7 +729,8 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             roomTextColor(cleared, completed),
             DungeonRoomDebugFormatter.matchOverlayLines(match, renderPlan)
         );
-        drawPrinceIcon(graphics, match.bounds(), stats, match.template().prince());
+        DungeonKnownRoomCatalog.MatchedComponent cornerCell = match.cornerCell();
+        drawPrinceIcon(graphics, cornerCell.roomGridX(), cornerCell.roomGridZ(), stats, match.template().prince());
     }
 
     private static int secretsFoundFor(
@@ -1017,19 +1018,6 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 : DungeonRoomDebugFormatter.hintOverlayLines(observedPoint.point(), roomGridX, roomGridZ)
         );
         drawPrinceIcon(graphics, roomGridX, roomGridZ, stats, hint.prince());
-    }
-
-    private static void drawPrinceIcon(
-        GuiGraphicsExtractor graphics,
-        RoomBounds bounds,
-        DungeonRunStats stats,
-        boolean hasPrince
-    ) {
-        int minPixelX = scanGridToPixel(bounds.minX() * 2);
-        int maxPixelX = scanGridToPixel(bounds.maxX() * 2) + ROOM_SIZE;
-        int minPixelY = scanGridToPixel(bounds.minZ() * 2);
-        int maxPixelY = scanGridToPixel(bounds.maxZ() * 2) + ROOM_SIZE;
-        drawPrinceIcon(graphics, minPixelX, minPixelY, maxPixelX, maxPixelY, stats, hasPrince);
     }
 
     private static void drawPrinceIcon(
@@ -2044,6 +2032,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         x = drawFooterStatus(graphics, x, secondLineY, stats.princeKilled());
         x = drawFooterText(graphics, " | B: ", x, secondLineY, TEXT);
         x = drawFooterStatus(graphics, x, secondLineY, stats.batScoreKilled());
+        if (stats.batKills() > 1) x = drawFooterText(graphics, String.valueOf(stats.batKills()), x, secondLineY, GOOD_TEXT);
         x = drawFooterText(graphics, " | Crypts: ", x, secondLineY, TEXT);
         x = drawFooterText(graphics, String.valueOf(stats.cryptsOpened()), x, secondLineY, cryptColor(stats.cryptsOpened()));
         x = drawFooterText(graphics, "/", x, secondLineY, TEXT);

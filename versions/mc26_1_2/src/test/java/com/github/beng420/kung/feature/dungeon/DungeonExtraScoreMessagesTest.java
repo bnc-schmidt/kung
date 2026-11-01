@@ -25,7 +25,8 @@ public final class DungeonExtraScoreMessagesTest {
             stats.observeSkyblockerBonus(DungeonBonusContribution.BAT);
             stats.observeMessage(null, "Party > [MVP+] omeowdy: Bat dead!", 1L);
             stats.observeMessage(null, "A Bat has been slain. +1 Bonus Score", 201L);
-            assertEquals(301, stats.score(null, 50)); // Captured estimate; the four-point gap is unresolved.
+            // omeowdy's party report and the server's own line ten seconds later are two players' Bats.
+            assertEquals(302, stats.score(null, 50)); // Captured estimate was 301; three of the four points left.
             assertFalse(stats.mimicKilled());
             assertFalse(stats.princeKilled());
             String trace = KungDebugRecorder.dump();
@@ -158,6 +159,25 @@ public final class DungeonExtraScoreMessagesTest {
         assertEquals(300, stats.score(null, 57));
         stats.observeStatLine(null, "Team Score: 302 (S+)");
         assertEquals(302, stats.score(null, 57));
+    }
+
+    @Test
+    public void everyPlayersBatKillScoresOnceNoMatterHowManyModsEchoIt() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(4, true);
+        // 2026-11-01 01:38:54-01:39:50: each report comes as "Bat Killed!" and "Bat Killed".
+        stats.observeSkyblockerBonus(DungeonBonusContribution.BAT);
+        stats.observeMessage(null, "Party > [VIP+] EinArtxr: Bat Killed!", 1L);
+        stats.observeMessage(null, "Party > [VIP+] EinArtxr: Bat Killed", 2L);
+        assertEquals(1, stats.batKills());
+        stats.observeMessage(null, "Party > [MVP+] ALonelyDancer: Bat Killed!", 1100L);
+        assertEquals(2, stats.batKills());
+        stats.observeMessage(null, "A Bat has been slain. +1 Bonus Score", 1200L);
+        assertEquals(3, stats.batKills());
+        stats.observeMessage(null, "A Bat has been slain. +1 Bonus Score", 1300L);
+        assertEquals(3, stats.batKills()); // the same player twice is still one point
+        stats.reset();
+        assertEquals(0, stats.batKills());
     }
 
     @Test

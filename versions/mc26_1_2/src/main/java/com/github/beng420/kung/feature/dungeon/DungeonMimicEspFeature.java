@@ -8,10 +8,13 @@ import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -19,6 +22,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.minecraft.client.Camera;
 import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
@@ -29,6 +33,7 @@ import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3fc;
 
 public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonConfig> {
     private static final Identifier WAYPOINT_HUD_ID = Identifier.fromNamespaceAndPath(KungMod.MOD_ID, "mimic_esp_waypoint");
@@ -77,6 +82,9 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     // Trace dedupe, cleared with the rest of the per-run state in clear().
     private final Set<String> rejectedLogged = new HashSet<>();
     private final Set<Long> anomalyLogged = new HashSet<>();
+    private final Set<Long> markerLogged = new HashSet<>();
+    private long lastRenderNanos;
+    private boolean renderedTwiceLogged;
 
     public DungeonMimicEspFeature(DungeonStateTracker tracker) {
         super(config -> config.dungeon);
@@ -151,22 +159,24 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             return;
         }
 
+        long nowNanos = System.nanoTime();
+        if (nowNanos - lastRenderNanos < 2_000_000L && !renderedTwiceLogged) {
+            renderedTwiceLogged = true;
+            KungDebugRecorder.event("mimic-esp", "waypoint rendered twice in one frame gapUs=" + (nowNanos - lastRenderNanos) / 1000L);
+        }
+        lastRenderNanos = nowNanos;
+
         try {
             DungeonLiveMapWriter.MatchRenderPlan renderPlan = tracker.renderPlan();
-            Set<String> drawnRooms = new HashSet<>();
             List<Marker> drawn = new ArrayList<>();
-            for (BlockPos pos : mimicChestPositions) {
-                String match = sameRoomReason(client, renderPlan, pos);
-                if (match != null) {
-                    String roomKey = roomKey(renderPlan, pos);
-                    if (roomKey != null && !drawnRooms.add(roomKey)) {
-                        continue;
-                    }
-                    Marker marker = drawScreenWaypoint(client, graphics, pos, match);
-                    if (marker != null) drawn.add(marker);
-                }
+            Map<BlockPos, String> targets = markerTargets(mimicChestPositions,
+                pos -> sameRoomReason(client, renderPlan, pos), pos -> roomKey(renderPlan, pos));
+            for (Map.Entry<BlockPos, String> target : targets.entrySet()) {
+                Marker marker = drawScreenWaypoint(client, graphics, target.getKey(), target.getValue());
+                if (marker != null) drawn.add(marker);
             }
             Vec3 camera = McCompat.camera(client).position();
+            logFirstMarker(client, renderPlan, camera, drawn);
             logAnomaly(client, renderPlan, camera, drawn);
             logRenderState(camera, sameRoomMimicChestCount(client), renderPlan, drawn);
         } catch (RuntimeException | LinkageError exception) {
@@ -212,6 +222,32 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     ) {
         BlockState state = client.level.getBlockState(pos);
         return state.is(Blocks.TRAPPED_CHEST) && isAllowedMimicPosition(client, renderPlan, pos);
+    }
+
+    /**
+     * The chests that get a marker: those in the player's room, one per room.
+     * The value is the sameRoom reason. A room's first chest in scan order wins.
+     */
+    static Map<BlockPos, String> markerTargets(
+        List<BlockPos> chests,
+        Function<BlockPos, String> sameRoomReason,
+        Function<BlockPos, String> roomKey
+    ) {
+        Map<BlockPos, String> targets = new LinkedHashMap<>();
+        Set<String> drawnRooms = new HashSet<>();
+        for (BlockPos pos : chests) {
+            String reason = sameRoomReason.apply(pos);
+            if (reason == null) continue;
+            String key = roomKey.apply(pos);
+            if (key != null && !drawnRooms.add(key)) continue;
+            targets.put(pos, reason);
+        }
+        return targets;
+    }
+
+    /** How far the point lies in front of the camera along its view direction; zero or less means behind it. */
+    static double depthInFront(Vec3 fromCamera, float forwardX, float forwardY, float forwardZ) {
+        return fromCamera.x * forwardX + fromCamera.y * forwardY + fromCamera.z * forwardZ;
     }
 
     private boolean isAllowedMimicPosition(Minecraft client, DungeonLiveMapWriter.MatchRenderPlan renderPlan, BlockPos pos) {
@@ -586,11 +622,15 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         String match
     ) {
         String label = "MIMIC";
-        Vec3 screen = client.gameRenderer.projectPointToScreen(new Vec3(
-            pos.getX() + 0.5,
-            pos.getY() + 1.35,
-            pos.getZ() + 0.5
-        ));
+        Vec3 target = new Vec3(pos.getX() + 0.5, pos.getY() + 1.35, pos.getZ() + 0.5);
+        Camera camera = McCompat.camera(client);
+        Vector3fc forward = camera.forwardVector();
+        double depth = depthInFront(target.subtract(camera.position()), forward.x(), forward.y(), forward.z());
+        // Behind the camera the projection mirrors the point onto the screen, so it is never drawn.
+        if (depth <= 0.05) {
+            return null;
+        }
+        Vec3 screen = client.gameRenderer.projectPointToScreen(target);
         if (!Double.isFinite(screen.x)
             || !Double.isFinite(screen.y)
             || !Double.isFinite(screen.z)
@@ -613,7 +653,10 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         graphics.fill(markerX + 4, markerY + 4, markerX + markerSize - 4, markerY + markerSize - 4, WAYPOINT_FILL);
         graphics.outline(markerX, markerY, markerSize, markerSize, WAYPOINT_OUTLINE);
         graphics.text(client.font, label, labelX, labelY, TEXT_RED, true);
-        return new Marker(pos, match, screenX, screenY, markerX != screenX - half || markerY != screenY - half);
+        String projection = String.format(Locale.ROOT, "ndc=%.2f,%.2f,%.3f depth=%.1f yaw=%.0f pitch=%.0f fov=%.0f gui=%dx%d",
+            screen.x, screen.y, screen.z, depth, camera.yRot(), camera.xRot(), camera.getFov(),
+            graphics.guiWidth(), graphics.guiHeight());
+        return new Marker(pos, match, screenX, screenY, markerX != screenX - half || markerY != screenY - half, projection);
     }
 
     private void clear() {
@@ -646,6 +689,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         observedMimicMapRoom = null;
         rejectedLogged.clear();
         anomalyLogged.clear();
+        markerLogged.clear();
     }
 
     private void logRenderState(
@@ -670,6 +714,25 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         }
         lastRenderLogState = state;
         KungDebugRecorder.event("mimic-esp", state);
+    }
+
+    /** Once per chest: where its first marker stood, in which room, how open it is and what else was a candidate. */
+    private void logFirstMarker(
+        Minecraft client,
+        DungeonLiveMapWriter.MatchRenderPlan renderPlan,
+        Vec3 camera,
+        List<Marker> drawn
+    ) {
+        boolean fresh = false;
+        for (Marker marker : drawn) {
+            if (markerLogged.add(marker.pos().asLong())) fresh = true;
+        }
+        if (!fresh) return;
+        DungeonLiveMapWriter.CellKey playerCell = currentPlayerRoom(client);
+        KungDebugRecorder.event("mimic-esp", "marker first drawn player=" + (playerCell == null ? "none"
+            : playerCell.x() + "," + playerCell.z())
+            + " candidates=" + mimicChestPositions.size()
+            + drawnText(renderPlan, camera, drawn));
     }
 
     /** Every frame: a second marker, or one matched by owner/cells instead of the player's own cell, is logged once per chest. */
@@ -697,7 +760,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             return xyz(marker.pos()) + " room=" + roomName(renderPlan, grid.gridX(), grid.gridZ())
                 + " cell=" + grid.gridX() + "," + grid.gridZ() + " match=" + marker.match()
                 + " dist=" + distance(marker.pos(), camera) + " screen=" + marker.x() + "," + marker.y()
-                + " clamped=" + marker.clamped();
+                + " clamped=" + marker.clamped() + " " + marker.projection();
         }).collect(Collectors.joining("; "));
         return " markers=" + drawn.size() + " drawn=[" + list
             + (drawn.size() > 4 ? "; +" + (drawn.size() - 4) + " more" : "") + "]";
@@ -768,7 +831,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return hint != null ? hint.name() : "unknown";
     }
 
-    private record Marker(BlockPos pos, String match, int x, int y, boolean clamped) {
+    private record Marker(BlockPos pos, String match, int x, int y, boolean clamped, String projection) {
     }
 
     private record ScanStats(int checkedChunks, int checkedBlockEntityPositions, int blockStateScannedChunks) {
