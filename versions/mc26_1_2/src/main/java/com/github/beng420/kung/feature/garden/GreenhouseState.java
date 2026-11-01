@@ -159,6 +159,12 @@ final class GreenhouseState {
         if (index >= 0 && index < targets.size()) selected.remove(targets.remove(index).mutation());
     }
 
+    /** Drops every goal row, for a pasted layout that brings its own. */
+    void clearTargets() {
+        targets.clear();
+        selected.clear();
+    }
+
     void setMode(int index, Mode mode) {
         Target target = targets.get(index);
         targets.set(index, new Target(target.mutation(), mode, target.count()));

@@ -48,7 +48,7 @@
   "Sunflower": {"id": "DOUBLE_PLANT", "gfs": "DOUBLE_PLANT"},
   "Cactus": {"id": "CACTUS", "gfs": "CACTUS"},
   "Melon Seeds": {"id": "MELON", "gfs": "MELON", "item": "Melon Slice", "names": ["Melon"], "holdFirst": ["MELON_SEEDS"], "note": "planted from Melon Seeds or a Melon Slice, one per stem"},
-  "Pumpkin Seeds": {"id": "PUMPKIN", "gfs": "PUMPKIN", "item": "Pumpkin", "plantsPerItem": 4, "note": "one Pumpkin gives 4 stems"},
+  "Pumpkin Seeds": {"id": "PUMPKIN", "gfs": "PUMPKIN", "item": "Pumpkin", "plantsPerItem": 4, "holdFirst": ["PUMPKIN_SEEDS"], "note": "planted from Pumpkin Seeds (one per stem) or a Pumpkin (4 stems); only the Pumpkin is in a Sack"},
   "Brown Mushroom": {"id": "BROWN_MUSHROOM", "gfs": "BROWN_MUSHROOM"},
   "Red Mushroom": {"id": "RED_MUSHROOM", "gfs": "RED_MUSHROOM"},
   "Wheat Seeds": {"id": "SEEDS", "gfs": "SEEDS", "names": ["Seeds"]},

@@ -110,6 +110,26 @@ public final class GreenhouseSupplyTest {
     }
 
     @Test
+    public void seedsInTheInventoryPlantStemsOneToOneBeforeAnythingIsPulled() {
+        // Jakob's trace: six stems wanted, the seeds already in the inventory, yet "/gfs PUMPKIN 1" was sent.
+        Plan enough = GreenhouseSupply.plan("Pumpkin Seeds", INGREDIENT, 6, 0, Map.of("PUMPKIN_SEEDS", 6));
+        assertEquals(6, enough.inInventory());
+        assertEquals(0, enough.missing());
+        assertEquals(Action.SWITCH, enough.action());
+
+        // Seeds and a Pumpkin add up: 2 seeds + 4 stems from one Pumpkin.
+        assertEquals(Action.SWITCH, GreenhouseSupply.plan("Pumpkin Seeds", INGREDIENT, 6, 0,
+            Map.of("PUMPKIN_SEEDS", 2, "PUMPKIN", 1)).action());
+        // Four short: one Pumpkin, the only thing a Sack can give.
+        Plan short4 = GreenhouseSupply.plan("Pumpkin Seeds", INGREDIENT, 6, 0, Map.of("PUMPKIN_SEEDS", 2));
+        assertEquals("gfs PUMPKIN 1", short4.command());
+
+        Plan melon = GreenhouseSupply.plan("Melon Seeds", INGREDIENT, 6, 0, Map.of("MELON_SEEDS", 6));
+        assertEquals(0, melon.missing());
+        assertEquals(Action.SWITCH, melon.action());
+    }
+
+    @Test
     public void whatNoSackHoldsIsNeverPulled() {
         Plan plan = GreenhouseSupply.plan("Jerryflower", INGREDIENT, 3, 0, Map.of("JERRYFLOWER", 1));
 

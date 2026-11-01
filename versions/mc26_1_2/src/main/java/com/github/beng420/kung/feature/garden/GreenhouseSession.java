@@ -223,9 +223,36 @@ final class GreenhouseSession {
         if (decoded.isEmpty()) return fail("Invalid layout code");
         replace(decoded.get(), null);
         int crops = decoded.get().filled();
-        sayAboutGrid("Layout loaded: " + crops + (crops == 1 ? " crop" : " crops"), Tone.SUCCESS);
+        int taken = takeOverTargets();
+        sayAboutGrid("Layout loaded: " + crops + (crops == 1 ? " crop" : " crops")
+            + (taken == 0 ? "" : ", " + taken + (taken == 1 ? " target" : " targets") + " taken over"), Tone.SUCCESS);
         persist();
         return null;
+    }
+
+    /**
+     * A pasted layout brings its goals: every mutation it grows becomes a target row with the number of footprints it
+     * has there, the most numerous first (an earlier fixed goal outranks a later one in the solver), so the next solve
+     * starts from what the layout does and the player can add to it. A layout without any known target keeps the
+     * current rows. Returns how many rows were taken over.
+     */
+    private int takeOverTargets() {
+        Map<String, Integer> counts = new LinkedHashMap<>();
+        for (GreenhousePlan.Block block : plan.blocks()) {
+            if (GreenhouseMutations.find(block.mutation()).filter(GreenhouseState::searchable).isPresent()) {
+                counts.merge(block.mutation(), 1, Integer::sum);
+            }
+        }
+        if (counts.isEmpty()) return 0;
+        state.clearTargets();
+        int taken = 0;
+        for (Map.Entry<String, Integer> entry : counts.entrySet().stream()
+            .sorted(Map.Entry.<String, Integer>comparingByValue().reversed()).toList()) {
+            if (!state.add(entry.getKey())) continue;
+            state.setCount(state.indexOf(entry.getKey()), entry.getValue());
+            taken++;
+        }
+        return taken;
     }
 
     private String refuse() {

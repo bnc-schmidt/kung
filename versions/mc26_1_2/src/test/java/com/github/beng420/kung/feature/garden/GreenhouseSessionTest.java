@@ -535,7 +535,7 @@ public final class GreenhouseSessionTest {
 
         assertEquals(grid, fixture.session.plan().grid());
         assertNull(fixture.session.summary());
-        assertEquals("Layout loaded: 2 crops", fixture.session.status());
+        assertEquals("Layout loaded: 2 crops, 1 target taken over", fixture.session.status());
         assertEquals(grid, new Fixture(file()).session.plan().grid());
     }
 
@@ -549,8 +549,42 @@ public final class GreenhouseSessionTest {
         assertNull(fixture.session.loadLayout("my layout: " + GreenhouseCode.encode(grid) + " thanks"));
 
         assertEquals(grid, fixture.session.plan().grid());
-        assertEquals("Layout loaded: 2 crops", fixture.session.status());
+        assertEquals("Layout loaded: 2 crops, 1 target taken over", fixture.session.status());
         assertEquals(grid, new Fixture(file()).session.plan().grid());
+    }
+
+    @Test
+    public void aPastedLayoutBringsItsTargetsAsGoalRowsMostNumerousFirst() {
+        Fixture fixture = new Fixture(file());
+        fixture.session.state().add("Dustgrain");
+        GreenhouseGrid grid = new GreenhouseGrid();
+        grid.set(0, 0, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+        grid.set(2, 2, new GreenhouseGrid.Cell("Cindershade", GreenhouseGrid.TARGET));
+        grid.set(4, 4, new GreenhouseGrid.Cell("Dustgrain", GreenhouseGrid.TARGET));
+        grid.set(6, 6, new GreenhouseGrid.Cell("Cindershade", GreenhouseGrid.TARGET));
+        grid.set(8, 8, new GreenhouseGrid.Cell("Cindershade", GreenhouseGrid.TARGET));
+
+        assertNull(fixture.session.loadLayout(GreenhouseCode.encode(grid)));
+
+        assertEquals(java.util.List.of(
+            new GreenhouseState.Target("Cindershade", GreenhouseState.Mode.TARGET, 3),
+            new GreenhouseState.Target("Dustgrain", GreenhouseState.Mode.TARGET, 1)), fixture.session.state().targets());
+        assertEquals("Layout loaded: 5 crops, 2 targets taken over", fixture.session.status());
+        assertEquals(fixture.session.state().targets(), new Fixture(file()).session.state().targets());
+    }
+
+    @Test
+    public void aPastedLayoutWithoutTargetsKeepsTheGoalRows() {
+        Fixture fixture = new Fixture(file());
+        fixture.session.state().add("Dustgrain");
+        GreenhouseGrid grid = new GreenhouseGrid();
+        grid.set(0, 0, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
+
+        assertNull(fixture.session.loadLayout(GreenhouseCode.encode(grid)));
+
+        assertEquals(1, fixture.session.state().targets().size());
+        assertEquals("Dustgrain", fixture.session.state().targets().getFirst().mutation());
+        assertEquals("Layout loaded: 1 crop", fixture.session.status());
     }
 
     @Test

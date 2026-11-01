@@ -11,7 +11,7 @@ import java.util.function.LongSupplier;
  * <p>Two uses: {@link #always} for buttons, whose labels scroll all the time, and {@link #onHover} for list
  * rows and the like, which scroll only while the pointer is over them and start from the beginning each time.
  */
-final class GreenhouseMarquee {
+public final class GreenhouseMarquee {
     /** Pause at each end of the travel. */
     static final long PAUSE_MILLIS = 800L;
     /** Travel speed in logical units per second: slow enough to read while it moves. */
@@ -25,7 +25,7 @@ final class GreenhouseMarquee {
     private boolean hoveredThisFrame;
 
     /** @param millisClock a monotonic clock in milliseconds */
-    GreenhouseMarquee(LongSupplier millisClock) {
+    public GreenhouseMarquee(LongSupplier millisClock) {
         this.clock = millisClock;
         this.epoch = millisClock.getAsLong();
     }
@@ -49,10 +49,10 @@ final class GreenhouseMarquee {
     int always(int overflow) { return offset(overflow, clock.getAsLong() - epoch); }
 
     /** Call once at the start of each frame, before any {@link #onHover}. */
-    void beginFrame() { hoveredThisFrame = false; }
+    public void beginFrame() { hoveredThisFrame = false; }
 
     /** Call once at the end of each frame: when nothing was hovered, the next hover starts from the beginning. */
-    void endFrame() {
+    public void endFrame() {
         if (!hoveredThisFrame) hoverKey = NONE;
     }
 
@@ -60,7 +60,7 @@ final class GreenhouseMarquee {
      * The shift for a label that scrolls only while the pointer is over it. {@code key} names the element (its
      * list and row); moving to another element, or leaving for a frame, restarts the pause.
      */
-    int onHover(long key, int overflow, boolean hovered) {
+    public int onHover(long key, int overflow, boolean hovered) {
         if (!hovered) return 0;
         hoveredThisFrame = true;
         long now = clock.getAsLong();
