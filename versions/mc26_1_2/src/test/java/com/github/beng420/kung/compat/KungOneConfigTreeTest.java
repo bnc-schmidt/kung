@@ -207,6 +207,7 @@ public final class KungOneConfigTreeTest {
     private static int countControls(List<SettingEntry> settings) {
         return settings.stream().mapToInt(setting -> (setting.kind() == SettingKind.GROUP ? 0
             : setting.kind() == SettingKind.COLOR_REMOVE ? 2 : 1) + (setting.reset() != null ? 1 : 0)
+            + (setting.rowToggle() != null ? countControls(List.of(setting.rowToggle())) : 0)
             + countControls(setting.children())).sum();
     }
 

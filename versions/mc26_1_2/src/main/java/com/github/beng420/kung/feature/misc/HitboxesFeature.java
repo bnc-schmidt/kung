@@ -78,7 +78,7 @@ public final class HitboxesFeature extends ConfigurableFeature<HitboxesConfig> {
     public boolean isEnabled() { return config().enabled(); }
 
     private void resolve() {
-        var selected = config().entities();
+        var selected = config().activeEntities();
         if (selected.equals(resolvedFor)) return;
         resolvedFor = Map.copyOf(selected);
         Map<EntityType<?>, String> types = new HashMap<>();

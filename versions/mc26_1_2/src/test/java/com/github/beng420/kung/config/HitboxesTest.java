@@ -95,6 +95,70 @@ public final class HitboxesTest {
     }
 
     @Test
+    public void everyHitboxSwitchesOffAndOnWithoutBeingDeletedAndTheStateSurvivesARestart() {
+        var path = temporary.getRoot().toPath().resolve("switches.json");
+        var config = new KungConfig(path);
+        config.hitboxes.add("minecraft:arrow");
+        config.hitboxes.add("minecraft:zombie");
+        var settings = new HitboxSettings(config.hitboxes);
+        var arrow = settings.get().get(1);
+        var zombie = settings.get().get(2);
+        var enabled = arrow.rowToggle();
+        // The switch sits in the row itself, not among the expandable children.
+        assertEquals("Enabled", enabled.label());
+        assertEquals(List.of("Line Thickness (%)", "Box Size (%)"), arrow.children().stream().map(SettingEntry::label).toList());
+        assertEquals(SettingKind.TOGGLE, enabled.kind());
+        assertTrue(enabled.booleanSupplier().getAsBoolean());
+        assertEquals(List.of("minecraft:arrow", "minecraft:zombie"), List.copyOf(config.hitboxes.activeEntities().keySet()));
+
+        enabled.toggle().run();
+        assertFalse(enabled.booleanSupplier().getAsBoolean());
+        assertTrue(zombie.rowToggle().booleanSupplier().getAsBoolean());
+        assertEquals(List.of("minecraft:zombie"), List.copyOf(config.hitboxes.activeEntities().keySet()));
+        // The entry stays: still listed, same color, its rows survive and the swatch only dims.
+        assertEquals(List.of("minecraft:arrow", "minecraft:zombie"), List.copyOf(config.hitboxes.entities().keySet()));
+        assertSame(arrow, settings.get().get(1));
+        assertEquals(0xFF153F15, arrow.intSupplier().getAsInt());
+        assertEquals(HitboxesConfig.DEFAULT_COLOR, zombie.intSupplier().getAsInt());
+
+        var restored = new KungConfig(path);
+        restored.load();
+        assertFalse(restored.hitboxes.active("minecraft:arrow"));
+        assertTrue(restored.hitboxes.active("minecraft:zombie"));
+        assertEquals(List.of("minecraft:zombie"), List.copyOf(restored.hitboxes.activeEntities().keySet()));
+
+        // Switching back on, and deleting an off entry, both work as before.
+        enabled.toggle().run();
+        assertEquals(2, config.hitboxes.activeEntities().size());
+        enabled.toggle().run();
+        arrow.click(150, 100, 52);
+        assertEquals(List.of("Add Hitbox", "Zombie"), settings.get().stream().map(SettingEntry::label).toList());
+        config.hitboxes.add("minecraft:arrow");
+        assertTrue(config.hitboxes.active("minecraft:arrow"));
+        // An unknown id is no entry, so it cannot be switched off.
+        config.hitboxes.setActive("minecraft:pig", false);
+        assertEquals(2, config.hitboxes.activeEntities().size());
+    }
+
+    @Test
+    public void configsSavedBeforeTheSwitchLoadAllOnAndStaleOrBrokenSwitchesAreDropped() {
+        var old = read("{\"hitboxes\":{\"entities\":{\"minecraft:zombie\":1,\"minecraft:arrow\":2}}}").hitboxes;
+        assertTrue(old.active("minecraft:zombie"));
+        assertTrue(old.active("minecraft:arrow"));
+        assertEquals(2, old.activeEntities().size());
+        assertTrue(read("{\"hitboxes\":{\"entities\":{\"minecraft:zombie\":1},\"disabled\":null}}").hitboxes.active("minecraft:zombie"));
+        var saved = read("""
+            {"hitboxes":{"entities":{"minecraft:zombie":1,"minecraft:arrow":2},"disabled":["minecraft:arrow","minecraft:gone"]}}
+            """).hitboxes;
+        assertFalse(saved.active("minecraft:arrow"));
+        assertTrue(saved.active("minecraft:zombie"));
+        assertEquals(java.util.Map.of("minecraft:zombie", 0xFF000001), saved.activeEntities());
+        // The stale id was dropped on load, so adding that entity later starts switched on.
+        saved.add("minecraft:gone");
+        assertTrue(saved.active("minecraft:gone"));
+    }
+
+    @Test
     public void addedTypesAndColorsPersistAndTheExistingCatalogUpdatesWithoutReopening() {
         var path = temporary.getRoot().toPath().resolve("kung.json");
         KungConfig config = new KungConfig(path);

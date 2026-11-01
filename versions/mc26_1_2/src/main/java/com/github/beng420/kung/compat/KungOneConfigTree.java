@@ -115,6 +115,10 @@ final class KungOneConfigTree {
             if (setting.kind() == SettingKind.COLOR_REMOVE) {
                 put(button(key + "__remove", label + " / Remove", description, "Remove", setting.cycleChoice()), category, feature);
             }
+            // The row's own switch is no child, but the native menu lists it right under the setting.
+            if (setting.rowToggle() != null) {
+                addSettings(List.of(setting.rowToggle()), key, label, category, feature, available, visible);
+            }
             if (!setting.children().isEmpty()) {
                 BooleanSupplier childAvailable = setting.kind() == SettingKind.TOGGLE
                     ? () -> available.getAsBoolean() && setting.booleanSupplier().getAsBoolean() : available;

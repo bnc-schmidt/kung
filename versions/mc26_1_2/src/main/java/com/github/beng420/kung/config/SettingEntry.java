@@ -36,7 +36,8 @@ public record SettingEntry(
     Supplier<String> rawKeybindSupplier,
     BooleanSupplier visibleWhen,
     boolean developerOnly,
-    Reset reset
+    Reset reset,
+    SettingEntry rowToggle
 ) {
     public String label() { return labelSupplier.get(); }
 
@@ -50,13 +51,13 @@ public record SettingEntry(
     public SettingEntry forDeveloper() {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, children, tooltip,
-            choicesSupplier, rawKeybindSupplier, visibleWhen, true, reset);
+            choicesSupplier, rawKeybindSupplier, visibleWhen, true, reset, rowToggle);
     }
 
     public SettingEntry withVisibleWhen(BooleanSupplier condition) {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, children, tooltip,
-            choicesSupplier, rawKeybindSupplier, condition, developerOnly, reset);
+            choicesSupplier, rawKeybindSupplier, condition, developerOnly, reset, rowToggle);
     }
 
     public static SettingEntry toggle(String label, BooleanSupplier supplier, Runnable toggle) {
@@ -101,7 +102,7 @@ public record SettingEntry(
         return new SettingEntry(() -> label, SettingKind.CHOICE, null, null, selected, select,
             0, 0, 1, () -> option(options.get(), selected.getAsInt()),
             () -> select.accept(options.get().isEmpty() ? 0 : (selected.getAsInt() + 1) % options.get().size()),
-            null, null, List.of(), List.of(), options, null, null, false, null);
+            null, null, List.of(), List.of(), options, null, null, false, null, null);
     }
 
     private static String option(List<String> options, int index) {
@@ -120,7 +121,7 @@ public record SettingEntry(
         return new SettingEntry(() -> label, SettingKind.CHOICE, null, null, selected, select,
             0, options.size() - 1, 1, () -> labeler.apply(options.get(selected.getAsInt())),
             () -> select.accept((selected.getAsInt() + 1) % options.size()), null, null, List.of(), List.of(),
-            () -> options.stream().map(labeler).toList(), null, null, false, null);
+            () -> options.stream().map(labeler).toList(), null, null, false, null, null);
     }
 
     public static SettingEntry text(String label, Supplier<String> supplier, Consumer<String> consumer) {
@@ -130,7 +131,7 @@ public record SettingEntry(
     /** A group whose title follows its content, e.g. a custom emote's shortcut. */
     public static SettingEntry group(Supplier<String> label) {
         return new SettingEntry(label, SettingKind.GROUP, null, null, null, null, 0, 0, 0,
-            null, null, null, null, List.of(), List.of(), List::of, null, null, false, null);
+            null, null, null, null, List.of(), List.of(), List::of, null, null, false, null, null);
     }
 
     public static SettingEntry group(String label) {
@@ -140,12 +141,12 @@ public record SettingEntry(
     public static SettingEntry keybind(String label, Supplier<String> display, Supplier<String> raw,
                                       Consumer<String> consumer) {
         return new SettingEntry(() -> label, SettingKind.KEYBIND, null, null, null, null, 0, 0, 0,
-            null, null, display, consumer, List.of(), List.of(), List::of, raw, null, false, null);
+            null, null, display, consumer, List.of(), List.of(), List::of, raw, null, false, null, null);
     }
 
     public static SettingEntry dynamicLabel(Supplier<String> labelSupplier) {
         return new SettingEntry(labelSupplier, SettingKind.LABEL, null, null, null, null, 0, 0, 0,
-            null, null, null, null, List.of(), List.of(), List::of, null, null, false, null);
+            null, null, null, null, List.of(), List.of(), List::of, null, null, false, null, null);
     }
 
     public static SettingEntry button(String label, String text, Runnable action) {
@@ -165,7 +166,17 @@ public record SettingEntry(
     public SettingEntry withChildren(List<SettingEntry> children) {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, List.copyOf(children), tooltip,
-            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, reset);
+            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, reset, rowToggle);
+    }
+
+    /**
+     * A switch drawn in the row itself, left of its control, so it needs no expanding: a hitbox's on/off.
+     * {@code onOff} is a {@link SettingKind#TOGGLE}; its label and tooltip name the switch in tooltips and the native menu.
+     */
+    public SettingEntry withRowToggle(SettingEntry onOff) {
+        return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
+            min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, children, tooltip,
+            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, reset, onOff);
     }
 
     /**
@@ -175,7 +186,7 @@ public record SettingEntry(
     public SettingEntry withReset(BooleanSupplier available, String hint, Runnable action) {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, children, tooltip,
-            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, new Reset(available, hint, action));
+            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, new Reset(available, hint, action), rowToggle);
     }
 
     /** True while the row's reset button is on screen. */
@@ -186,7 +197,7 @@ public record SettingEntry(
     public SettingEntry withTooltip(String... lines) {
         return new SettingEntry(labelSupplier, kind, booleanSupplier, toggle, intSupplier, intConsumer,
             min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, children, List.of(lines),
-            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, reset);
+            choicesSupplier, rawKeybindSupplier, visibleWhen, developerOnly, reset, rowToggle);
     }
 
     public String textValue() {
@@ -373,6 +384,6 @@ public record SettingEntry(
         Consumer<String> textConsumer
     ) {
         return new SettingEntry(() -> label, kind, booleanSupplier, toggle, intSupplier, intConsumer,
-            min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, List.of(), List.of(), List::of, null, null, false, null);
+            min, max, step, choiceSupplier, cycleChoice, textSupplier, textConsumer, List.of(), List.of(), List::of, null, null, false, null, null);
     }
 }

@@ -4,6 +4,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungSettings.CategoryEntry;
 import com.github.beng420.kung.config.KungSettings.FeatureEntry;
+import com.github.beng420.kung.feature.garden.GreenhouseMarquee;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.ui.UiBounds;
 import com.github.beng420.kung.ui.UiHoverDelay;
@@ -18,8 +19,8 @@ import com.github.beng420.kung.ui.UiMenuFont;
 import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.update.KungUpdater;
 import com.github.beng420.kung.update.KungReleaseNotesPopup;
-import java.util.ArrayList;
 import com.github.beng420.kung.util.KeyCodes;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
@@ -61,6 +62,8 @@ public final class KungConfigScreen extends Screen {
     /** How far a child row is indented from its parent. */
     private static final int SETTING_INDENT = 12;
     private static final int RESET_WIDTH = 14;
+    /** A row toggle is as wide as a toggle row's own control. */
+    private static final int ROW_TOGGLE_WIDTH = 24;
     /** The reset button's glyph: an arrow turning back. */
     private static final String[] RESET_ICON = {
         "..#.....",
@@ -82,6 +85,8 @@ public final class KungConfigScreen extends Screen {
     private final Map<String, Integer> categoryScrolls = new HashMap<>();
     private final Set<FeatureEntry> expandedFeatures = Collections.newSetFromMap(new IdentityHashMap<>());
     private final ExpandedPath<SettingEntry> expanded = new ExpandedPath<>();
+    /** Slides a cut-off name or label inside its room while the pointer is on its row. */
+    private final GreenhouseMarquee marquee = new GreenhouseMarquee(() -> System.nanoTime() / 1_000_000L);
     private TextEditorOverlay textEditor;
     private SettingEntry capturingSetting;
     private ChoiceDropdown dropdown;
@@ -188,6 +193,7 @@ public final class KungConfigScreen extends Screen {
         horizontalScroll.setOffsetWithinMax(horizontalScroll.offset(), maxHorizontalScroll());
         clickRegions.clear();
         tooltip = null;
+        marquee.beginFrame();
         graphics.pose().pushMatrix();
         try {
             float scale = menuScale();
@@ -209,6 +215,7 @@ public final class KungConfigScreen extends Screen {
             if (releaseNotesPopup != null) {
                 releaseNotesPopup.draw(graphics, menuFont, menuWidth(), menuHeight(), mouseX, mouseY);
             }
+            marquee.endFrame();
         } finally {
             graphics.pose().popMatrix();
         }
@@ -446,8 +453,12 @@ public final class KungConfigScreen extends Screen {
             : settingsOnly ? THEME.control() : THEME.panelDark();
         UiShapes.rounded(graphics, x, rowY, COLUMN_WIDTH, ROW_HEIGHT, 0,
             rowY + ROW_HEIGHT == viewportBottom ? PANEL_RADIUS : 0, color);
-        drawCentered(graphics, trimToWidth(feature.name(), COLUMN_WIDTH - 8), x + COLUMN_WIDTH / 2, rowY + 5, THEME.text(), true);
-        if (hovered && (!feature.tooltip().isEmpty() || menuFont.width(feature.name()) > COLUMN_WIDTH - 8)) {
+        if (hovered && menuFont.width(feature.name()) > COLUMN_WIDTH - 8) {
+            slidingText(graphics, feature.name(), x + 4, rowY + 5, COLUMN_WIDTH - 8, x, THEME.text(), true);
+        } else {
+            drawCentered(graphics, trimToWidth(feature.name(), COLUMN_WIDTH - 8), x + COLUMN_WIDTH / 2, rowY + 5, THEME.text(), true);
+        }
+        if (hovered && !feature.tooltip().isEmpty()) {
             requestTooltip(feature, feature.name(), feature.tooltip(), x, rowY);
         }
         addClickRegion(x, rowY, COLUMN_WIDTH, ROW_HEIGHT, (clickX, clickY, button) -> clickFeature(feature, button));
@@ -536,11 +547,17 @@ public final class KungConfigScreen extends Screen {
         int controlWidth = twoLine ? COLUMN_WIDTH - 10 - indent : controlWidthFor(setting);
         boolean resettable = !twoLine && setting.resettable();
         int resetSpace = resettable ? RESET_WIDTH + 3 : 0;
+        SettingEntry rowToggle = twoLine ? null : setting.rowToggle();
+        int toggleSpace = rowToggle == null ? 0 : ROW_TOGGLE_WIDTH + 3;
         int labelWidth = twoLine ? COLUMN_WIDTH - indent - 16 - menuFont.width(value)
-            : COLUMN_WIDTH - controlWidth - indent - 20 - resetSpace;
-        graphics.text(menuFont, trimToWidth(setting.label(), labelWidth), labelX, rowY + 4, THEME.muted(), true);
+            : COLUMN_WIDTH - controlWidth - indent - 20 - resetSpace - toggleSpace;
+        if (hovered && menuFont.width(setting.label()) > labelWidth) {
+            slidingText(graphics, setting.label(), labelX, rowY + 4, labelWidth, x, THEME.muted(), true);
+        } else {
+            graphics.text(menuFont, trimToWidth(setting.label(), labelWidth), labelX, rowY + 4, THEME.muted(), true);
+        }
         if (!value.isEmpty()) graphics.text(menuFont, value, x + COLUMN_WIDTH - 5 - menuFont.width(value), rowY + 4, THEME.text(), true);
-        if (hovered && (!setting.tooltip().isEmpty() || menuFont.width(setting.label()) > labelWidth)) {
+        if (hovered && !setting.tooltip().isEmpty()) {
             requestTooltip(setting, setting.label(), setting.tooltip(), x, rowY);
         }
         int controlX = twoLine ? x + 5 + indent : x + COLUMN_WIDTH - controlWidth - 5;
@@ -552,9 +569,20 @@ public final class KungConfigScreen extends Screen {
         addClickRegion(x, rowY, COLUMN_WIDTH, height, (clickX, clickY, button) ->
             clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth)
         );
+        if (rowToggle != null) {
+            int toggleX = controlX - toggleSpace;
+            rowToggle.draw(graphics, menuFont, THEME, toggleX, controlY, ROW_TOGGLE_WIDTH, SETTING_HEIGHT, false);
+            if (inside(mouseX, mouseY, toggleX, rowY, ROW_TOGGLE_WIDTH, height)) {
+                requestTooltip(rowToggle, rowToggle.label(), rowToggle.tooltip(), x, rowY);
+            }
+            addClickRegion(toggleX, rowY, ROW_TOGGLE_WIDTH, height, (clickX, clickY, button) -> {
+                if (button == 0) rowToggle.click(clickX, toggleX, ROW_TOGGLE_WIDTH);
+                return true;
+            });
+        }
         if (resettable) {
             // Added after the row's own region, so a click on the button never reaches the row.
-            int resetX = controlX - resetSpace;
+            int resetX = controlX - toggleSpace - resetSpace;
             boolean overReset = inside(mouseX, mouseY, resetX, rowY, RESET_WIDTH, height);
             drawResetButton(graphics, resetX, rowY + 3, overReset);
             if (overReset) requestTooltip(setting.reset(), "Reset", List.of(setting.reset().hint()), x, rowY);
@@ -688,6 +716,19 @@ public final class KungConfigScreen extends Screen {
             case COLOR -> Math.clamp(menuFont.width("#FFFFFF") + 10, 24, 72);
             default -> SETTING_CONTROL_WIDTH;
         };
+    }
+
+    /**
+     * The whole text, slid back and forth inside {@code room} so all of it can be read. {@code column} (the column's
+     * left edge) and the text name the element for the marquee, which restarts its pause when the pointer moves on.
+     */
+    private void slidingText(GuiGraphicsExtractor graphics, String text, int left, int top, int room, int column,
+                             int color, boolean shadow) {
+        int shift = marquee.onHover(((long) column << 32) | (text.hashCode() & 0xFFFFFFFFL),
+            menuFont.width(text) - room, true);
+        graphics.enableScissor(left, top - 1, left + room, top + menuFont.lineHeight + 1);
+        graphics.text(menuFont, text, left - shift, top, color, shadow);
+        graphics.disableScissor();
     }
 
     private String trimToWidth(String value, int maxWidth) {

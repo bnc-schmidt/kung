@@ -49,11 +49,18 @@ final class HitboxSettings implements Supplier<List<SettingEntry>> {
                     percent -> config.setBoxSize(id, percent), 50, 200, 10)
                 .withTooltip("50% = x0.5, 100% = normal, 200% = x2.0, around the box's center.",
                     "Only the drawn outline changes; the real hitbox stays the same."));
-            next.add(SettingEntry.colorRemove(name(id), () -> config.entities().getOrDefault(id, HitboxesConfig.DEFAULT_COLOR),
+            next.add(SettingEntry.colorRemove(name(id), () -> swatch(config.entities().getOrDefault(id, HitboxesConfig.DEFAULT_COLOR), config.active(id)),
                     () -> open(id), () -> config.remove(id))
+                .withRowToggle(SettingEntry.toggle("Enabled", () -> config.active(id), on -> config.setActive(id, on))
+                    .withTooltip("Turn this hitbox off without deleting it.", "A switched-off hitbox shows a dimmed color."))
                 .withChildren(children).withTooltip(id, expand, "Click the color to edit; click - to remove."));
         }
         return rows = List.copyOf(next);
+    }
+
+    /** The row's color, a quarter as bright while the hitbox is switched off. */
+    static int swatch(int color, boolean active) {
+        return active ? color : 0xFF000000 | color >> 2 & 0x3F3F3F;
     }
 
     private void open(String id) {

@@ -2,7 +2,9 @@ package com.github.beng420.kung.config.category;
 
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 import net.minecraft.resources.Identifier;
 
@@ -18,6 +20,8 @@ public final class HitboxesConfig extends ConfigCategory {
     /** Per entry, in percent; an entry without a value (every one saved before these existed) draws as it always did. */
     private Map<String, Integer> lineThickness = new LinkedHashMap<>();
     private Map<String, Integer> boxSize = new LinkedHashMap<>();
+    /** Entries switched off without being deleted; one missing here is on, so every config saved before this loads all-on. */
+    private Set<String> disabled = new LinkedHashSet<>();
 
     public boolean enabled() { return enabled; }
     public void setEnabled(boolean value) { enabled = value; save(); }
@@ -27,6 +31,19 @@ public final class HitboxesConfig extends ConfigCategory {
     public void setDragonPartBoxes(boolean value) { dragonPartBoxes = value; save(); }
     public Map<String, Integer> entities() { return Collections.unmodifiableMap(entities); }
 
+    public boolean active(String id) { return !disabled.contains(id); }
+
+    public void setActive(String id, boolean active) {
+        if (entities.containsKey(id) && (active ? disabled.remove(id) : disabled.add(id))) save();
+    }
+
+    /** What draws: the saved entries minus the switched-off ones. */
+    public Map<String, Integer> activeEntities() {
+        Map<String, Integer> on = new LinkedHashMap<>(entities);
+        on.keySet().removeAll(disabled);
+        return Collections.unmodifiableMap(on);
+    }
+
     public void add(String id) {
         Identifier key = id == null ? null : Identifier.tryParse(id);
         if (key != null && entities.putIfAbsent(key.toString(), DEFAULT_COLOR) == null) save();
@@ -35,6 +52,7 @@ public final class HitboxesConfig extends ConfigCategory {
     public void remove(String id) {
         lineThickness.remove(id);
         boxSize.remove(id);
+        disabled.remove(id);
         if (entities.remove(id) != null) save();
     }
 
@@ -67,6 +85,9 @@ public final class HitboxesConfig extends ConfigCategory {
         entities = valid;
         lineThickness = percents(lineThickness, 25, 400);
         boxSize = percents(boxSize, 50, 200);
+        Set<String> off = new LinkedHashSet<>();
+        if (disabled != null) disabled.stream().filter(entities::containsKey).forEach(off::add);
+        disabled = off;
     }
 
     private Map<String, Integer> percents(Map<String, Integer> saved, int min, int max) {
