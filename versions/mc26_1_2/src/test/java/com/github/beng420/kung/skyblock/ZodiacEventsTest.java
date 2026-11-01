@@ -30,17 +30,28 @@ public class ZodiacEventsTest {
         assertEquals(522, ZodiacEvents.yearOnOrAfter(Event.SEAL, NOW));
         assertEquals(534, ZodiacEvents.yearOnOrAfter(Event.SEAL, SEAL_START + JerryTimeline.SB_YEAR_MILLIS));
         assertEquals(522, ZodiacEvents.yearOnOrAfter(Event.SEAL, SEAL_START)); // running counts
-        // Pig and Witch run in the year before and after the Seal (an assumption, see ZodiacEvents).
-        assertEquals(521, ZodiacEvents.yearOnOrAfter(Event.PIG, NOW));
-        assertEquals(523, ZodiacEvents.yearOnOrAfter(Event.WITCH, NOW));
-        assertEquals(533, ZodiacEvents.yearOnOrAfter(Event.PIG, SEAL_START));
+        // The Pig alternates with the Seal every six years.
+        assertEquals(528, ZodiacEvents.yearOnOrAfter(Event.PIG, NOW));
+        assertEquals(528, ZodiacEvents.yearOnOrAfter(Event.PIG, SEAL_START));
+        assertEquals(540, ZodiacEvents.yearOnOrAfter(Event.PIG, JerryTimeline.yearStartMillis(529)));
+        // The first Year of the Witch is 476 (Hypixel's 0.24.2 post), then every 12 years: 488, ..., 524.
+        assertEquals(476, ZodiacEvents.yearOnOrAfter(Event.WITCH, JerryTimeline.yearStartMillis(476)));
+        assertEquals(488, ZodiacEvents.yearOnOrAfter(Event.WITCH, JerryTimeline.yearStartMillis(477)));
+        assertEquals(524, ZodiacEvents.yearOnOrAfter(Event.WITCH, NOW));
     }
 
     @Test
     public void aRunningEventSaysWhenItEndsAndAnyOtherWhenItStarts() {
         assertEquals("Year of the Seal is not active. It starts in 1 day (Sat 24 Oct).", ZodiacEvents.answer(Event.SEAL, NOW, UTC));
-        assertEquals("Year of the Pig is active and ends in 1 day (Sat 24 Oct).", ZodiacEvents.answer(Event.PIG, NOW, UTC));
-        assertEquals("Year of the Witch is not active. It starts in 6 days (Thu 29 Oct).", ZodiacEvents.answer(Event.WITCH, NOW, UTC));
+        assertEquals("Year of the Pig is not active. It starts in 32 days (Tue 24 Nov).", ZodiacEvents.answer(Event.PIG, NOW, UTC));
+        assertEquals("Year of the Witch is not active. It starts in 11 days (Tue 3 Nov).", ZodiacEvents.answer(Event.WITCH, NOW, UTC));
+        // Sat 31 Oct 2026, 01:54 in Berlin: the Seal ended two days ago, no event runs, the Witch comes on Tuesday.
+        long between = Instant.parse("2026-10-31T00:54:00Z").toEpochMilli();
+        assertEquals("Year of the Seal is not active. It starts in 55 days (Fri 25 Dec).", ZodiacEvents.answer(Event.SEAL, between, UTC));
+        assertEquals("Year of the Pig is not active. It starts in 24 days (Tue 24 Nov).", ZodiacEvents.answer(Event.PIG, between, UTC));
+        assertEquals("Year of the Witch is not active. It starts in 3 days (Tue 3 Nov).", ZodiacEvents.answer(Event.WITCH, between, UTC));
+        long witchStart = JerryTimeline.yearStartMillis(524);
+        assertEquals("Year of the Witch is active and ends in 5 days (Mon 9 Nov).", ZodiacEvents.answer(Event.WITCH, witchStart + 1_000, UTC));
         // Short waits read in hours.
         long evening = SEAL_START - 5 * 3_600_000L - 59 * 60_000L;
         assertEquals("Year of the Seal is not active. It starts in 5h (Sat 24 Oct).", ZodiacEvents.answer(Event.SEAL, evening, UTC));

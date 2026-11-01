@@ -21,7 +21,7 @@ public final class ChatCommandSettingsTest {
         FeatureEntry chat = chat(new KungConfig(file()));
         assertEquals(List.of("Default Channels", "Reset All", "!c50", "!ca50", "Class Level",
             "!tps", "Special Mayors", "Yearly Events"), labels(chat.settings()));
-        assertEquals(List.of("Party", "Guild", "All Chat", "DMs"), labels(setting(chat, "Default Channels").children()));
+        assertEquals(List.of("Party", "Guild", "Co-op", "All Chat", "DMs"), labels(setting(chat, "Default Channels").children()));
         assertEquals(SettingKind.BUTTON, setting(chat, "Reset All").kind());
         for (String group : List.of("Special Mayors", "Yearly Events")) {
             assertEquals(SettingKind.TOGGLE, setting(chat, group).kind());
@@ -47,12 +47,12 @@ public final class ChatCommandSettingsTest {
         // The own channels start as a copy of the defaults, and the switch makes room for them.
         assertFalse(config.misc.c50UseDefaultChannels());
         assertTrue(command.resettable());
-        assertEquals(List.of("Party", "Guild", "All Chat", "DMs"), visible(command));
-        assertEquals(List.of(false, true, false, true), channels(command));
+        assertEquals(List.of("Party", "Guild", "Co-op", "All Chat", "DMs"), visible(command));
+        assertEquals(List.of(false, true, true, false, true), channels(command));
 
         // Editing an own channel leaves the defaults alone.
         command.children().get(1).toggle().run();
-        assertEquals(List.of(true, true, false, true), channels(command));
+        assertEquals(List.of(true, true, true, false, true), channels(command));
         assertFalse(config.misc.defaultPartyCommandsEnabled());
 
         // The reset button hands the command back to the defaults; the other commands never moved.
@@ -144,8 +144,8 @@ public final class ChatCommandSettingsTest {
         return command.children().stream().filter(SettingEntry::visible).map(SettingEntry::label).toList();
     }
 
-    /** Party, Guild, All Chat and DMs of an overridden command, in that order. */
+    /** Party, Guild, Co-op, All Chat and DMs of an overridden command, in that order. */
     private static List<Boolean> channels(SettingEntry command) {
-        return command.children().subList(1, 5).stream().map(setting -> setting.booleanSupplier().getAsBoolean()).toList();
+        return command.children().subList(1, 6).stream().map(setting -> setting.booleanSupplier().getAsBoolean()).toList();
     }
 }

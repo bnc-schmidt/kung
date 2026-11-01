@@ -52,7 +52,9 @@ enum ChatCommand {
         // Only the !ca variants take a "-class" flag, after the optional name.
         String classFlag = goal == Goal.CLASS_AVERAGE && dungeonClass != null
             ? "\\s+-(?:" + classFlags(dungeonClass) + ")" : "";
-        pattern = Pattern.compile("^!(?:" + triggers + ")"
+        // "!m1" to "!m7" alone start the master mode floors for the party: the mage command leaves them to Hypixel.
+        String masterFloor = goal == Goal.CLASS_LEVEL && dungeonClass == DungeonClass.MAGE ? "(?![1-7]\\s*$)" : "";
+        pattern = Pattern.compile("^!(?:" + triggers + ")" + masterFloor
             + (goal == null ? "" : LEVEL + "(?:\\s+(?<name>[A-Za-z0-9_]{1,16}))?") + classFlag + "\\s*$", Pattern.CASE_INSENSITIVE);
     }
 
@@ -108,60 +110,70 @@ enum ChatCommand {
                 case GUILD -> config.c50GuildCommandsEnabled();
                 case ALL -> config.c50AllChatCommandsEnabled();
                 case PRIVATE -> config.c50PrivateCommandsEnabled();
+                case COOP -> config.c50CoopCommandsEnabled();
             };
             case CA, CA_ARCHER, CA_BERSERK, CA_HEALER, CA_MAGE, CA_TANK -> config.ca50ChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.ca50PartyCommandsEnabled();
                 case GUILD -> config.ca50GuildCommandsEnabled();
                 case ALL -> config.ca50AllChatCommandsEnabled();
                 case PRIVATE -> config.ca50PrivateCommandsEnabled();
+                case COOP -> config.ca50CoopCommandsEnabled();
             };
             case TPS -> config.tpsChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.tpsPartyCommandsEnabled();
                 case GUILD -> config.tpsGuildCommandsEnabled();
                 case ALL -> config.tpsAllChatCommandsEnabled();
                 case PRIVATE -> config.tpsPrivateCommandsEnabled();
+                case COOP -> config.tpsCoopCommandsEnabled();
             };
             case JERRY -> config.jerryChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.jerryPartyCommandsEnabled();
                 case GUILD -> config.jerryGuildCommandsEnabled();
                 case ALL -> config.jerryAllChatCommandsEnabled();
                 case PRIVATE -> config.jerryPrivateCommandsEnabled();
+                case COOP -> config.jerryCoopCommandsEnabled();
             };
             case SCORPIUS -> config.scorpChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.scorpPartyCommandsEnabled();
                 case GUILD -> config.scorpGuildCommandsEnabled();
                 case ALL -> config.scorpAllChatCommandsEnabled();
                 case PRIVATE -> config.scorpPrivateCommandsEnabled();
+                case COOP -> config.scorpCoopCommandsEnabled();
             };
             case DERPY -> config.derpyChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.derpyPartyCommandsEnabled();
                 case GUILD -> config.derpyGuildCommandsEnabled();
                 case ALL -> config.derpyAllChatCommandsEnabled();
                 case PRIVATE -> config.derpyPrivateCommandsEnabled();
+                case COOP -> config.derpyCoopCommandsEnabled();
             };
             case YOTP -> config.yotpChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.yotpPartyCommandsEnabled();
                 case GUILD -> config.yotpGuildCommandsEnabled();
                 case ALL -> config.yotpAllChatCommandsEnabled();
                 case PRIVATE -> config.yotpPrivateCommandsEnabled();
+                case COOP -> config.yotpCoopCommandsEnabled();
             };
             case YOTW -> config.yotwChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.yotwPartyCommandsEnabled();
                 case GUILD -> config.yotwGuildCommandsEnabled();
                 case ALL -> config.yotwAllChatCommandsEnabled();
                 case PRIVATE -> config.yotwPrivateCommandsEnabled();
+                case COOP -> config.yotwCoopCommandsEnabled();
             };
             case YOTS -> config.yotsChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.yotsPartyCommandsEnabled();
                 case GUILD -> config.yotsGuildCommandsEnabled();
                 case ALL -> config.yotsAllChatCommandsEnabled();
                 case PRIVATE -> config.yotsPrivateCommandsEnabled();
+                case COOP -> config.yotsCoopCommandsEnabled();
             };
             case A, B, H, M, T -> config.classLevelChatCommandEnabled() && switch (channel) {
                 case PARTY -> config.classLevelPartyCommandsEnabled();
                 case GUILD -> config.classLevelGuildCommandsEnabled();
                 case ALL -> config.classLevelAllChatCommandsEnabled();
                 case PRIVATE -> config.classLevelPrivateCommandsEnabled();
+                case COOP -> config.classLevelCoopCommandsEnabled();
             };
         };
     }

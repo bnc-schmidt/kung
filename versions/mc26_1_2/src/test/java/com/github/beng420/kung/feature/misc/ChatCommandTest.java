@@ -111,9 +111,16 @@ public final class ChatCommandTest {
             assertLevel("!a" + level, ChatCommand.A, level);
             assertLevel("!b" + level + " Beng114", ChatCommand.B, level);
             assertLevel("!h" + level, ChatCommand.H, level);
-            assertLevel("!m" + level, ChatCommand.M, level);
+            if (level > 7) assertLevel("!m" + level, ChatCommand.M, level); // !m1 to !m7 start master mode floors
             assertLevel("!t" + level + "\t", ChatCommand.T, level);
         }
+        for (int floor = 1; floor <= 7; floor++) {
+            assertEquals("!m" + floor, List.of(), matching("!m" + floor));
+            assertEquals("!M" + floor + " ", List.of(), matching("!M" + floor + " "));
+            // With a player name it is still a mage level question.
+            assertLevel("!m" + floor + " Beng114", ChatCommand.M, floor);
+        }
+        assertLevel("!m8", ChatCommand.M, 8);
         assertLevel("!c43", ChatCommand.C, 43);
         assertLevel("!c98 Beng114", ChatCommand.C, 98);
         assertLevel("!ca60 -tank", ChatCommand.CA_TANK, 60);

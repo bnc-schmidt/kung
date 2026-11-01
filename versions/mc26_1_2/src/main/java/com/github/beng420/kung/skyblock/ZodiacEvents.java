@@ -5,7 +5,8 @@ import java.time.ZoneId;
 /**
  * The SkyBlock zodiac events (Year of the Pig, Seal and Witch): each one runs for a whole SkyBlock year, 124 real
  * hours from the start of the year, and comes back every 12 years. The Seal's start was read in game (Sat 24 Oct 2026,
- * the start of SkyBlock year 522); Pig and Witch are assumed to run in the year before and after it.
+ * the start of SkyBlock year 522, 6 mod 12). The Pig alternates with the Seal every six years (Hypixel's 0.21.3 post),
+ * so it runs in 0 mod 12. The first Year of the Witch is year 476 (0.24.2 post), so it runs in 8 mod 12.
  */
 public final class ZodiacEvents {
     private static final long CYCLE_YEARS = 12;
@@ -14,7 +15,7 @@ public final class ZodiacEvents {
 
     /** {@code yearInCycle} is the SkyBlock year modulo 12 in which the event runs. */
     public enum Event {
-        PIG("Year of the Pig", 5), SEAL("Year of the Seal", 6), WITCH("Year of the Witch", 7);
+        PIG("Year of the Pig", 0), SEAL("Year of the Seal", 6), WITCH("Year of the Witch", 8);
 
         private final String title;
         private final long yearInCycle;

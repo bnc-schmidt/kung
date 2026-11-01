@@ -27,7 +27,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     private static final ChatCommand[] COMMANDS = ChatCommand.values();
 
     private static final Pattern PARTY_GUILD_CHAT_PATTERN =
-        Pattern.compile("^(?<channel>Party|Guild)\\s*>\\s*(?<sender>.+?)\\s*:\\s*(?<message>.+)$");
+        Pattern.compile("^(?<channel>Party|Guild|Co-op)\\s*>\\s*(?<sender>.+?)\\s*:\\s*(?<message>.+)$");
     private static final Pattern PRIVATE_CHAT_PATTERN =
         Pattern.compile("^(?<direction>From|To)\\s+(?<name>.+?)\\s*:\\s*(?<message>.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PUBLIC_CHAT_PATTERN =
@@ -165,7 +165,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         }
     }
 
-    private static ChatContext chatContext(Minecraft client, String clean) {
+    static ChatContext chatContext(Minecraft client, String clean) {
         clean = stripChatTimestamp(clean);
         Matcher partyGuildMatcher = PARTY_GUILD_CHAT_PATTERN.matcher(clean);
         if (partyGuildMatcher.matches()) {
@@ -192,7 +192,9 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         }
 
         Matcher publicMatcher = PUBLIC_CHAT_PATTERN.matcher(clean);
-        if (publicMatcher.matches()) {
+        // A "Co-op > name: ..." or "Officer > name: ..." line is another channel, never public chat: answering it
+        // would post the reply to the whole lobby.
+        if (publicMatcher.matches() && !publicMatcher.group("sender").contains(">")) {
             String senderName = senderName(publicMatcher.group("sender"));
             if (validUsername(senderName)) {
                 return new ChatContext(ChatChannel.ALL, senderName, publicMatcher.group("message"), "");
@@ -410,13 +412,15 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         PARTY,
         GUILD,
         ALL,
-        PRIVATE;
+        PRIVATE,
+        COOP;
 
         String commandPrefix(String replyTarget) {
             return switch (this) {
                 case PARTY -> "pc";
                 case GUILD -> "gc";
                 case ALL -> "ac";
+                case COOP -> "cc";
                 case PRIVATE -> validUsername(replyTarget) ? "msg " + replyTarget : "";
             };
         }
@@ -428,11 +432,14 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
             if ("Guild".equalsIgnoreCase(value)) {
                 return GUILD;
             }
+            if ("Co-op".equalsIgnoreCase(value)) {
+                return COOP;
+            }
             return null;
         }
     }
 
-    private record ChatContext(ChatChannel channel, String senderName, String message, String replyTarget) {
+    record ChatContext(ChatChannel channel, String senderName, String message, String replyTarget) {
     }
 
     /** A reply goes out once its own delay is over and the pause after the previous reply is too. */
