@@ -542,7 +542,7 @@ public final class GreenhouseScreen extends Screen {
             THEME.text());
         button(graphics, left + 8, y + CARD_Y + 28, 124, 18, "Unlock all",
             inside(mx, my, left + 8, y + CARD_Y + 28, 124, 18), THEME.control(), THEME.text());
-        button(graphics, left + 138, y + CARD_Y + 28, 124, 18, "Start area",
+        button(graphics, left + 138, y + CARD_Y + 28, 124, 18, "Starting area",
             inside(mx, my, left + 138, y + CARD_Y + 28, 124, 18), THEME.control(), THEME.text());
 
         text(graphics, "Mutation targets", left, y + SEARCH_LABEL_Y, THEME.muted());
@@ -1238,7 +1238,7 @@ public final class GreenhouseScreen extends Screen {
             state.unlockStartArea();
             editingCells = false;
             session.persist();
-            say("Only the start area is unlocked", Tone.MUTED);
+            say("Only the starting area is unlocked", Tone.MUTED);
             return true;
         }
         if (inside(mx, my, left, y + SOLVE_Y, 84, 22)) {
