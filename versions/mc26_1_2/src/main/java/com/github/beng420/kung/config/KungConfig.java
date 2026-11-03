@@ -6,14 +6,17 @@ import com.github.beng420.kung.config.category.DebugConfig;
 import com.github.beng420.kung.config.category.DungeonChatFilterConfig;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.FeastConfig;
+import com.github.beng420.kung.config.category.GardenAlarmsConfig;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.config.category.InvisibugConfig;
+import com.github.beng420.kung.config.category.MiningConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
+import com.github.beng420.kung.config.category.PlotCleaningConfig;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.config.category.SafariConfig;
 import com.github.beng420.kung.config.category.SplitsConfig;
-import com.github.beng420.kung.config.category.VisitorAlarmConfig;
+import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
@@ -44,10 +47,13 @@ public final class KungConfig {
     public SlayerConfig slayer = new SlayerConfig();
     public SafariConfig safari = new SafariConfig();
     public FeastConfig feast = new FeastConfig();
-    public VisitorAlarmConfig visitorAlarm = new VisitorAlarmConfig();
+    public GardenAlarmsConfig gardenAlarms = new GardenAlarmsConfig();
     public HitboxesConfig hitboxes = new HitboxesConfig();
     public GreenhouseConfig greenhouse = new GreenhouseConfig();
     public InvisibugConfig invisibug = new InvisibugConfig();
+    public PlotCleaningConfig plotCleaning = new PlotCleaningConfig();
+    public MiningConfig mining = new MiningConfig();
+    public WaypointsConfig waypoints = new WaypointsConfig();
 
     private transient Path explicitConfigFile;
     private transient boolean loading;
@@ -93,10 +99,13 @@ public final class KungConfig {
                     slayer = loaded.slayer;
                     safari = loaded.safari;
                     feast = loaded.feast;
-                    visitorAlarm = loaded.visitorAlarm;
+                    gardenAlarms = loaded.gardenAlarms;
                     hitboxes = loaded.hitboxes;
                     greenhouse = loaded.greenhouse;
                     invisibug = loaded.invisibug;
+                    plotCleaning = loaded.plotCleaning;
+                    mining = loaded.mining;
+                    waypoints = loaded.waypoints;
                     loadedSuccessfully = true;
                 }
             }
@@ -132,6 +141,14 @@ public final class KungConfig {
             loaded.debug.setTarantulaMessages(slayerJson.get("tarantulaHelperDebugMessages").getAsBoolean());
         }
         migrateLegacyChatCommandSettings(loaded, miscJson);
+        // "6th Visitor Alarm" became the Max Visitor Alarm inside Garden Alarms.
+        JsonObject visitorAlarmJson = object(json, "visitorAlarm");
+        if (!hasValue(json, "gardenAlarms") && !visitorAlarmJson.isEmpty()) {
+            loaded.gardenAlarms.migrateVisitorAlarm(
+                hasValue(visitorAlarmJson, "enabled") && visitorAlarmJson.get("enabled").getAsBoolean(),
+                hasValue(visitorAlarmJson, "volume") ? visitorAlarmJson.get("volume").getAsInt() : null);
+            loaded.pendingSave = true;
+        }
         loaded.misc.keepOwnChannelsWhereChanged(name -> hasValue(miscJson, name));
         loaded.normalize();
         loaded.loading = false;
@@ -161,10 +178,13 @@ public final class KungConfig {
         if (slayer == null) slayer = new SlayerConfig();
         if (safari == null) safari = new SafariConfig();
         if (feast == null) feast = new FeastConfig();
-        if (visitorAlarm == null) visitorAlarm = new VisitorAlarmConfig();
+        if (gardenAlarms == null) gardenAlarms = new GardenAlarmsConfig();
         if (hitboxes == null) hitboxes = new HitboxesConfig();
         if (greenhouse == null) greenhouse = new GreenhouseConfig();
         if (invisibug == null) invisibug = new InvisibugConfig();
+        if (plotCleaning == null) plotCleaning = new PlotCleaningConfig();
+        if (mining == null) mining = new MiningConfig();
+        if (waypoints == null) waypoints = new WaypointsConfig();
     }
 
     private void bindCategories() {
@@ -177,10 +197,13 @@ public final class KungConfig {
         slayer.onChange(this::save);
         safari.onChange(this::save);
         feast.onChange(this::save);
-        visitorAlarm.onChange(this::save);
+        gardenAlarms.onChange(this::save);
         hitboxes.onChange(this::save);
         greenhouse.onChange(this::save);
         invisibug.onChange(this::save);
+        plotCleaning.onChange(this::save);
+        mining.onChange(this::save);
+        waypoints.onChange(this::save);
     }
 
     private void normalize() {
@@ -196,7 +219,7 @@ public final class KungConfig {
         safari.setScale(safari.scale());
         feast.setScale(feast.scale());
         feast.setKernelTimeoutSeconds(feast.kernelTimeoutSeconds());
-        visitorAlarm.setVolume(visitorAlarm.volume());
+        gardenAlarms.setVolume(gardenAlarms.volume());
         splits.setFormat(splits.format());
         misc.setHypixelApiKey(misc.hypixelApiKey());
         misc.setSuperpairsHelperScale(misc.superpairsHelperScale());
@@ -210,6 +233,8 @@ public final class KungConfig {
         hitboxes.normalize();
         greenhouse.normalize();
         invisibug.setThickness(invisibug.thickness());
+        mining.setGourmandCountdownSeconds(mining.gourmandCountdownSeconds());
+        mining.setGourmandVolume(mining.gourmandVolume());
     }
 
     private static JsonObject object(JsonObject parent, String name) {

@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.feature.misc.StorageHudFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
+import com.github.beng420.kung.feature.misc.CurrentChatDisplayFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
@@ -37,6 +38,7 @@ public final class KungHudPreviews {
             case "storage_hud" -> StorageHudFeature.drawPreview(graphics, config.misc);
             case "egg_sac_countdown" -> TarantulaHelperFeature.drawCountdownPreview(graphics, config.slayer);
             case "performance_hud" -> PerformanceHudFeature.drawPreview(graphics, config.misc);
+            case "current_chat_display" -> CurrentChatDisplayFeature.drawPreview(graphics, config.misc);
             case "sack_tracker" -> SackTrackerFeature.drawPreview(graphics, config.misc);
             // Map and Superpairs retain the safe labeled placeholders used by /kung hud.
             case "dungeon_map", "superpairs" -> drawPlaceholder(graphics, entry);

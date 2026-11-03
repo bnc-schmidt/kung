@@ -34,13 +34,13 @@ personal bests, run and player reports, Wither Dragons helper for M7, Blood Rush
 Ice Spray highlights, colored F7/M7 pillars, mimic hints, crypt and death messages, and a
 chat filter.
 
-**Slayer, Garden and Hunting** — Tarantula egg sac prediction, 6th visitor alarm, feast
-progress and Critter Safari uniques.
+**Slayer, Garden, Hunting and Mining** — Tarantula egg sac prediction, garden alarms (visitor queue, FF buff, spray), feast
+progress, Critter Safari uniques and a Gourmand Alert for Don Expresso's departure.
 
 **Util** — hitboxes for any entity, SkyBlock mob or held item, sack tracker with goals,
 performance HUD with TPS, FPS and ping plus 30 second graphs, bow draw indicator, Frozen
 Blaze aura timer, Ragnarock Axe tick timer, lobby hop helper, superpairs helper, loadout auto close, chat commands,
-chat emotes and custom sounds.
+chat emotes, chat channels and custom sounds.
 
 Everything stays client side and passive: Kung reads chat, packets and entities, and never
 plays for you.

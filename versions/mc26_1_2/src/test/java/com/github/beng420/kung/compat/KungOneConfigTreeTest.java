@@ -30,9 +30,9 @@ public final class KungOneConfigTreeTest {
         int expected = categories.stream().mapToInt(category -> category.features().stream()
             .mapToInt(feature -> 1 + countControls(feature.settings())).sum()).sum();
         assertEquals(expected, tree.map.size());
-        assertEquals(6, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
+        assertEquals(7, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
         long keybinds = tree.map.values().stream().filter(node -> node.getMetadata("visualizer") == Visualizer.KeybindVisualizer.class).count();
-        assertEquals(16, keybinds);
+        assertEquals(17, keybinds);
         assertEquals(Property.Display.DISABLED, property(tree, "Crypt Messages", "Enabled").getDisplay());
         assertEquals(false, property(tree, "Colored F7/M7 Pillars", "Enabled").get());
         assertArrayEquals(java.util.Arrays.stream(com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial.choices())
@@ -43,10 +43,10 @@ public final class KungOneConfigTreeTest {
         // A row hidden by its switch is hidden in the native menu too, not merely greyed out.
         assertEquals(Property.Display.SHOWN, property(tree, "Wither Dragons", "Track").getDisplay());
         // Global OneConfig search reads searchTags, but ignores category/subcategory headings.
-        assertEquals(List.of("Kung", "Garden", "6th Visitor Alarm"),
-            property(tree, "6th Visitor Alarm", "Enabled").getMetadata("searchTags"));
-        assertEquals(List.of("Kung", "Garden", "6th Visitor Alarm"),
-            property(tree, "6th Visitor Alarm", "Volume (%)").getMetadata("searchTags"));
+        assertEquals(List.of("Kung", "Garden", "Garden Alarms"),
+            property(tree, "Garden Alarms", "Enabled").getMetadata("searchTags"));
+        assertEquals(List.of("Kung", "Garden", "Garden Alarms"),
+            property(tree, "Garden Alarms", "Volume (%)").getMetadata("searchTags"));
     }
 
     @Test
@@ -121,7 +121,7 @@ public final class KungOneConfigTreeTest {
     public void numericUnitsAndDefaultsMatchKungRatherThanRawStorageUnits() {
         var defaults = new KungOneConfigTree(KungSettings.defaults(), () -> { }, () -> true);
         Tree tree = defaults.tree();
-        assertEquals(70, property(tree, "6th Visitor Alarm", "Volume (%)").get());
+        assertEquals(70, property(tree, "Garden Alarms", "Volume (%)").get());
         if (!com.github.beng420.kung.KungBuild.MODRINTH) {
             assertEquals(0.5, (Double) property(tree, "Blood rush helper", "Title Time (s)").get(), 0.00001);
         }

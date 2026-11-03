@@ -11,7 +11,9 @@ import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioSplit;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioUnit;
 import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
+import com.github.beng420.kung.config.category.MiningConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
+import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionMode;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionSource;
 import com.github.beng420.kung.config.category.SplitsConfig.TimeFormat;
@@ -19,8 +21,11 @@ import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog;
 import com.github.beng420.kung.feature.dungeon.DungeonQuizReminderFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomClassifier;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomDataSyncClient;
+import com.github.beng420.kung.feature.misc.ChatChannels;
+import com.github.beng420.kung.feature.misc.ChatChannelsFeature;
 import com.github.beng420.kung.feature.misc.CustomSoundsFeature;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.github.beng420.kung.feature.waypoints.WaypointType;
 import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.ui.KungFonts;
 import com.github.beng420.kung.update.KungUpdater;
@@ -248,14 +253,31 @@ public final class KungSettings {
                 )
             )),
             new CategoryEntry("Garden", List.of(
-                new FeatureEntry("6th Visitor Alarm", config.visitorAlarm::enabled,
-                    config.visitorAlarm::setEnabled,
+                new FeatureEntry("Garden Alarms", config.gardenAlarms::enabled,
+                    config.gardenAlarms::setEnabled,
                     List.of(
-                        SettingEntry.slider("Volume (%)", config.visitorAlarm::volume,
-                            config.visitorAlarm::setVolume, 1, 100, 1)
+                        SettingEntry.toggle("Max Visitor Alarm", config.gardenAlarms::maxVisitor,
+                            config.gardenAlarms::setMaxVisitor)
+                            .withTooltip("Rings as soon as the visitor queue is full (5, up to 10 with Max Occupancy).",
+                                "Accepting or declining a visitor, or muting it in chat, stops it."),
+                        SettingEntry.toggle("No FF Buff Alarm", config.gardenAlarms::noFfBuff,
+                            config.gardenAlarms::setNoFfBuff)
+                            .withTooltip("Rings once when the Pesthunter bonus (the Farming Fortune buff in the",
+                                "Pests tab widget) is inactive while you farm a garden plot.",
+                                "Breaking a few crops, the Barn and the Greenhouse never ring it."),
+                        SettingEntry.toggle("No Spray Alarm", config.gardenAlarms::noSpray,
+                            config.gardenAlarms::setNoSpray)
+                            .withTooltip("Rings once when the plot you farm has no spray.",
+                                "Rings again only on another plot or after a spray was active."),
+                        SettingEntry.keybind("Mute Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.gardenAlarms.muteKeybind()),
+                            config.gardenAlarms::muteKeybind, config.gardenAlarms::setMuteKeybind)
+                            .withTooltip("Press it to silence a ringing alarm, like clicking the chat message.",
+                                "Works in the world with no menu open. Unbound by default."),
+                        SettingEntry.slider("Volume (%)", config.gardenAlarms::volume,
+                            config.gardenAlarms::setVolume, 1, 100, 1)
                     )
-                ).withTooltip("Rings when 5 visitors wait and the timer for the 6th has run out.",
-                    "Accepting or declining a visitor, or muting it in chat, stops it."),
+                ).withTooltip("Alarms for the Garden: the visitor queue, the Farming Fortune buff and the plot spray.",
+                    "Turn each alarm on below. Sound and chat only, nothing is clicked for you."),
                 new FeatureEntry("Feast Progress", config.feast::enabled,
                     config.feast::setEnabled,
                     List.of(
@@ -272,6 +294,12 @@ public final class KungSettings {
                     "Avg Kernels/h is saved per profile and stays visible after pauses or restarts.",
                     "Every 5 farming minutes: 80% previous rate + 20% measured rate.",
                     "Without a saved rate, the first estimate takes 5 farming minutes."),
+                new FeatureEntry("Plot Cleaning Helper", config.plotCleaning::enabled,
+                    config.plotCleaning::setEnabled, List.of())
+                    .withTooltip("Draws leaves, grass and flowers as sponge in the garden plot you stand in,",
+                        "while Hypixel shows a cleaning progress for it. It stops when the plot is clean.",
+                        "Plots without a cleaning progress and the middle plot (Barn) stay as they are.",
+                        "Only the picture changes: nothing is clicked, built or moved for you."),
                 // Settings only, no master toggle: the hologram is user-triggered (/kung greenhouse), so there is
                 // nothing to switch on first and the "toggles default off" rule has nothing to apply to.
                 new FeatureEntry("Greenhouse Hologram", () -> false, (Runnable) null, greenhouseHologramSettings(config))
@@ -304,6 +332,23 @@ public final class KungSettings {
                     "An Invisibug is found by its crit particles and stays found 5 seconds after the last one.",
                     "Only crits right above a stand count: a tree you chop or an NPC stays unmarked.",
                     "A bug behind you or off screen keeps its direction: the line ends on the screen edge.")
+            )),
+            new CategoryEntry("Mining", List.of(
+                new FeatureEntry("Gourmand Alert", config.mining::gourmandAlertEnabled,
+                    config.mining::setGourmandAlertEnabled,
+                    List.of(
+                        SettingEntry.slider("Countdown (s)", config.mining::gourmandCountdownSeconds,
+                            config.mining::setGourmandCountdownSeconds,
+                            MiningConfig.MIN_GOURMAND_COUNTDOWN_SECONDS, MiningConfig.MAX_GOURMAND_COUNTDOWN_SECONDS, 1)
+                            .withTooltip("Seconds before Don Expresso leaves in which a red title counts down.",
+                                "Every second also plays a sound. Default: 10 seconds."),
+                        SettingEntry.slider("Volume (%)", config.mining::gourmandVolume,
+                            config.mining::setGourmandVolume, 1, 100, 1)
+                    )
+                ).withTooltip("Mithril Gourmand: warns you while you hold Tasty Mithril and Don Expresso is about to leave.",
+                    "A minute before: a yellow title and a chat link that runs /tptodonexpresso.",
+                    "Then a red countdown with a sound every second; its first second sends the link again.",
+                    "Don's time comes from Hypixel's chat lines and the 10 minutes since the event started.")
             )),
             new CategoryEntry("Slayer", List.of(
                 new FeatureEntry("Tarantula Helper", config.slayer::tarantulaHelperEnabled,
@@ -443,9 +488,35 @@ public final class KungSettings {
                         ))
                 )).withTooltip("Hold the key to see the whole chat without opening it.",
                     "Shows it like the open chat, without the text box. Letting go hides it again."),
+                new FeatureEntry("Chat Channels", config.misc::chatChannelsEnabled, () -> {
+                    config.misc.setChatChannelsEnabled(!config.misc.chatChannelsEnabled());
+                    ChatChannelsFeature.refresh();
+                }, List.of(
+                    SettingEntry.toggle("Tab Follows /chat", config.misc::chatChannelsFollowChat,
+                        config.misc::setChatChannelsFollowChat)
+                        .withTooltip("On: /chat party, or Hypixel's \"You are now in the PARTY channel\", also switches the tab.",
+                            "Off: only a click on a tab changes what the chat shows."),
+                    SettingEntry.group("Shown Channels").withChildren(java.util.Arrays.stream(ChatChannels.Channel.values())
+                        .map(channel -> SettingEntry.toggle(channel.label(), () -> !config.misc.chatChannelHidden(channel.name()),
+                            () -> {
+                                config.misc.setChatChannelHidden(channel.name(), !config.misc.chatChannelHidden(channel.name()));
+                                ChatChannelsFeature.refresh();
+                            }).withTooltip(channel.description())).toList())
+                        .withTooltip("An off channel vanishes from the chat, old lines too; on brings them back.")
+                )).withTooltip("Tabs under the open chat: All, Party, Guild, Co-op and DMs.",
+                    "A tab shows only its own lines and sends /chat to its channel.",
+                    "All shows everything except the channels you switch off:",
+                    "hover All to open the list, or set them under Shown Channels.",
+                    "Hidden lines are kept, so switching a channel on brings them all back."),
+                new FeatureEntry("Current Chat Display", config.misc::currentChatDisplayEnabled,
+                    config.misc::setCurrentChatDisplayEnabled, List.of())
+                    .withTooltip("Shows which chat your messages go to: All, Party, Guild, Officer or Co-op.",
+                        "Follows /chat and the Chat Channels tabs, from Hypixel's own notices.",
+                        "Move and resize in /kung hud."),
                 KungBuild.MODRINTH ? null : new FeatureEntry("Skip NPC Dialogue", config.misc::skipNpcDialogueEnabled,
                     config.misc::setSkipNpcDialogueEnabled, List.of())
-                    .withTooltip("Answers NPC dialogue prompts: a single option, or a known choice.",
+                    .withTooltip("Answers NPC dialogue prompts: a single option, a known choice, else the first option.",
+                        "Prompts that cost coins or swap items stay yours.",
                         "Clicks the NPC a \"Talk to\", \"Check on\" or \"Give\" quest objective names once it is in reach.",
                         "Never clicks in menus, sends chat or moves you. Off in dungeons and Kuudra.",
                         "Automates gameplay, which Hypixel's rules forbid. Use at your own risk."),
@@ -674,7 +745,37 @@ public final class KungSettings {
                     "Up to marks an upper bound because hidden fields may contain bonuses.",
                     "1/2 and 2/2 mean cards seen, not confirmed claimed rewards.",
                     "Also marks the next click in the Chronomatron and Ultrasequencer add-ons.",
-                    "Turn it on before an add-on starts: it learns the pattern while the game shows it.")
+                    "Turn it on before an add-on starts: it learns the pattern while the game shows it."),
+                new FeatureEntry("Waypoints", config.waypoints::enabled,
+                    config.waypoints::setEnabled,
+                    List.of(
+                        SettingEntry.button("Editor", "Open", () -> McCompat.setScreen(Minecraft.getInstance(),
+                            new WaypointsScreen(McCompat.screen(Minecraft.getInstance()))))
+                            .withTooltip("Opens the waypoint editor. /kung waypoints does the same."),
+                        SettingEntry.choice("Default Type", WaypointType.values(), config.waypoints::defaultType,
+                            config.waypoints::setDefaultType, WaypointType::label)
+                            .withTooltip("The draw type a new group starts with. Change a group's type with /kung waypoints group type."),
+                        SettingEntry.toggle("Route Line", config.waypoints::routeLine, config.waypoints::setRouteLine)
+                            .withTooltip("Draws a line from your crosshair to the next waypoint of a route."),
+                        SettingEntry.color("Line Color", config.waypoints::lineColor,
+                            () -> editColor("Waypoints", "Line Color", config.waypoints.lineColor(), config.waypoints::setLineColor)),
+                        SettingEntry.slider("Line Thickness", config.waypoints::lineThickness,
+                            config.waypoints::setLineThickness, 1, WaypointsConfig.MAX_LINE_THICKNESS, 1),
+                        SettingEntry.slider("Activation Radius", config.waypoints::activationRadius,
+                            config.waypoints::setActivationRadius, WaypointsConfig.MIN_RADIUS, WaypointsConfig.MAX_RADIUS, 1)
+                            .withTooltip("Blocks from a route waypoint within which it counts as reached."),
+                        SettingEntry.toggle("Allow Skipping Waypoints", config.waypoints::allowSkipping,
+                            config.waypoints::setAllowSkipping)
+                            .withTooltip("Lets a route move to a waypoint that is not next to the current one."),
+                        SettingEntry.toggle("Allow Going Backwards", config.waypoints::allowGoingBackwards,
+                            config.waypoints::setAllowGoingBackwards)
+                            .withTooltip("Lets a route move back to the previous waypoint.")
+                    )
+                ).withTooltip("Saves waypoints and routes per island and shows them in the world.",
+                    "They are kept in config/kung/waypoints.json, also across restarts.",
+                    "A route is a group whose waypoints show one after the other.",
+                    "Share groups as a Skyblocker waypoint string with /kung waypoints export and import.",
+                    "Beng114 only for now: it is at an early stage.").forDeveloper()
             )),
             new CategoryEntry("Debug", List.of(
                 new FeatureEntry(
@@ -785,6 +886,9 @@ public final class KungSettings {
                     "The soil marker itself stays."),
             SettingEntry.toggle("Crosshair Label", hologram::showCrosshairLabel, hologram::setShowCrosshairLabel)
                 .withTooltip("Shows the name of the crop or soil you aim at below the crosshair."),
+            SettingEntry.toggle("Focus On Held Item", hologram::focusOnHeldItem, hologram::setFocusOnHeldItem)
+                .withTooltip("While you hold a crop, a mutation or a soil block, the hologram shows only where",
+                    "it goes. Without anything left to place for it, the whole hologram shows again."),
             SettingEntry.keybind("Toggle Key",
                     () -> LoadoutsAutoCloseFeature.keybindDisplay(hologram.toggleKeybind()),
                     hologram::toggleKeybind, hologram::setToggleKeybind)
@@ -1016,7 +1120,11 @@ public final class KungSettings {
                 config.dungeon::setDragonHpEnabled)
                 .withTooltip("Shows each dragon's HP as text on its body, from the health the server sends.",
                     "It drops when anyone hurts the dragon. Green above 75% of its highest HP, then yellow, gold, red.",
-                    "Hidden while the server has not sent a value yet. Turn it on before the dragons spawn.")));
+                    "Hidden while the server has not sent a value yet. Turn it on before the dragons spawn."),
+            SettingEntry.slider("Text Size (%)", config.dungeon::dragonHpScale,
+                config.dungeon::setDragonHpScale, 50, 300, 25)
+                .withTooltip("Scales the HP text. It also grows when the dragon is near and shrinks when far.")
+                .withVisibleWhen(config.dungeon::dragonHpEnabled)));
         if (developer) settings.add(
             SettingEntry.toggle("Developer Diagnostics", config.dungeon::devDragonDiagnosticsEnabled,
                 config.dungeon::setDevDragonDiagnosticsEnabled)

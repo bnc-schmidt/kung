@@ -5,6 +5,7 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.runtime.AppServices;
+import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.ClientCommandRegistrationCallback;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -23,6 +24,7 @@ public final class KungCommands {
             RoomSyncCommandGroup.register(root, tracker);
             DungeonDebugCommandGroup.register(root, tracker);
             UserCommandGroup.register(root, tracker);
+            if (KungDeveloperAccess.allowed()) WaypointCommandGroup.register(root);
             DeveloperCommandGroup.register(root);
             dispatcher.register(root);
             DungeonJoinCommands.register(dispatcher);

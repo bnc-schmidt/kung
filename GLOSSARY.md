@@ -177,6 +177,37 @@ A top-level slash command such as `/f7` or `/m1` that starts a Catacombs floor. 
 A message such as `!c50` that other players type in party chat and Kung answers.
 _Avoid_: bang command
 
+**Chat channel**:
+One kind of chat line that Chat Channels can switch off: Guild, Party, Co-op or DMs. Public chat and system lines belong to no channel and are never hidden in All. A hidden channel's lines stay stored, so switching it on brings them all back.
+
+**Channel tab**:
+One of the tabs under the open chat: All, Party, Guild, Co-op, DMs. A tab shows only its own chat channel and, except DMs, sends `/chat` to switch the send channel. The All tab shows every line except the chat channels switched off in its flyout.
+_Avoid_: filter bar, chat tab (a bare "tab" is a menu column)
+
+**Flyout**:
+The list of one check per chat channel that opens over the All tab while the pointer is on it.
+_Avoid_: dropdown, popup (a popup is an editor popup)
+
+**Send channel**:
+The channel Hypixel sends the player's next chat message to: All, Party, Guild, Officer or Co-op. `/chat party` sets it. Current Chat Display shows it; the channel tabs underline it.
+_Avoid_: current chat, active channel
+
+## Waypoints
+
+**Waypoint**:
+One marked block with a name, a color and an on/off state, drawn in the world.
+
+**Waypoint group**:
+The waypoints of one island that share a draw type and a through-walls choice. Always say "waypoint group": a bare "group" is the Group setting.
+_Avoid_: category, folder
+
+**Route**:
+A waypoint group whose waypoints show one after the other, with the previous, current and next one colored. Skyblocker calls it an ordered group.
+_Avoid_: ordered group, path
+
+**Edit island**:
+The island whose waypoint groups the editor shows and the `/kung waypoints` subcommands change. It starts as the island the player is on; the island menu or `/kung waypoints island` picks another.
+
 ## Builds and diagnostics
 
 **Flavor**:

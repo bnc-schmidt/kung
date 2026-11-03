@@ -28,11 +28,11 @@ public final class KungSettingsTest {
         Path file = temporary.getRoot().toPath().resolve("kung.json");
         var categories = KungSettings.categories(new KungConfig(file), () -> { });
 
-        assertEquals(List.of("Dungeon", "Garden", "Hunting", "Slayer", "Util", "Debug"),
+        assertEquals(List.of("Dungeon", "Garden", "Hunting", "Mining", "Slayer", "Util", "Debug"),
             categories.stream().map(CategoryEntry::name).toList());
-        // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue.
+        // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue. Waypoints is developer only.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 3, 2, 2, modrinth ? 16 : 18, 4),
+        assertEquals(List.of(modrinth ? 12 : 13, 4, 2, 1, 2, modrinth ? 18 : 20, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -74,7 +74,7 @@ public final class KungSettingsTest {
         assertFalse(group.clickable());
         assertEquals(List.of("Opacity (%)", "To Place Color", "Wrong Crop Color",
             "Wrong State Color", "Deactivate When Complete", "Hide Models Over Wrong Soil", "Crosshair Label",
-            "Toggle Key", "Unload Key"),
+            "Focus On Held Item", "Toggle Key", "Unload Key"),
             group.settings().stream().map(SettingEntry::label).toList());
 
         SettingEntry opacity = setting(group, "Opacity (%)");
@@ -112,6 +112,11 @@ public final class KungSettingsTest {
         label.toggle().run();
         assertFalse(config.greenhouse.showCrosshairLabel());
 
+        SettingEntry focus = setting(group, "Focus On Held Item");
+        assertTrue("on by default", focus.booleanSupplier().getAsBoolean());
+        focus.toggle().run();
+        assertFalse(config.greenhouse.focusOnHeldItem());
+
         SettingEntry key = setting(group, "Toggle Key");
         assertEquals(SettingKind.KEYBIND, key.kind());
         assertEquals("K", key.textValue());
@@ -128,6 +133,7 @@ public final class KungSettingsTest {
         assertFalse(restored.greenhouse.hideWhenComplete());
         assertFalse(restored.greenhouse.hideModelsOverWrongSoil());
         assertFalse(restored.greenhouse.showCrosshairLabel());
+        assertFalse(restored.greenhouse.focusOnHeldItem());
         assertEquals("", restored.greenhouse.toggleKeybind());
     }
 
@@ -325,14 +331,14 @@ public final class KungSettingsTest {
         config.dungeon.setDevDragonDiagnosticsEnabled(true);
         var developer = KungSettings.categories(config, () -> { }, true);
         var publicCatalog = KungSettings.categories(config, () -> { }, false);
-        // Same entries for everyone; Wither Dragons differs in its settings.
+        // Same entries for everyone but the developer-only rows; Wither Dragons differs in its settings.
         for (int index = 0; index < developer.size(); index++) {
-            assertEquals(developer.get(index).features().stream().map(FeatureEntry::name).toList(),
+            assertEquals(developer.get(index).features().stream().filter(feature -> !feature.developerOnly()).map(FeatureEntry::name).toList(),
                 publicCatalog.get(index).features().stream().map(FeatureEntry::name).toList());
         }
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Developer Diagnostics"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Text Size (%)", "Developer Diagnostics"),
             feature(developer, "Wither Dragons").settings().stream().map(SettingEntry::label).toList());
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Text Size (%)"),
             feature(publicCatalog, "Wither Dragons").settings().stream().map(SettingEntry::label).toList());
     }
 
@@ -395,7 +401,7 @@ public final class KungSettingsTest {
         KungConfig config = new KungConfig(file);
         var helper = feature(KungSettings.categories(config, () -> { }, true), "Wither Dragons");
         assertFalse(helper.enabled());
-        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Developer Diagnostics"),
+        assertEquals(List.of("Debuff Tracker", "Track", "Dragon Prio", "Mage Split", "Healer Split", "Tank Split", "Prio Unit", "Spawn Markers", "Marker", "Core Parts", "Aim Point", "Flight Paths", "Path Part", "Line Thickness (%)", "Statue Boxes", "Count Notifications", "Dragon HP", "Text Size (%)", "Developer Diagnostics"),
             helper.settings().stream().map(SettingEntry::label).toList());
         assertFalse(setting(helper, "Developer Diagnostics").booleanSupplier().getAsBoolean());
         // By name, not by index: the list also holds a slider, which has no boolean supplier.
@@ -504,6 +510,28 @@ public final class KungSettingsTest {
         restored.load();
         assertEquals(12, restored.misc.peekChatScrollLines());
         assertEquals("key:89:0", restored.misc.peekChatKeybind());
+    }
+
+    @Test
+    public void chatChannelsOffByDefaultListsEveryChannelAndKeepsTheHiddenOnesAcrossRestarts() {
+        Path file = temporary.getRoot().toPath().resolve("chat-channels.json");
+        KungConfig config = new KungConfig(file);
+        FeatureEntry channels = feature(KungSettings.categories(config, () -> { }), "Chat Channels");
+        assertFalse(config.misc.chatChannelsEnabled());
+
+        SettingEntry shown = setting(channels, "Shown Channels");
+        assertEquals(List.of("Guild", "Party", "Co-op", "DMs"), shown.children().stream().map(SettingEntry::label).toList());
+        assertTrue("every channel starts shown", shown.children().stream().allMatch(s -> s.booleanSupplier().getAsBoolean()));
+
+        config.misc.setChatChannelHidden("GUILD", true);
+        config.misc.setChatChannelHidden("DIRECT", true);
+        config.misc.setChatChannelHidden("DIRECT", false);
+        assertFalse(setting(channels, "Shown Channels").children().getFirst().booleanSupplier().getAsBoolean());
+        KungConfig restored = new KungConfig(file);
+        restored.load();
+        assertTrue(restored.misc.chatChannelHidden("GUILD"));
+        assertFalse(restored.misc.chatChannelHidden("DIRECT"));
+        assertFalse("a channel added later starts shown", restored.misc.chatChannelHidden("OFFICER"));
     }
 
     private static FeatureEntry feature(List<CategoryEntry> categories, String name) {

@@ -78,14 +78,36 @@ public final class ConfigRegressionTest {
     }
 
     @Test
-    public void visitorAlarmDefaultsOffAndNormalizesVolume() {
-        equal(false, read("{}").visitorAlarm.enabled(), "new alarm defaults off");
-        equal(false, read("{\"visitorAlarm\":null}").visitorAlarm.enabled(), "null category defaults off");
-        equal(70, read("{}").visitorAlarm.volume(), "audible default volume");
-        KungConfig loaded = read("{\"visitorAlarm\":{\"enabled\":true,\"volume\":999}}");
-        equal(true, loaded.visitorAlarm.enabled(), "enabled setting retained");
-        equal(100, loaded.visitorAlarm.volume(), "volume upper bound");
-        equal(1, read("{\"visitorAlarm\":{\"volume\":0}}").visitorAlarm.volume(), "volume lower bound");
+    public void gardenAlarmsDefaultOffAndNormalizeVolume() {
+        equal(false, read("{}").gardenAlarms.enabled(), "new alarms default off");
+        equal(false, read("{}").gardenAlarms.maxVisitor(), "max visitor alarm defaults off");
+        equal(false, read("{}").gardenAlarms.noFfBuff(), "no FF buff alarm defaults off");
+        equal(false, read("{}").gardenAlarms.noSpray(), "no spray alarm defaults off");
+        equal(false, read("{\"gardenAlarms\":null}").gardenAlarms.enabled(), "null category defaults off");
+        equal(70, read("{}").gardenAlarms.volume(), "audible default volume");
+        KungConfig loaded = read("{\"gardenAlarms\":{\"enabled\":true,\"noSpray\":true,\"volume\":999}}");
+        equal(true, loaded.gardenAlarms.enabled(), "enabled setting retained");
+        equal(true, loaded.gardenAlarms.noSpray(), "child setting retained");
+        equal(false, loaded.gardenAlarms.noFfBuff(), "other child setting untouched");
+        equal(100, loaded.gardenAlarms.volume(), "volume upper bound");
+        equal(1, read("{\"gardenAlarms\":{\"volume\":0}}").gardenAlarms.volume(), "volume lower bound");
+    }
+
+    @Test
+    public void sixthVisitorAlarmMigratesToTheMaxVisitorAlarm() {
+        KungConfig on = read("{\"visitorAlarm\":{\"enabled\":true,\"volume\":35}}");
+        equal(true, on.gardenAlarms.enabled(), "old switch turns Garden Alarms on");
+        equal(true, on.gardenAlarms.maxVisitor(), "old switch turns the Max Visitor Alarm on");
+        equal(false, on.gardenAlarms.noFfBuff(), "new alarms stay off");
+        equal(false, on.gardenAlarms.noSpray(), "new alarms stay off");
+        equal(35, on.gardenAlarms.volume(), "old volume kept");
+        KungConfig off = read("{\"visitorAlarm\":{\"enabled\":false,\"volume\":20}}");
+        equal(false, off.gardenAlarms.enabled(), "old off stays off");
+        equal(false, off.gardenAlarms.maxVisitor(), "old off stays off");
+        equal(20, off.gardenAlarms.volume(), "old volume kept while off");
+        KungConfig both = read("{\"visitorAlarm\":{\"enabled\":true},\"gardenAlarms\":{\"enabled\":false}}");
+        equal(false, both.gardenAlarms.enabled(), "a saved Garden Alarms section wins over the old one");
+        equal(false, both.gardenAlarms.maxVisitor(), "a saved Garden Alarms section wins over the old one");
     }
 
     @Test
@@ -205,8 +227,9 @@ public final class ConfigRegressionTest {
             config.feast.setX(321);
             config.feast.setY(123);
             config.feast.setScale(150);
-            config.visitorAlarm.setEnabled(true);
-            config.visitorAlarm.setVolume(35);
+            config.gardenAlarms.setEnabled(true);
+            config.gardenAlarms.setNoSpray(true);
+            config.gardenAlarms.setVolume(35);
             config.debug.setTarantulaMessages(false);
             config.slayer.setEggSacPredictionEnabled(true);
             config.misc.setLoadoutKeybind(2, "mouse:3");
@@ -214,8 +237,9 @@ public final class ConfigRegressionTest {
             config.misc.setCustomArrowHitSounds("\"C:/sounds/ping.wav\", 'bell.wav'");
             String saved = Files.readString(file);
             KungConfig roundTrip = read(saved);
-            equal(true, roundTrip.visitorAlarm.enabled(), "visitor alarm persisted");
-            equal(35, roundTrip.visitorAlarm.volume(), "visitor volume persisted");
+            equal(true, roundTrip.gardenAlarms.enabled(), "garden alarms persisted");
+            equal(true, roundTrip.gardenAlarms.noSpray(), "no spray alarm persisted");
+            equal(35, roundTrip.gardenAlarms.volume(), "alarm volume persisted");
             equal(77, roundTrip.dungeon.x(), "map setter persists");
             equal(250, roundTrip.dungeon.scale(), "map enlargement beyond old cap persists");
             equal(175, roundTrip.dungeon.textScale(), "map text size persists independently");

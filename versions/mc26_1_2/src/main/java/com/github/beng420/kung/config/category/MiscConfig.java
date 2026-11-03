@@ -4,11 +4,16 @@ import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.util.KeyCodes;
 import com.github.beng420.kung.util.KeyboardLayout;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
+import java.util.regex.Pattern;
 
 public final class MiscConfig extends ConfigCategory {
+    private static final Pattern SACK_KEY_SYMBOL = Pattern.compile("^[^\\p{L}\\p{N}]+");
     private static String layoutPeekChatKeybind;
 
     private boolean lobbyHopHelperEnabled = false;
@@ -49,6 +54,9 @@ public final class MiscConfig extends ConfigCategory {
     private boolean sackTrackerEnabled = false;
     private String sackTrackerKeybind = "";
     private boolean sackTrackerInMenus = true;
+    private boolean sackTrackerGoalSound = true;
+    private boolean sackTrackerGoalTitle = true;
+    private boolean sackTrackerApiResync = true;
     private int sackTrackerX = 6;
     private int sackTrackerY = 240;
     private int sackTrackerScale = 100;
@@ -60,6 +68,15 @@ public final class MiscConfig extends ConfigCategory {
     private String peekChatKeybind;
     private boolean peekChatScrollEnabled = true;
     private int peekChatScrollLines = 7;
+    private boolean chatChannelsEnabled = false;
+    /** Names of the {@code ChatChannels.Channel} kinds the player hid; a kind added later starts shown. */
+    private Set<String> chatChannelsHidden = new LinkedHashSet<>();
+    /** Whether a /chat switch (typed or a tab click's) also changes the tab; off, only a click on a tab does. */
+    private boolean chatChannelsFollowChat = false;
+    private boolean currentChatDisplayEnabled = false;
+    private int currentChatDisplayX = 6;
+    private int currentChatDisplayY = 90;
+    private int currentChatDisplayScale = 100;
     private String menuFont = "Inter";
     private boolean hypixelApiEnabled = false;
     private String hypixelApiKey = "";
@@ -253,14 +270,30 @@ public final class MiscConfig extends ConfigCategory {
     public void setSackTrackerKeybind(String value) { sackTrackerKeybind = value == null ? "" : value; save(); }
     public boolean sackTrackerInMenus() { return sackTrackerInMenus; }
     public void setSackTrackerInMenus(boolean value) { sackTrackerInMenus = value; save(); }
+    public boolean sackTrackerGoalSound() { return sackTrackerGoalSound; }
+    public void setSackTrackerGoalSound(boolean value) { sackTrackerGoalSound = value; save(); }
+    public boolean sackTrackerGoalTitle() { return sackTrackerGoalTitle; }
+    public void setSackTrackerGoalTitle(boolean value) { sackTrackerGoalTitle = value; save(); }
+    public boolean sackTrackerApiResync() { return sackTrackerApiResync; }
+    public void setSackTrackerApiResync(boolean value) { sackTrackerApiResync = value; save(); }
     public int sackTrackerX() { return sackTrackerX; }
     public void setSackTrackerX(int value) { sackTrackerX = value; save(); }
     public int sackTrackerY() { return sackTrackerY; }
     public void setSackTrackerY(int value) { sackTrackerY = value; save(); }
     public int sackTrackerScale() { return sackTrackerScale; }
     public void setSackTrackerScale(int value) { sackTrackerScale = Math.clamp(value, 25, 300); save(); }
-    /** The items of the profile the player is on; the old shared list while no profile is known yet. */
-    public List<SackItem> sackTrackerItems() { return Collections.unmodifiableList(activeSackItems()); }
+    /**
+     * The items the player tracks, in the profile the player is on; the old shared list while no profile is known
+     * yet. Watched items (see {@link #watchSackTrackerItems}) are not among them: the display and the settings never show them.
+     */
+    public List<SackItem> sackTrackerItems() {
+        List<SackItem> items = activeSackItems();
+        return items.stream().anyMatch(SackItem::hidden) ? items.stream().filter(item -> !item.hidden()).toList()
+            : Collections.unmodifiableList(items);
+    }
+
+    /** Tracked and watched items: everything the sack reads and [Sacks] messages have to keep current. */
+    public List<SackItem> sackTrackerAllItems() { return Collections.unmodifiableList(activeSackItems()); }
     public boolean sackTrackerProfileKnown() { return sackTrackerProfiles.known(); }
     public String sackTrackerProfileName() { return sackTrackerProfiles.name(); }
     public void leaveSackTrackerProfile() { sackTrackerProfiles.leave(); }
@@ -284,6 +317,25 @@ public final class MiscConfig extends ConfigCategory {
     public void setPeekChatScrollEnabled(boolean value) { peekChatScrollEnabled = value; save(); }
     public int peekChatScrollLines() { return Math.clamp(peekChatScrollLines, 1, 30); }
     public void setPeekChatScrollLines(int value) { peekChatScrollLines = Math.clamp(value, 1, 30); save(); }
+    public boolean chatChannelsEnabled() { return chatChannelsEnabled; }
+    public void setChatChannelsEnabled(boolean value) { chatChannelsEnabled = value; save(); }
+    public boolean chatChannelsFollowChat() { return chatChannelsFollowChat; }
+    public void setChatChannelsFollowChat(boolean value) { chatChannelsFollowChat = value; save(); }
+    public boolean currentChatDisplayEnabled() { return currentChatDisplayEnabled; }
+    public void setCurrentChatDisplayEnabled(boolean value) { currentChatDisplayEnabled = value; save(); }
+    public int currentChatDisplayX() { return currentChatDisplayX; }
+    public void setCurrentChatDisplayX(int value) { currentChatDisplayX = value; save(); }
+    public int currentChatDisplayY() { return currentChatDisplayY; }
+    public void setCurrentChatDisplayY(int value) { currentChatDisplayY = value; save(); }
+    public int currentChatDisplayScale() { return currentChatDisplayScale; }
+    public void setCurrentChatDisplayScale(int value) { currentChatDisplayScale = Math.clamp(value, 25, 300); save(); }
+    public boolean chatChannelHidden(String channel) { return chatChannelsHidden != null && chatChannelsHidden.contains(channel); }
+    public void setChatChannelHidden(String channel, boolean hidden) {
+        if (chatChannelsHidden == null) chatChannelsHidden = new LinkedHashSet<>();
+        if (hidden) chatChannelsHidden.add(channel);
+        else chatChannelsHidden.remove(channel);
+        save();
+    }
 
     public SackItem sackTrackerItem(String name) {
         String key = sackKey(name);
@@ -293,21 +345,56 @@ public final class MiscConfig extends ConfigCategory {
 
     /** An item's name without the symbol some names start with (a gemstone's "☠ Onyx"): menus and chat disagree on it. */
     public static String sackKey(String name) {
-        return name == null ? "" : name.strip().replaceFirst("^[^\\p{L}\\p{N}]+", "");
+        return name == null ? "" : SACK_KEY_SYMBOL.matcher(name.strip()).replaceFirst("");
     }
 
-    /** Tracks the item, or stops tracking it when it already is; true when it is tracked now. */
+    /**
+     * Tracks the item, or stops tracking it when it already is; true when it is tracked now. A watched item becomes
+     * tracked and shown, keeping the amount already read.
+     */
     public boolean toggleSackTrackerItem(String name, int color, long amount) {
         SackItem existing = sackTrackerItem(name);
+        if (existing != null && existing.hidden) {
+            existing.hidden = false;
+            existing.color = color;
+            if (amount >= 0) existing.amount = amount;
+            save();
+            return true;
+        }
         if (existing != null) activeSackItems().remove(existing);
         else activeSackItems().add(new SackItem(name, color, amount, 0));
         save();
         return existing == null;
     }
 
+    /**
+     * Has the sack reads and [Sacks] messages keep these items current without showing them (the Greenhouse planner
+     * reads them); items that are already tracked or watched stay as they are. Only for a known profile: the old
+     * shared list belongs to no profile.
+     */
+    public void watchSackTrackerItems(Collection<String> names) {
+        if (!sackTrackerProfiles.known()) return;
+        boolean added = false;
+        for (String name : names) {
+            if (sackTrackerItem(name) != null) continue;
+            SackItem item = new SackItem(name, 0xFFFFFF, -1, 0);
+            item.hidden = true;
+            activeSackItems().add(item);
+            added = true;
+        }
+        if (added) save();
+    }
+
     public void setSackTrackerAmount(SackItem item, long amount) {
         if (!activeSackItems().contains(item) || item.amount == Math.max(0, amount)) return;
         item.amount = Math.max(0, amount);
+        save();
+    }
+
+    /** The SkyBlock item id a sack menu showed for this row: the key of its count in the API. */
+    public void setSackTrackerId(SackItem item, String id) {
+        if (!activeSackItems().contains(item) || id == null || id.isBlank() || id.equals(item.id())) return;
+        item.id = id;
         save();
     }
 
@@ -321,10 +408,9 @@ public final class MiscConfig extends ConfigCategory {
         if (activeSackItems().remove(item)) save();
     }
 
+    /** Stops tracking everything the player tracks; watched items keep being read. */
     public void clearSackTrackerItems() {
-        if (activeSackItems().isEmpty()) return;
-        activeSackItems().clear();
-        save();
+        if (activeSackItems().removeIf(item -> !item.hidden())) save();
     }
 
     /** Identity stays stable while editing, like ChatEmote, so rows keep owning their entry. */
@@ -333,6 +419,10 @@ public final class MiscConfig extends ConfigCategory {
         private int color = 0xFFFFFF;
         private long amount;
         private long goal;
+        /** The SkyBlock item id, read from a sack menu; empty until one was open. */
+        private String id = "";
+        /** Watched, not tracked: read like a tracked item but never shown (see {@link #watchSackTrackerItems}). */
+        private boolean hidden;
 
         private SackItem() { }
 
@@ -347,6 +437,8 @@ public final class MiscConfig extends ConfigCategory {
         public int color() { return color; }
         public long amount() { return amount; }
         public long goal() { return goal; }
+        public String id() { return id == null ? "" : id; }
+        public boolean hidden() { return hidden; }
     }
 
     public void addBowDrawThreshold() {
@@ -750,6 +842,7 @@ public final class MiscConfig extends ConfigCategory {
         ragTimerScale = Math.clamp(ragTimerScale, 25, 300);
         storageHudScale = Math.clamp(storageHudScale, 25, 300);
         performanceHudScale = Math.clamp(performanceHudScale, 25, 300);
+        currentChatDisplayScale = Math.clamp(currentChatDisplayScale, 25, 300);
         performanceRefreshTenths = Math.clamp(performanceRefreshTenths, 1, 10);
         sackTrackerScale = Math.clamp(sackTrackerScale, 25, 300);
         sackTrackerItems = sackTrackerItems == null ? new ArrayList<>()

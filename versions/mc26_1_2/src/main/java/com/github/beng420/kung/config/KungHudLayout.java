@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.feature.misc.StorageHudFeature;
 import com.github.beng420.kung.feature.misc.FrozenBlazeHudFeature;
+import com.github.beng420.kung.feature.misc.CurrentChatDisplayFeature;
 import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import com.github.beng420.kung.feature.misc.RagTickTimerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
@@ -98,6 +99,11 @@ public final class KungHudLayout {
                 config.misc::setPerformanceHudX, config.misc::setPerformanceHudY,
                 config.misc::performanceHudScale, config.misc::setPerformanceHudScale,
                 config.misc::performanceHudEnabled, config.misc::setPerformanceHudEnabled),
+            new Entry("current_chat_display", "Current Chat Display", () -> CurrentChatDisplayFeature.overlayBounds(config.misc),
+                config.misc::currentChatDisplayX, config.misc::currentChatDisplayY,
+                config.misc::setCurrentChatDisplayX, config.misc::setCurrentChatDisplayY,
+                config.misc::currentChatDisplayScale, config.misc::setCurrentChatDisplayScale,
+                config.misc::currentChatDisplayEnabled, config.misc::setCurrentChatDisplayEnabled),
             new Entry("sack_tracker", "Sack Tracker", () -> SackTrackerFeature.overlayBounds(config.misc),
                 config.misc::sackTrackerX, config.misc::sackTrackerY,
                 config.misc::setSackTrackerX, config.misc::setSackTrackerY,
