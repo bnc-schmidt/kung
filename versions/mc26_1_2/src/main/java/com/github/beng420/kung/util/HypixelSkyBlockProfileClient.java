@@ -21,6 +21,7 @@ import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
@@ -118,6 +119,70 @@ public final class HypixelSkyBlockProfileClient {
             .thenCompose(profile -> loadHypixelObject(HYPIXEL_PLAYER_API, "uuid", profile.uuid(), key)
                 .thenApply(playerRoot -> SecretResult.ok(profile.name(), totalSecrets(playerRoot)))
                 .exceptionally(throwable -> SecretResult.error(shortError(throwable))));
+    }
+
+    public static final String SOURCE_HYPIXEL = "hypixel";
+    public static final String SOURCE_KUNG_SERVER = "kung-server";
+
+    /** Where a Sack lookup goes: your own key first, else the Kung server; empty when neither is set up. */
+    public static String sackSource(boolean directEnabled, boolean serverConfigured) {
+        return directEnabled ? SOURCE_HYPIXEL : serverConfigured ? SOURCE_KUNG_SERVER : "";
+    }
+
+    public static String sackSource() {
+        return sackSource(KungConfig.get().misc.directHypixelApiEnabled(), DungeonRoomDataSyncClient.INSTANCE.configured());
+    }
+
+    /**
+     * The Sack counts of one player's selected profile, from {@link #sackSource()}. The {@code /kung dev sackapi}
+     * probe uses it to measure how far the API trails the game. A limited lookup (429) is not retried.
+     */
+    public CompletableFuture<SackCounts> loadSackCounts(String uuid) {
+        String source = sackSource();
+        if (source.isEmpty()) return CompletableFuture.failedFuture(new IllegalStateException(NO_SOURCE));
+        String plain = uuid.replace("-", "");
+        CompletableFuture<JsonObject> root = SOURCE_HYPIXEL.equals(source)
+            ? loadHypixelObject(HYPIXEL_PROFILES_API, "uuid", plain, KungConfig.get().misc.hypixelApiKey())
+            : loadKungServerObject(DungeonRoomDataSyncClient.endpoint("hypixel/sacks"), "uuid", plain,
+                KungServerSession.INSTANCE);
+        return root.thenApply(profiles -> parseSackCounts(uuid, profiles).withSource(source));
+    }
+
+    /**
+     * Item id to amount of the selected profile's Sacks (the first profile when none says "selected"); empty when the
+     * profile hides its inventory. The field sits in the member's {@code inventory}, older data had it on the member.
+     */
+    public static SackCounts parseSackCounts(String uuid, JsonObject profilesRoot) {
+        JsonObject chosen = null;
+        JsonElement profiles = profilesRoot == null ? null : profilesRoot.get("profiles");
+        if (profiles != null && profiles.isJsonArray()) {
+            for (JsonElement element : profiles.getAsJsonArray()) {
+                if (!element.isJsonObject()) continue;
+                JsonObject profile = element.getAsJsonObject();
+                if (chosen == null || bool(profile, "selected")) chosen = profile;
+            }
+        }
+        if (chosen == null) return new SackCounts("", Map.of(), "", "no profiles in the answer");
+        JsonObject member = objectMember(objectMember(chosen, "members"), uuid.replace("-", "").toLowerCase(Locale.ROOT));
+        JsonObject sacks = objectMember(objectMember(member, "inventory"), "sacks_counts");
+        if (sacks == null) sacks = objectMember(member, "sacks_counts");
+        Map<String, Long> counts = new TreeMap<>();
+        if (sacks != null) {
+            sacks.entrySet().forEach(entry -> {
+                if (entry.getValue().isJsonPrimitive() && entry.getValue().getAsJsonPrimitive().isNumber()) {
+                    counts.put(entry.getKey(), entry.getValue().getAsLong());
+                }
+            });
+        }
+        return new SackCounts(string(chosen, "cute_name", ""), counts, "", sacks == null ? missingSacks(member) : "");
+    }
+
+    /** Why a member has no Sack counts: absent, or an answer without the {@code inventory} object (the Inventory API is off, or the route cut it). */
+    private static String missingSacks(JsonObject member) {
+        if (member == null) return "member not found";
+        JsonObject inventory = objectMember(member, "inventory");
+        return "member keys=" + String.join(",", new java.util.TreeSet<>(member.keySet()))
+            + (inventory == null ? "; no inventory object" : "; inventory keys=" + String.join(",", new java.util.TreeSet<>(inventory.keySet())));
     }
 
     private CompletableFuture<ProfileResult> loadPlayerFromKungServer(String username) {
@@ -491,6 +556,13 @@ public final class HypixelSkyBlockProfileClient {
         Throwable cause = throwable.getCause() != null ? throwable.getCause() : throwable;
         String message = cause.getMessage();
         return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
+    }
+
+    /** A profile's name and its Sack amounts by item id (sorted); {@code source}: where the lookup went; {@code note}: why there are none. */
+    public record SackCounts(String profile, Map<String, Long> counts, String source, String note) {
+        SackCounts withSource(String source) {
+            return new SackCounts(profile, counts, source, note);
+        }
     }
 
     public record ProfileResult(boolean success, PlayerData player, int secretsFound, String error, String source,

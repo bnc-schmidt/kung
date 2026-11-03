@@ -27,6 +27,8 @@ const roomReport = {
 
 const owner = { id: "69617dbf568e46329ee980bf67d534d9", name: "Beng114" };
 const friend = { id: "0123456789abcdef0123456789abcdef", name: "Friend_1" };
+// A player whose profiles hold Sack counts; the fake Hypixel answers for this uuid with two profiles.
+const sacker = { id: "5".repeat(32), name: "Sack_Player" };
 // serverId -> profile; stands in for the client's joinServer call at Mojang.
 const joined = new Map();
 // Every token and challenge handed out, to prove none of them reaches the server log.
@@ -59,7 +61,7 @@ before(async () => {
       return response.writeHead(200, { "content-type": "application/json" })
         .end(JSON.stringify({ success: true, player: { achievements, displayname: "junk" } }));
     }
-    const body = uuid === fixtureUuid ? withJunk(rawFixture) : { success: true, profiles: null };
+    const body = uuid === fixtureUuid ? withJunk(rawFixture) : uuid === sacker.id ? sackProfiles() : { success: true, profiles: null };
     response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(body));
   });
   main = await startServer({ KUNG_AUTH_LIMIT_PER_5_MIN: "1000" });
@@ -301,6 +303,55 @@ test("secrets are the lifetime achievement alone, -1 when the player has none", 
   assert.equal((await call(main, "GET", `/hypixel/secrets?uuid=${fixtureUuid}`, {})).status, 401);
 });
 
+test("sacks are your own counts of the selected profile alone", async () => {
+  const token = (await signIn(main, sacker)).body.token;
+  const sacks = await call(main, "GET", `/hypixel/sacks?uuid=${sacker.id}`, { token });
+  assert.equal(sacks.status, 200);
+  assert.deepEqual(sacks.body, {
+    success: true,
+    profiles: [{
+      profile_id: "b",
+      cute_name: "Banana",
+      selected: true,
+      members: { [sacker.id]: { inventory: { sacks_counts: { WHEAT: 1500, CARROT_ITEM: 20 } } } },
+    }],
+  });
+  // Dashes in the uuid are fine, someone else's uuid is not (even the public fixture player).
+  assert.equal((await call(main, "GET", `/hypixel/sacks?uuid=${sacker.id.replace(/(.{8})(.*)/, "$1-$2")}`, { token })).status, 200);
+  const other = await call(main, "GET", `/hypixel/sacks?uuid=${fixtureUuid}`, { token });
+  assert.equal(other.status, 403);
+  assert.deepEqual(other.body, { error: "sacks of your own account only" });
+  assert.equal((await call(main, "GET", "/hypixel/sacks?uuid=nope", { token })).status, 403);
+  assert.equal((await call(main, "GET", `/hypixel/sacks?uuid=${sacker.id}`, {})).status, 401);
+});
+
+test("sacks of a player without profiles stay empty and sacks have their own limit", async () => {
+  const server = await startServer({ KUNG_SACKS_USER_LIMIT_PER_5_MIN: "2" });
+  const lonely = { id: "0".repeat(32), name: "Lonely_One" };
+  const token = (await signIn(server, lonely)).body.token;
+  assert.deepEqual((await call(server, "GET", `/hypixel/sacks?uuid=${lonely.id}`, { token })).body, { success: true, profiles: null });
+  assert.equal((await call(server, "GET", `/hypixel/sacks?uuid=${lonely.id}`, { token })).status, 200);
+  assert.equal((await call(server, "GET", `/hypixel/sacks?uuid=${lonely.id}`, { token })).status, 429);
+  // The profile route keeps its own budget.
+  assert.equal((await call(server, "GET", `/hypixel/profiles?uuid=${fixtureUuid}`, { token })).status, 200);
+});
+
+test("all players together get a fixed share of the Hypixel key for sacks", async () => {
+  const server = await startServer({ KUNG_SACKS_ALL_LIMIT_PER_5_MIN: "2" });
+  const lonely = { id: "0".repeat(32), name: "Lonely_One" };
+  const tokens = [];
+  for (const player of [sacker, lonely, friend]) {
+    tokens.push((await signIn(server, player)).body.token);
+  }
+  assert.equal((await call(server, "GET", `/hypixel/sacks?uuid=${sacker.id}`, { token: tokens[0] })).status, 200);
+  assert.equal((await call(server, "GET", `/hypixel/sacks?uuid=${lonely.id}`, { token: tokens[1] })).status, 200);
+  const limited = await call(server, "GET", `/hypixel/sacks?uuid=${friend.id}`, { token: tokens[2] });
+  assert.equal(limited.status, 429);
+  assert.deepEqual(limited.body, { error: "too many requests" });
+  // Profiles and secrets keep their own budgets.
+  assert.equal((await call(server, "GET", `/hypixel/secrets?uuid=${fixtureUuid}`, { token: tokens[2] })).status, 200);
+});
+
 test("each profile lookup logs one line, never the raw query", async () => {
   const token = (await signIn(main, owner)).body.token;
   const uuid = "1".repeat(32);
@@ -388,6 +439,20 @@ test("the log never shows a token or challenge", () => {
   }
 });
 
+// Two profiles of one player with Sack counts (the selected one second) plus coop data and fields nobody should get.
+function sackProfiles() {
+  const member = (sacks) => ({ inventory: { inv_contents: { data: "junk" }, sacks_counts: sacks }, player_data: { junk: 1 } });
+  return {
+    success: true,
+    cause: "junk",
+    profiles: [
+      { profile_id: "a", cute_name: "Apple", selected: false, banking: { balance: 1 }, members: { [sacker.id]: member({ WHEAT: 1 }) } },
+      { profile_id: "b", cute_name: "Banana", selected: true, banking: { balance: 2 },
+        members: { [sacker.id]: member({ WHEAT: 1500, CARROT_ITEM: 20 }), [friend.id]: member({ WHEAT: 999 }) } },
+    ],
+  };
+}
+
 // The real fixture plus fields and members the parser never reads.
 function withJunk(root) {
   const copy = structuredClone(root);
@@ -423,6 +488,10 @@ async function startServer(env) {
       KUNG_AUTH_LIMIT_PER_5_MIN: "",
       KUNG_PROFILE_LIMIT_PER_5_MIN: "",
       KUNG_PROFILE_USER_LIMIT_PER_5_MIN: "",
+      KUNG_SACKS_CACHE_MS: "",
+      KUNG_SACKS_LIMIT_PER_5_MIN: "",
+      KUNG_SACKS_USER_LIMIT_PER_5_MIN: "",
+      KUNG_SACKS_ALL_LIMIT_PER_5_MIN: "",
       KUNG_LIVE_REPORT_LIMIT_PER_5_MIN: "",
       KUNG_ROOM_REPORT_LIMIT_PER_5_MIN: "",
       ...env,

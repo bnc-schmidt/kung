@@ -50,6 +50,7 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
         registerMessageObserver(this::observeMessage);
+        SafariThrowTracker.register();
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST, HUD_ID,
             (graphics, delta) -> render(graphics));
     }

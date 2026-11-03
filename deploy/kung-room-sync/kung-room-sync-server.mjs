@@ -18,6 +18,9 @@ const profileCacheMillis = Number(process.env.KUNG_PROFILE_CACHE_MS || 120_000);
 const profileCache = new Map();
 const secretsCacheMillis = Number(process.env.KUNG_SECRETS_CACHE_MS || 5_000);
 const secretsCache = new Map();
+// The sack probe measures how far Hypixel's data trails the game, so the server adds as little cache as it can.
+const sacksCacheMillis = Number(process.env.KUNG_SACKS_CACHE_MS || 5_000);
+const sacksCache = new Map();
 
 // Sign-in is the vanilla server-join handshake: we hand out a challenge, the client joins it at
 // Mojang with its own access token, and hasJoined tells us who did. No shared secret in the jar.
@@ -112,6 +115,16 @@ const server = http.createServer(async (request, response) => {
       return hypixelLookup(request, response, session, "secrets", cachedSecrets,
         [[secretsRequests, secretsLimit], [secretsUserRequests, secretsUserLimit]]);
     }
+    if (request.method === "GET" && request.url.startsWith("/hypixel/sacks?")) {
+      // Sack contents are inventory data, unlike the public profile and secrets stats: the signed-in player's own only.
+      const asked = String(new URL(request.url, "http://localhost").searchParams.get("uuid") || "")
+        .replace(/-/g, "").toLowerCase();
+      if (asked !== session.uuid) {
+        return json(response, 403, { error: "sacks of your own account only" });
+      }
+      return hypixelLookup(request, response, session, "sacks", cachedSacks,
+        [[sacksRequests, sacksLimit], [sacksUserRequests, sacksUserLimit], [sacksAllRequests, sacksAllLimit]]);
+    }
     return json(response, 404, { error: "not found" });
   } catch (error) {
     // Client errors carry a status and are not logged; nothing here may log a body, token or challenge.
@@ -143,6 +156,15 @@ const secretsLimit = Number(process.env.KUNG_SECRETS_LIMIT_PER_5_MIN || 60);
 const secretsRequests = new Map();
 const secretsUserLimit = Number(process.env.KUNG_SECRETS_USER_LIMIT_PER_5_MIN || 30);
 const secretsUserRequests = new Map();
+// The probe asks every 30 s: 10 per 5 minutes.
+const sacksLimit = Number(process.env.KUNG_SACKS_LIMIT_PER_5_MIN || 60);
+const sacksRequests = new Map();
+const sacksUserLimit = Number(process.env.KUNG_SACKS_USER_LIMIT_PER_5_MIN || 30);
+const sacksUserRequests = new Map();
+// The Hypixel key allows 300 requests per 5 minutes for everything. All players together may spend a fifth of it
+// on sacks, so a wave of world changes cannot starve the profile and secrets lookups.
+const sacksAllLimit = Number(process.env.KUNG_SACKS_ALL_LIMIT_PER_5_MIN || 60);
+const sacksAllRequests = new Map();
 const liveReportLimit = Number(process.env.KUNG_LIVE_REPORT_LIMIT_PER_5_MIN || 1800);
 const liveReportRequests = new Map();
 const roomReportLimit = Number(process.env.KUNG_ROOM_REPORT_LIMIT_PER_5_MIN || 30);
@@ -256,8 +278,10 @@ async function hypixelLookup(request, response, session, label, cached, limits) 
   // One line per lookup for journalctl -f; only a checked uuid, never a token, key or body.
   let outcome = "error";
   try {
-    const [[ipRequests, ipLimit], [userRequests, userLimit]] = limits;
-    if (!withinLimit(ipRequests, ipLimit, request) || !withinLimit(userRequests, userLimit, request, session.uuid)) {
+    const [[ipRequests, ipLimit], [userRequests, userLimit], allLimits] = limits;
+    // The optional third pair counts everyone together, and only requests that passed the other two.
+    if (!withinLimit(ipRequests, ipLimit, request) || !withinLimit(userRequests, userLimit, request, session.uuid)
+      || (allLimits && !withinLimit(allLimits[0], allLimits[1], request, "all"))) {
       outcome = "rate limited 429";
       return json(response, 429, { error: "too many requests" });
     }
@@ -280,6 +304,7 @@ async function hypixelLookup(request, response, session, label, cached, limits) 
 
 const cachedProfiles = (uuid) => cachedLookup(profileCache, profileCacheMillis, uuid, fetchProfiles);
 const cachedSecrets = (uuid) => cachedLookup(secretsCache, secretsCacheMillis, uuid, fetchSecrets);
+const cachedSacks = (uuid) => cachedLookup(sacksCache, sacksCacheMillis, uuid, fetchSacks);
 
 function cachedLookup(cache, cacheMillis, uuid, fetcher) {
   const now = Date.now();
@@ -329,6 +354,18 @@ async function fetchProfiles(uuid) {
   return { status: 200, body: `${JSON.stringify(stripProfiles(JSON.parse(body), uuid))}\n` };
 }
 
+async function fetchSacks(uuid) {
+  const upstream = await fetch(`${hypixelApiUrl}/v2/skyblock/profiles?uuid=${uuid}`, {
+    headers: { "API-Key": hypixelKey, "User-Agent": "Kung-Server" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const body = await upstream.text();
+  if (upstream.status !== 200) {
+    return { status: upstream.status, body };
+  }
+  return { status: 200, body: `${JSON.stringify(stripSacks(JSON.parse(body), uuid))}\n` };
+}
+
 // Exactly what HypixelSkyBlockProfileClient.parseProfiles reads, and only the asking player's member:
 // far less traffic, and coop members' data never leaves the server. true copies the value as is;
 // an object keeps those keys, and only when the value is an object (the Java skips non-objects too).
@@ -358,6 +395,18 @@ function stripProfiles(root, uuid) {
       ? root.profiles.map((profile) => isObject(profile) ? pick(profile, profileFields) : null)
       : null,
   };
+}
+
+// The Sack counts of the asking player's selected profile (the first one when none is), in Hypixel's own shape so
+// HypixelSkyBlockProfileClient.parseSackCounts reads it. The counts sit in the member's inventory; older data had
+// them on the member itself.
+const sacksMemberFields = { inventory: { sacks_counts: true }, sacks_counts: true };
+
+function stripSacks(root, uuid) {
+  const profileFields = { profile_id: true, cute_name: true, selected: true, members: { [uuid]: sacksMemberFields } };
+  const profiles = Array.isArray(root?.profiles) ? root.profiles.filter(isObject) : null;
+  const chosen = profiles && (profiles.find((profile) => profile.selected === true) ?? profiles[0]);
+  return { success: root?.success, profiles: profiles === null ? null : chosen ? [pick(chosen, profileFields)] : [] };
 }
 
 function pick(value, fields) {

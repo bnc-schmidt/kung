@@ -20,6 +20,7 @@ One small Node server (no dependencies, no Docker) for:
 | `GET /runs/live?runKey=…` | live run snapshot from the other clients |
 | `POST /runs/live/report` | report this client's live run state |
 | `GET /hypixel/profiles?uuid=…` | the player's SkyBlock profiles, cut down to what Kung reads (503 without `HYPIXEL_API_KEY`) |
+| `GET /hypixel/sacks?uuid=…` | your own Sack counts: the selected profile cut down to `inventory.sacks_counts` (403 for any other uuid, 503 without `HYPIXEL_API_KEY`), cached `KUNG_SACKS_CACHE_MS` (5 s), for the `/kung dev sackapi` probe |
 | `GET /hypixel/secrets?uuid=…` | the player's lifetime secrets, `{"success":true,"secrets":N}` (-1 when unknown), for the run's per-player secret counts |
 | `POST /jerry/report` | report the mayor Jerry copies, read from his hub menu; answers with the pooled cycle |
 | `GET /jerry?year=…` | Jerry's pooled 6-slot cycle for that election year (`positions` is null where unknown) |
@@ -59,6 +60,9 @@ Limits per 5 minutes, per client IP unless noted:
 | `KUNG_PROFILE_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/profiles`, per player |
 | `KUNG_SECRETS_LIMIT_PER_5_MIN` | 60 | `/hypixel/secrets` |
 | `KUNG_SECRETS_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/secrets`, per player |
+| `KUNG_SACKS_LIMIT_PER_5_MIN` | 60 | `/hypixel/sacks` |
+| `KUNG_SACKS_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/sacks`, per player |
+| `KUNG_SACKS_ALL_LIMIT_PER_5_MIN` | 60 | `/hypixel/sacks`, all players together (the Hypixel key allows 300 for everything) |
 | `KUNG_LIVE_REPORT_LIMIT_PER_5_MIN` | 1800 | `POST /runs/live/report`, per player |
 | `KUNG_ROOM_REPORT_LIMIT_PER_5_MIN` | 30 | `POST /rooms/report`, per player |
 
