@@ -89,6 +89,12 @@ public final class SackTrackerFeatureTest {
     }
 
     @Test
+    public void otherFeaturesReadNothingWhileTheTrackerIsNotRunning() {
+        assertTrue(SackTrackerFeature.trackedAmount("Wheat").isEmpty());
+        assertFalse(SackTrackerFeature.trackedApproximate("Wheat"));
+    }
+
+    @Test
     public void goalsSurviveSavingAndLoading() {
         Gson gson = new Gson();
         MiscConfig config = gson.fromJson(
@@ -97,5 +103,18 @@ public final class SackTrackerFeatureTest {
         MiscConfig reloaded = gson.fromJson(gson.toJson(config), MiscConfig.class);
         assertEquals(15, reloaded.sackTrackerItem("Wheat").goal());
         assertEquals(5, reloaded.sackTrackerItem("Wheat").amount());
+    }
+
+    @Test
+    public void aRowKeepsTheSkyBlockIdOfItsSackItem() {
+        Gson gson = new Gson();
+        MiscConfig config = gson.fromJson(
+            "{\"sackTrackerItems\":[{\"name\":\"Titanium\",\"color\":16777215,\"amount\":5,\"goal\":0}]}", MiscConfig.class);
+        SackItem row = config.sackTrackerItem("Titanium");
+        assertEquals("", row.id()); // saved before the id existed
+        config.setSackTrackerId(row, "");
+        assertEquals("", row.id()); // a stack without custom data names nothing
+        config.setSackTrackerId(row, "TITANIUM_ORE");
+        assertEquals("TITANIUM_ORE", gson.fromJson(gson.toJson(config), MiscConfig.class).sackTrackerItem("Titanium").id());
     }
 }

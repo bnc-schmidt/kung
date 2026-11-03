@@ -13,6 +13,8 @@ import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiTooltip;
+import com.github.beng420.kung.util.HypixelSkyBlockProfileClient;
+import com.github.beng420.kung.util.HypixelSkyBlockProfileClient.SackCounts;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -22,7 +24,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
+import java.util.concurrent.CompletionException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -36,6 +40,8 @@ import net.fabricmc.fabric.api.client.screen.v1.ScreenKeyboardEvents;
 import net.fabricmc.fabric.api.client.screen.v1.ScreenMouseEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.resources.sounds.SimpleSoundInstance;
+import net.minecraft.sounds.SoundEvents;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.Screen;
@@ -65,13 +71,31 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private static final Pattern LAST = Pattern.compile("\\(Last (?:(\\d+)m\\s*)?(\\d+)s\\.\\)");
     private static final Pattern CHANGE = Pattern.compile("^([+-][\\d,]+) (.+) \\((.+)\\)$");
     private static final int SYNC_TICKS = 10;
+    /**
+     * A row changed by a [Sacks] message within this long counts as grinded. Hypixel reports pick-ups about every 30 s,
+     * so a row that stayed quiet for minutes has nothing unreported to lose in a world change.
+     */
+    private static final long ACTIVE_MILLIS = 5 * 60_000L;
+    /**
+     * After a world change marked rows "~" the API is asked after 4, 12, 30, 90 and 220 s (the ticks between): Hypixel
+     * saves a profile at a world change, and about every 3 minutes besides. The 220 s ask is the last one.
+     */
+    private static final int[] RESYNC_DELAYS = {80, 160, 360, 1200, 2600};
+    /** The first ask also checks the rows without a "~"; only marked rows are asked again. */
+    private static final int QUIET_ASKS = 1;
+    /** The Hypixel key is shared by every Kung player: one player may ask this often per 5 minutes. */
+    private static final int RESYNC_MAX_PER_5_MIN = 10;
     private static final int LINE_HEIGHT = 11;
     private static final long MAX_GOAL = 999_999_999L;
     private static final int KEY_BACKSPACE = 259;
+    private static final int KEY_V = 86;
     private static final int MOD_CONTROL = 2;
     private static final UiTheme THEME = UiTheme.settings();
     private static final Component RESET = Component.literal("[Reset Display]").withColor(0xFF5555);
     private static final String GOAL_HINT = "Type a number to set a target amount (Backspace deletes, Ctrl+Backspace clears)";
+    private static final String PASTE_HINT = "Ctrl+V pastes a number from the clipboard";
+    /** Cursor moves below this many GUI pixels count as resting: the render and key paths read the position differently. */
+    private static final double REST_PIXELS = 1.0;
     /** The amount of an item tracked outside its sack: unknown until the sack is opened once. */
     private static final long UNKNOWN_AMOUNT = -1;
     private final HoveredTooltip<ItemStack> tooltip = new HoveredTooltip<>(ItemStack::isSameItemSameComponents);
@@ -80,12 +104,28 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     /**
      * Rows that may be too low: after a world change Hypixel drops the pick-ups it had not reported yet, so the
      * count stays short until a sack is read again (seen in a trace: 74 Flawed gems found just before a warp).
+     * Only rows that were grinded just before the change get the mark, see {@link #ACTIVE_MILLIS}.
      */
     private final Set<SackItem> approximate = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    /** When a [Sacks] message last changed each row. */
+    private final Map<SackItem, Long> changedAt = new java.util.IdentityHashMap<>();
     private long seenEpoch = Long.MIN_VALUE;
-    /** A world change happened while the profile was unknown: its rows get the "~" once the profile is known again. */
-    private boolean markOnIdentify;
+    /** The rows grinded when the connection dropped: Hypixel loses their unreported pick-ups too, so they get the "~" once the profile is back. */
+    private List<String> activeBeforeLeaving = List.of();
     private int ticksUntilSync;
+    /** Each marked row's count at the world change: the API holds what the chat lost on top of it. */
+    private final Map<SackItem, Long> amountAtChange = new java.util.IdentityHashMap<>();
+    private final java.util.ArrayDeque<Long> resyncRequests = new java.util.ArrayDeque<>();
+    /** The next API ask (an index into RESYNC_DELAYS), -1 when none is due. */
+    private int resyncStep = -1;
+    private int ticksToResync;
+    private boolean resyncInFlight;
+    /** Counts the resyncs, so the answer to an earlier one is ignored. */
+    private int resyncGeneration;
+    /** The row the cursor rested on last, and where: it stays hovered while the cursor rests, however short its text got. */
+    private SackItem held;
+    private double heldX;
+    private double heldY;
 
     private SackTrackerFeature() { super(config -> config.misc); }
 
@@ -100,9 +140,12 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             return true;
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> {
-            if (initialized()) config().leaveSackTrackerProfile();
+            if (!initialized()) return;
+            activeBeforeLeaving = activeItems(System.currentTimeMillis()).stream().map(SackItem::name).toList();
+            config().leaveSackTrackerProfile();
         });
         ClientTickEvents.END_CLIENT_TICK.register(this::syncOpenSack);
+        SackApiProbe.register();
         // Every mod that shows an item (inventory, REI, JEI, ...) builds its tooltip through this event.
         ItemTooltipCallback.EVENT.register((stack, context, flag, lines) -> {
             if (isEnabled()) tooltip.observe(stack);
@@ -136,9 +179,16 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (!config().observeSackTrackerProfile(text, player == null ? null : player.getUUID().toString())) return;
         // The previous profile's sack reads say nothing about these rows.
         syncedAt.clear();
+        changedAt.clear();
         approximate.clear();
-        if (markOnIdentify && config().sackTrackerProfileKnown()) approximate.addAll(config().sackTrackerItems());
-        markOnIdentify = false;
+        amountAtChange.clear();
+        resyncStep = -1;
+        // ponytail: matched by name, not profile - after a reconnect into another profile a same-named row gets a needless "~".
+        if (config().sackTrackerProfileKnown()) {
+            config().sackTrackerAllItems().stream().filter(item -> activeBeforeLeaving.contains(item.name())).forEach(approximate::add);
+            startResync();
+        }
+        activeBeforeLeaving = List.of();
         KungDebugRecorder.event("sack-tracker", "profile " + (config().sackTrackerProfileKnown()
             ? config().sackTrackerProfileName() + " items=" + config().sackTrackerItems().size() : "unknown"));
     }
@@ -247,8 +297,167 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return items.stream().anyMatch(item -> item.amount() >= 0) && items.stream().noneMatch(approximate::contains);
     }
 
+    /** Rows a [Sacks] message changed within {@link #ACTIVE_MILLIS}: the ones that can have unreported pick-ups. */
+    private List<SackItem> activeItems(long nowMillis) {
+        return config().sackTrackerAllItems().stream().filter(item -> active(changedAt.get(item), nowMillis)).toList();
+    }
+
+    static boolean active(Long changedMillis, long nowMillis) {
+        return changedMillis != null && nowMillis - changedMillis <= ACTIVE_MILLIS;
+    }
+
     /** True while the row may be short of what the sack holds (after a world change, until a sack was read). */
     public boolean approximate(SackItem item) { return approximate.contains(item); }
+
+    /**
+     * Has the tracker read these sack items without showing them, for features that only read the amounts (the
+     * Greenhouse planner). Each amount stays unknown until its sack is opened once. Does nothing while the tracker is
+     * off or the profile is unknown.
+     */
+    public static void watch(Collection<String> names) {
+        if (INSTANCE.tracking()) INSTANCE.config().watchSackTrackerItems(names);
+    }
+
+    /**
+     * The amount the tracker holds for a sack item, tracked or watched. Empty while the tracker is off or the profile
+     * unknown, for an item it neither tracks nor watches and for one whose sack was never opened.
+     */
+    public static OptionalLong trackedAmount(String name) {
+        if (!INSTANCE.tracking()) return OptionalLong.empty();
+        SackItem item = INSTANCE.config().sackTrackerItem(name);
+        return item == null || item.amount() < 0 ? OptionalLong.empty() : OptionalLong.of(item.amount());
+    }
+
+    /** True while {@link #trackedAmount} may be too low (the tracker marks that row "~"). */
+    public static boolean trackedApproximate(String name) {
+        if (!INSTANCE.tracking()) return false;
+        SackItem item = INSTANCE.config().sackTrackerItem(name);
+        return item != null && INSTANCE.approximate(item);
+    }
+
+    /** Sets a row's count; a count that rises to its goal rings once and shows a small title. */
+    private void setAmount(SackItem item, long amount) {
+        boolean reached = goalReached(item.amount(), amount, item.goal());
+        config().setSackTrackerAmount(item, amount);
+        if (!reached) return;
+        var client = Minecraft.getInstance();
+        if (config().sackTrackerGoalSound()) {
+            var sounds = client.getSoundManager();
+            sounds.play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING.value(), 1.5F, 1.0F));
+            sounds.play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING.value(), 2.0F, 1.0F));
+        }
+        if (config().sackTrackerGoalTitle()) {
+            // Only the subtitle line has text: an empty title keeps the vanilla title overlay up for it, in the smaller font.
+            McCompat.setTitleTimes(client, 5, 40, 10);
+            McCompat.setTitle(client, Component.empty());
+            McCompat.setSubtitle(client, goalTitle(item.name(), item.color()));
+        }
+    }
+
+    /** "Enchanted Wheat done": the item in its rarity color. */
+    static Component goalTitle(String name, int color) {
+        return Component.literal(name).withColor(color).append(Component.literal(" done").withColor(0x55FF55));
+    }
+
+    /** Below the goal before, at or above it now. An unread row (-1) never rings: opening its sack is no pick-up. */
+    static boolean goalReached(long before, long after, long goal) {
+        return goal > 0 && before >= 0 && before < goal && after >= goal;
+    }
+
+    /**
+     * After a world change: the counts now of every row the API can answer for, and the first ask. Rows without a "~"
+     * are checked once as well: the first pick-ups of a burst are lost before any [Sacks] message announced them.
+     */
+    private void startResync() {
+        resyncGeneration++;
+        amountAtChange.clear();
+        for (SackItem item : config().sackTrackerAllItems()) {
+            if (!item.id().isEmpty() && item.amount() >= 0) amountAtChange.put(item, item.amount());
+        }
+        resyncStep = !amountAtChange.isEmpty() && config().sackTrackerApiResync() ? 0 : -1;
+        ticksToResync = RESYNC_DELAYS[0];
+    }
+
+    private void tickResync(Minecraft client) {
+        if (resyncStep < 0 || resyncInFlight || client.player == null || --ticksToResync > 0) return;
+        long now = System.currentTimeMillis();
+        while (!resyncRequests.isEmpty() && now - resyncRequests.peekFirst() > 300_000L) resyncRequests.removeFirst();
+        if (!tracking() || amountAtChange.isEmpty() || approximate.isEmpty() && resyncStep >= QUIET_ASKS
+            || HypixelSkyBlockProfileClient.sackSource().isEmpty()
+            || resyncRequests.size() >= RESYNC_MAX_PER_5_MIN) {
+            resyncStep = -1; // the sack was read or the API cannot be asked: the rows keep their "~"
+            return;
+        }
+        resyncRequests.addLast(now);
+        resyncInFlight = true;
+        int step = resyncStep;
+        int generation = resyncGeneration;
+        HypixelSkyBlockProfileClient.INSTANCE.loadSackCounts(client.player.getUUID().toString())
+            .whenComplete((counts, error) -> client.execute(() -> {
+                resyncInFlight = false;
+                if (generation != resyncGeneration) return;
+                if (error == null) applyApi(counts, step);
+                else apiFailed(error, step);
+            }));
+    }
+
+    /** Rows the API settles lose their "~"; the others stay marked and are asked again until the last ask. */
+    private void applyApi(SackCounts counts, int step) {
+        boolean last = step == RESYNC_DELAYS.length - 1;
+        String profile = config().sackTrackerProfileName();
+        if (!tracking() || !profile.isBlank() && !counts.profile().isBlank() && !profile.equalsIgnoreCase(counts.profile())) {
+            KungDebugRecorder.event("sack-tracker", "api resync dropped: the API's profile " + counts.profile() + " is not " + profile);
+            resyncStep = -1;
+            return;
+        }
+        boolean pending = false;
+        for (SackItem item : List.copyOf(amountAtChange.keySet())) {
+            boolean marked = approximate.contains(item);
+            Long api = counts.counts().get(item.id());
+            long before = amountAtChange.get(item);
+            if (api == null) {
+                if (marked) KungDebugRecorder.event("sack-tracker", "api resync " + item.name() + " id=" + item.id() + " is not in the answer");
+                continue;
+            }
+            // A row without "~" has nothing to wait for: only found pick-ups change it, the same count is no news.
+            long resolved = resolvedAmount(item.amount(), api, before, last && marked);
+            if (marked || resolved >= 0 && resolved != item.amount()) {
+                KungDebugRecorder.event("sack-tracker", "api resync ask " + (step + 1) + " " + item.name() + " " + item.id()
+                    + " api=" + api + " atChange=" + before + " tracked=" + item.amount()
+                    + (resolved < 0 ? " not yet" : " -> " + resolved));
+            }
+            if (resolved < 0) {
+                pending |= marked;
+                continue;
+            }
+            setAmount(item, resolved);
+            approximate.remove(item);
+            amountAtChange.remove(item);
+        }
+        resyncStep = (pending || step + 1 < QUIET_ASKS) && !last ? step + 1 : -1;
+        if (resyncStep >= 0) ticksToResync = RESYNC_DELAYS[resyncStep];
+    }
+
+    private void apiFailed(Throwable error, int step) {
+        Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
+        String reason = String.valueOf(cause.getMessage());
+        KungDebugRecorder.event("sack-tracker", "api resync ask " + (step + 1) + " failed: " + reason);
+        // A limit (429) will not pass in seconds: stop, the rows keep their "~" until the sack is read.
+        int next = reason.contains("429") ? -1 : step + 1;
+        resyncStep = next < RESYNC_DELAYS.length ? next : -1;
+        if (resyncStep >= 0) ticksToResync = RESYNC_DELAYS[resyncStep];
+    }
+
+    /**
+     * What an API answer makes of a row marked "~", given the row's count when the world changed. More than that
+     * count means the chat lost pick-ups, and the difference is added to the current count. The same count is exact
+     * only on the last ask, once the API surely refreshed since the change; less is an older snapshot. -1: not yet.
+     */
+    static long resolvedAmount(long current, long api, long amountAtChange, boolean last) {
+        long lost = api - amountAtChange;
+        if (lost > 0) return current + lost;
+        return lost == 0 && last ? current : -1;
+    }
 
     private void markSynced(SackItem item) {
         syncedAt.put(item, System.currentTimeMillis());
@@ -261,19 +470,21 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             boolean first = seenEpoch == Long.MIN_VALUE;
             seenEpoch = epoch;
             if (!first && tracking()) {
+                // Only rows grinded just before the change can be short; a quiet row (a relog, an island hop) stays exact.
+                List<SackItem> active = activeItems(System.currentTimeMillis());
                 // One notice per stretch without a sack read, not one per world change (every dungeon run is one).
-                boolean notify = shouldWarnAfterWorldChange(config().sackTrackerItems(), approximate);
-                approximate.addAll(config().sackTrackerItems());
+                boolean notify = !active.isEmpty() && shouldWarnAfterWorldChange(config().sackTrackerItems(), approximate);
+                approximate.addAll(active);
+                startResync();
                 if (notify) KungMessages.send(client, KungMessages.Type.WARNING, "Sack Tracker",
                     "Counts may be off after a world change (marked ~): Hypixel drops finds it had not reported yet. "
                         + "Open the sack for exact values.");
-            } else if (!first && isEnabled()) {
-                markOnIdentify = true; // the profile is not known yet: its rows get the "~" once it is
             }
         }
+        tickResync(client);
         if (--ticksUntilSync > 0) return;
         ticksUntilSync = SYNC_TICKS;
-        if (!tracking() || config().sackTrackerItems().isEmpty()
+        if (!tracking() || config().sackTrackerAllItems().isEmpty()
             || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen) || !isSack(plain(screen.getTitle()))) return;
         if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) {
             syncGemstoneSack(screen);
@@ -284,9 +495,10 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             SackItem item = stack.isEmpty() ? null : config().sackTrackerItem(plain(stack.getHoverName()));
             Long stored = item == null ? null : stored(lore(stack));
             if (stored == null) continue;
+            config().setSackTrackerId(item, SkyblockItemId.of(stack));
             if (item.amount() != stored) KungDebugRecorder.event("sack-tracker",
                 "sack shows " + item.name() + " " + stored + " (tracked " + item.amount() + ")");
-            config().setSackTrackerAmount(item, stored);
+            setAmount(item, stored);
             markSynced(item);
         }
     }
@@ -303,7 +515,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (whole != null && total != null) {
                 if (whole.amount() != total) KungDebugRecorder.event("sack-tracker",
                     "sack shows " + whole.name() + " " + total + " (tracked " + whole.amount() + ")");
-                config().setSackTrackerAmount(whole, total);
+                setAmount(whole, total);
                 markSynced(whole);
             }
             SackGemstones.amounts(lore(stack), filter).forEach((quality, amount) -> {
@@ -314,22 +526,17 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
                 markSynced(item);
                 if (item.amount() == amount) return;
                 KungDebugRecorder.event("sack-tracker", "sack shows " + item.name() + " " + amount + " (tracked " + item.amount() + ")");
-                config().setSackTrackerAmount(item, amount);
+                setAmount(item, amount);
             });
         }
     }
 
     private void observeMessage(Component message) {
         // Until the profile is known the pick-ups cannot be placed: they are dropped, not counted into a guess.
-        if (!tracking() || config().sackTrackerItems().isEmpty()) return;
+        if (!tracking() || config().sackTrackerAllItems().isEmpty()) return;
         String text = plain(message);
         if (!text.startsWith("[Sacks] ")) return;
-        // "+130 items" and "-10 items" each carry their item list as hover text.
-        Set<String> hovers = new LinkedHashSet<>();
-        message.visit((style, part) -> {
-            if (style.getHoverEvent() instanceof HoverEvent.ShowText(Component value)) hovers.add(plain(value));
-            return Optional.<Void>empty();
-        }, Style.EMPTY);
+        Set<String> hovers = hoverTexts(message);
         // Hypixel sums the pick-ups of the last ~30 s into one message, so the count trails what the sack holds. A
         // message that covers the moment a sack was opened holds items that sack showed already: only the part
         // after that moment counts (items arrive about evenly, so by time).
@@ -344,14 +551,25 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         });
     }
 
+    /** "+130 items" and "-10 items" of a [Sacks] message each carry their item list as hover text. */
+    static Set<String> hoverTexts(Component message) {
+        Set<String> hovers = new LinkedHashSet<>();
+        message.visit((style, part) -> {
+            if (style.getHoverEvent() instanceof HoverEvent.ShowText(Component value)) hovers.add(plain(value));
+            return Optional.<Void>empty();
+        }, Style.EMPTY);
+        return hovers;
+    }
+
     private void applyChange(String name, long delta, int seconds) {
         SackItem item = config().sackTrackerItem(name);
         if (item == null || item.amount() < 0) return; // nothing to add to until the sack shows the amount
         long now = System.currentTimeMillis();
+        if (delta != 0) changedAt.put(item, now);
         long counted = countedShare(delta, now, seconds, syncedAt.getOrDefault(item, Long.MIN_VALUE));
         KungDebugRecorder.event("sack-tracker", "message " + name + " " + (delta > 0 ? "+" : "") + delta
             + (counted != delta ? " counted " + counted : "") + " -> " + (item.amount() + counted));
-        config().setSackTrackerAmount(item, item.amount() + counted);
+        setAmount(item, item.amount() + counted);
     }
 
     /** "(Last 26s.)" or "(Last 1m 5s.)" of a [Sacks] message: how long the pick-ups it sums took; 0 when it says nothing. */
@@ -411,7 +629,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return stack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY).lines().stream().map(SackTrackerFeature::plain).toList();
     }
 
-    private static String plain(Component component) { return FORMATTING.matcher(component.getString()).replaceAll(""); }
+    static String plain(Component component) { return FORMATTING.matcher(component.getString()).replaceAll(""); }
 
     /** The rarity color of the item's name. */
     private static int color(Component name) {
@@ -446,10 +664,9 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (!overScreen(screen)) return;
         graphics.nextStratum();
         draw(graphics, config(), lines(config().sackTrackerItems(), true, approximate, config().sackTrackerProfileName()));
-        int line = lineAt(mouseX, mouseY);
-        if (line >= 1 && line <= config().sackTrackerItems().size()) {
+        if (hoveredItem(mouseX, mouseY) != null) {
             List<String> tooltip = typesGoals(screen)
-                ? List.of("Click to remove from tracker", GOAL_HINT) : List.of("Click to remove from tracker");
+                ? List.of("Click to remove from tracker", GOAL_HINT, PASTE_HINT) : List.of("Click to remove from tracker");
             UiTooltip.draw(graphics, Minecraft.getInstance().font, tooltip, mouseX + 8, mouseY, screen.width, screen.height, THEME);
         }
     }
@@ -466,14 +683,44 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private boolean typeGoal(Screen screen, KeyEvent event) {
         if (!typesGoals(screen)) return false;
         var client = Minecraft.getInstance();
-        int line = lineAt(client.mouseHandler.getScaledXPos(client.getWindow()), client.mouseHandler.getScaledYPos(client.getWindow()));
-        List<SackItem> items = config().sackTrackerItems();
-        if (line < 1 || line > items.size()) return false;
-        SackItem item = items.get(line - 1);
-        Long goal = nextGoal(item.goal(), McInput.key(event), (event.modifiers() & MOD_CONTROL) != 0);
+        SackItem item = hoveredItem(client.mouseHandler.getScaledXPos(client.getWindow()), client.mouseHandler.getScaledYPos(client.getWindow()));
+        if (item == null) return false;
+        int key = McInput.key(event);
+        boolean control = (event.modifiers() & MOD_CONTROL) != 0;
+        Long goal = control && key == KEY_V ? pastedGoal(client.keyboardHandler.getClipboard()) : nextGoal(item.goal(), key, control);
         if (goal == null) return false;
         config().setSackTrackerGoal(item, goal);
         return true;
+    }
+
+    /**
+     * The tracker row the cursor is on. Deleting a goal digit shortens the row's text, which would slide it out from
+     * under the cursor: while the cursor does not move, the row stays hovered, so every further key still counts for it.
+     */
+    private SackItem hoveredItem(double mouseX, double mouseY) {
+        List<SackItem> items = config().sackTrackerItems();
+        int line = lineAt(mouseX, mouseY);
+        if (line >= 1 && line <= items.size()) {
+            held = items.get(line - 1);
+            heldX = mouseX;
+            heldY = mouseY;
+            return held;
+        }
+        if (held != null && resting(heldX, heldY, mouseX, mouseY) && items.contains(held)) return held;
+        held = null;
+        return null;
+    }
+
+    static boolean resting(double fromX, double fromY, double toX, double toY) {
+        return Math.abs(fromX - toX) < REST_PIXELS && Math.abs(fromY - toY) < REST_PIXELS;
+    }
+
+    /** A goal from the clipboard: only a number ("1500", "1,500", "1.5m") within the typing limit; null for anything else. */
+    static Long pastedGoal(String clipboard) {
+        String text = clipboard == null ? "" : clipboard.strip();
+        if (!text.matches("\\d[\\d,]*([kKmMbB]|\\.\\d+[kKmMbB])?")) return null;
+        Long amount = parseAmount(text);
+        return amount == null || amount < 1 || amount > MAX_GOAL ? null : amount;
     }
 
     /**

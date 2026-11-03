@@ -29,6 +29,17 @@ final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
         next.add(SettingEntry.toggle("Show In Menus", config::sackTrackerInMenus,
             config::setSackTrackerInMenus)
             .withTooltip("Also shows the tracker over inventories, chat and other vanilla menus, not over menus of mods."));
+        next.add(SettingEntry.toggle("Goal Sound", config::sackTrackerGoalSound,
+            config::setSackTrackerGoalSound)
+            .withTooltip("Plays a short pling when an item reaches its goal."));
+        next.add(SettingEntry.toggle("Goal Title", config::sackTrackerGoalTitle,
+            config::setSackTrackerGoalTitle)
+            .withTooltip("Shows a small \"<item> done\" title when an item reaches its goal."));
+        next.add(SettingEntry.toggle("API Resync", config::sackTrackerApiResync,
+            config::setSackTrackerApiResync)
+            .withTooltip("After a world change, asks the Hypixel API once for the pick-ups the chat lost, up to 5 times for counts marked with ~.",
+                "Uses your own API key or else the Kung server, and never lowers a count.",
+                "Needs the item's sack to have been opened once, so Kung knows its id."));
         for (SackItem item : items) {
             next.add(SettingEntry.group(() -> item.name() + ": " + (SackTrackerFeature.INSTANCE.approximate(item) && item.amount() >= 0 ? "~" : "")
                         + SackTrackerFeature.amountText(item.amount())

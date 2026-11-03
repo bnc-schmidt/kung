@@ -182,4 +182,68 @@ public final class SackProfilesTest {
         join(config, ACCOUNT, "Coconut", COCONUT);
         assertEquals(List.of("Wheat"), names(config));
     }
+
+    @Test
+    public void watchedItemsAreReadButNeverListedAndNeedAKnownProfile() {
+        MiscConfig config = new MiscConfig();
+        config.watchSackTrackerItems(List.of("Carrot"));
+        assertTrue(config.sackTrackerAllItems().isEmpty()); // no profile: the old shared list stays the player's
+
+        join(config, ACCOUNT, "Coconut", COCONUT);
+        config.toggleSackTrackerItem("Wheat", 0xFFFFFF, 100);
+        config.watchSackTrackerItems(List.of("Carrot", "Wheat", "Carrot"));
+
+        assertEquals(List.of("Wheat"), names(config)); // the display and the settings list only what is tracked
+        assertEquals(2, config.sackTrackerAllItems().size());
+        MiscConfig.SackItem carrot = config.sackTrackerItem("Carrot");
+        assertTrue(carrot.hidden());
+        assertEquals(-1, carrot.amount()); // unknown until its sack is read
+        assertFalse(config.sackTrackerItem("Wheat").hidden()); // tracking wins over watching
+
+        config.setSackTrackerAmount(carrot, 30);
+        assertEquals(30, config.sackTrackerItem("Carrot").amount());
+    }
+
+    @Test
+    public void trackingAWatchedItemShowsItWithItsAmountAndTheResetKeepsWatchedOnes() {
+        MiscConfig config = new MiscConfig();
+        join(config, ACCOUNT, "Coconut", COCONUT);
+        config.watchSackTrackerItems(List.of("Carrot", "Potato"));
+        config.setSackTrackerAmount(config.sackTrackerItem("Carrot"), 30);
+
+        assertTrue(config.toggleSackTrackerItem("Carrot", 0x55FF55, -1)); // tracked now, not untracked
+        assertEquals(List.of("Carrot"), names(config));
+        assertEquals(30, config.sackTrackerItem("Carrot").amount());
+        assertEquals(0x55FF55, config.sackTrackerItem("Carrot").color());
+
+        assertFalse(config.toggleSackTrackerItem("Carrot", 0x55FF55, -1)); // pressing again removes it
+        assertNull(config.sackTrackerItem("Carrot"));
+
+        config.toggleSackTrackerItem("Wheat", 0xFFFFFF, 5);
+        config.clearSackTrackerItems();
+        assertTrue(config.sackTrackerItems().isEmpty());
+        assertNotNull(config.sackTrackerItem("Potato")); // still read, still hidden
+    }
+
+    @Test
+    public void watchedItemsSurviveSavingAndLoadingAsWatched() {
+        MiscConfig config = new MiscConfig();
+        join(config, ACCOUNT, "Coconut", COCONUT);
+        config.watchSackTrackerItems(List.of("Carrot"));
+        config.setSackTrackerAmount(config.sackTrackerItem("Carrot"), 30);
+
+        MiscConfig reloaded = reload(config);
+        join(reloaded, ACCOUNT, "Coconut", COCONUT);
+        assertTrue(reloaded.sackTrackerItems().isEmpty());
+        assertTrue(reloaded.sackTrackerItem("Carrot").hidden());
+        assertEquals(30, reloaded.sackTrackerItem("Carrot").amount());
+
+        // A config saved before watching existed has no flag: its items are all tracked.
+        MiscConfig old = GSON.fromJson("{\"sackTrackerProfiles\":{\"profiles\":{\"" + ACCOUNT + ":" + COCONUT
+            + "\":{\"name\":\"Coconut\",\"items\":[{\"name\":\"Wheat\",\"color\":1,\"amount\":2,\"goal\":0}]}}}}",
+            MiscConfig.class);
+        old.normalize();
+        join(old, ACCOUNT, "Coconut", COCONUT);
+        assertEquals(List.of("Wheat"), names(old));
+    }
 }

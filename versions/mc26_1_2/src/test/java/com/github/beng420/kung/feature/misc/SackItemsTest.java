@@ -125,6 +125,67 @@ public class SackItemsTest {
     }
 
     @Test
+    public void aGoalRingsOnceWhenTheCountRisesToIt() {
+        assertTrue(SackTrackerFeature.goalReached(900, 1_000, 1_000)); // exactly the goal
+        assertTrue(SackTrackerFeature.goalReached(900, 5_000, 1_000)); // a big pick-up jumps over it
+        assertFalse(SackTrackerFeature.goalReached(1_000, 1_100, 1_000)); // already there: no second ring
+        assertFalse(SackTrackerFeature.goalReached(900, 999, 1_000));
+        assertFalse(SackTrackerFeature.goalReached(-1, 5_000, 1_000)); // unread row: opening the sack is no pick-up
+        assertFalse(SackTrackerFeature.goalReached(0, 50, 0)); // no goal set
+    }
+
+    @Test
+    public void anApiAnswerAddsTheLostPickUpsToTheCurrentCount() {
+        // The chat held 3,690 at the warp and 3,700 now; the API holds 3,704: 14 were lost, so 3,714.
+        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, 3_690, false));
+        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, 3_690, true));
+        // The same count settles a row only on the last ask: an earlier one may be an older snapshot.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_690, 3_690, false));
+        assertEquals(3_700, SackTrackerFeature.resolvedAmount(3_700, 3_690, 3_690, true));
+        // Less than the count at the warp is an older snapshot, even on the last ask: the count is never lowered.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, 3_690, false));
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, 3_690, true));
+    }
+
+    @Test
+    public void theGoalTitleNamesTheItemInItsColor() {
+        var title = SackTrackerFeature.goalTitle("Enchanted Wheat", 0x55FF55);
+        assertEquals("Enchanted Wheat done", title.getString());
+        assertEquals(0x55FF55, title.getStyle().getColor().getValue());
+    }
+
+    @Test
+    public void aGoalCanBePastedOnlyFromAClipboardThatHoldsJustANumber() {
+        assertEquals(Long.valueOf(1_500), SackTrackerFeature.pastedGoal("1500"));
+        assertEquals(Long.valueOf(1_500), SackTrackerFeature.pastedGoal(" 1,500\n"));
+        assertEquals(Long.valueOf(1_500_000), SackTrackerFeature.pastedGoal("1.5m"));
+        assertEquals(Long.valueOf(10_000), SackTrackerFeature.pastedGoal("10k"));
+        assertNull(SackTrackerFeature.pastedGoal("0")); // no goal is Ctrl+Backspace
+        assertNull(SackTrackerFeature.pastedGoal("1000000000")); // above the typing limit
+        assertNull(SackTrackerFeature.pastedGoal("1.5")); // no half items
+        assertNull(SackTrackerFeature.pastedGoal("10 wheat"));
+        assertNull(SackTrackerFeature.pastedGoal("-5"));
+        assertNull(SackTrackerFeature.pastedGoal(""));
+        assertNull(SackTrackerFeature.pastedGoal(null));
+    }
+
+    @Test
+    public void aCursorThatMovedLessThanAPixelStillRests() {
+        assertTrue(SackTrackerFeature.resting(20.4, 30.9, 20, 30)); // render path floors the position
+        assertFalse(SackTrackerFeature.resting(20, 30, 22, 30));
+        assertFalse(SackTrackerFeature.resting(20, 30, 20, 33));
+    }
+
+    @Test
+    public void onlyRowsGrindedLatelyCanHaveUnreportedPickUps() {
+        long now = 10_000_000L;
+        assertFalse(SackTrackerFeature.active(null, now)); // no message yet: a relog or an island hop leaves the row exact
+        assertTrue(SackTrackerFeature.active(now - 60_000L, now));
+        assertTrue(SackTrackerFeature.active(now - 5 * 60_000L, now)); // the limit still counts
+        assertFalse(SackTrackerFeature.active(now - 5 * 60_000L - 1, now)); // quiet for hours: nothing to lose
+    }
+
+    @Test
     public void aMessageOnlyCountsWhatTheSackDidNotShowAlready() {
         assertEquals(26, SackTrackerFeature.coveredSeconds("[Sacks] +3,278 items. (Last 26s.)"));
         assertEquals(65, SackTrackerFeature.coveredSeconds("[Sacks] +9 items. (Last 1m 5s.)"));
