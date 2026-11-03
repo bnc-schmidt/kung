@@ -1,9 +1,11 @@
 package com.github.beng420.kung.mixin;
 
+import com.github.beng420.kung.feature.misc.ChatChannelsFeature;
 import com.github.beng420.kung.feature.misc.PeekChatFeature;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.components.ChatComponent;
+import net.minecraft.client.multiplayer.chat.GuiMessage;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -30,6 +32,16 @@ public abstract class ChatComponentMixin {
         callbackInfo.cancel();
         PeekChatFeature.asFocusedChat(() ->
             extractRenderState(graphics, font, tickCount, -1, -1, ChatComponent.DisplayMode.FOREGROUND, false));
+    }
+
+    /**
+     * Chat Channels: a hidden line is stored in allMessages as always but never gets chat lines. Both ways in run
+     * through here, a new message and the rebuild after a check changed, so the lines below close up and a shown
+     * kind comes back. Vanilla's setVisibleMessageFilter would drop a new hidden message for good instead.
+     */
+    @Inject(method = "addMessageToDisplayQueue", at = @At("HEAD"), cancellable = true)
+    private void kung$hideChannel(GuiMessage message, CallbackInfo callbackInfo) {
+        if (ChatChannelsFeature.hidden(message)) callbackInfo.cancel();
     }
 
     /** Lets getHeight() pick the focused height while the peeked chat is drawn or scrolled. */
