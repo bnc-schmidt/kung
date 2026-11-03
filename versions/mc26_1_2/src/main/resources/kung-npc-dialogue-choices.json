@@ -122,6 +122,9 @@
         "Look for signs of your friend getting hacked, and don't click on that website any further."
       ],
       "choose": "Look for signs of your friend getting hacked, and don't click on that website any further."
-    }
+    },
+    {"npc": "Hoppity", "npcId": "hoppity", "manual": true},
+    {"npc": "Coral", "npcId": "coral", "manual": true},
+    {"npc": "Hunter Billy", "manual": true}
   ]
 }

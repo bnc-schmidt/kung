@@ -59,10 +59,17 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
     static final long LONE_ANSWER_WINDOW_MILLIS = 30_000L;
     /** The click that starts a dialogue lands well within this of the NPC's first line (about 0.2 s). */
     private static final long CLICK_TO_LINE_MILLIS = 3_000L;
+    /** A line this soon after Kung's click answers it even when the speaker's name does not match the objective. */
+    private static final long CLICK_ANSWER_MILLIS = 1_000L;
+    private static final long NO_CLICK_LOG_MILLIS = 15_000L;
+    private static final Pattern TRAILING_SYMBOLS = Pattern.compile("[^\\p{L}\\p{N}]+$");
     private static final Pattern NPC_LINE = Pattern.compile("^\\[NPC] (.+?): ");
     /** Labels that name coins or an amount; the wiki lists no button labels, so this errs on the side of the player. */
     private static final Pattern COSTS = Pattern.compile("(?i)coin|pay|buy|\\d");
-    private static final Pattern CLICK_OBJECTIVE =Pattern.compile("^(?:Give|Talk to|Check on) ", Pattern.CASE_INSENSITIVE);
+    private static final Pattern CLICK_OBJECTIVE =
+        Pattern.compile("^(?:Give|Talk to|Check on|Find out what|Buy .+ from) ", Pattern.CASE_INSENSITIVE);
+    /** The chat line of a NEW OBJECTIVE may name the NPC where the sidebar does not ("Buy your first Huntaxe"). */
+    private static final long CHAT_OBJECTIVE_MILLIS = 120_000L;
     /** "TRIAL OF FIRE! Completed Trial of Fire III!": Ryan has the next badge, but no sidebar objective says so. */
     private static final Pattern TRIAL_DONE = Pattern.compile("^TRIAL OF FIRE! Completed Trial of Fire \\w+!");
     private static final String TRIAL_OBJECTIVE = "Talk to Ryan";
@@ -76,7 +83,14 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
     /** Entity id of the body the last [NPC] speaker was clicked on, for NPCs without a name stand (Romero). */
     private int speakerBodyId = -1;
     private String chatObjective = "";
+    private long chatObjectiveMillis;
     private String loggedObjective = "";
+    private String waitingLogged = "";
+    /** Counts [NPC] lines; a line of another NPC lets Kung try the objective NPC once more, a click per line at most. */
+    private int lineSeq;
+    private int attemptedLine = -1;
+    private long lastClickMillis;
+    private long noClickLoggedMillis;
     private boolean objectiveNext;
     private Pending pending;
     private ClickEvent lastAnswer;
@@ -113,7 +127,7 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
 
     private void message(Component message) {
         if (!active(Minecraft.getInstance())) return;
-        for (String raw : message.getString().split("\\R")) {
+        for (String raw : HypixelLocation.lines(message.getString())) {
             String line = HypixelLocation.clean(raw);
             if (line.isEmpty()) continue;
             Matcher npcLine = NPC_LINE.matcher(line);
@@ -123,6 +137,9 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
                 else if (!npcLine.group(1).equals(lastNpcName)) speakerBodyId = -1;
                 lastNpcName = npcLine.group(1);
                 lastNpcLineMillis = System.currentTimeMillis();
+                lineSeq++;
+                clickGuard.spoke(lastNpcLineMillis - lastClickMillis <= CLICK_ANSWER_MILLIS
+                    || objectiveNames(currentObjective(), lastNpcName));
                 if (lastNpcName.equals("Ryan")) ryanDue = false;
             }
             if (trialDone(line)) {
@@ -132,9 +149,12 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
             }
             if (objectiveNext) {
                 chatObjective = line;
+                chatObjectiveMillis = System.currentTimeMillis();
                 objectiveNext = false;
             } else if (line.contains("NEW OBJECTIVE")) {
                 objectiveNext = true;
+                // A new step, even when its words repeat the clicked one's ("Talk to Molbert" twice in a row).
+                clickGuard.forget();
             } else if (line.contains("QUEST COMPLETE")) {
                 chatObjective = "";
             }
@@ -143,16 +163,14 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         List<Option> options = options(message);
         if (options.isEmpty()) return;
         String npc = options.getFirst().npcId().orElse(lastNpcName);
-        Option option = choose(options, lastNpcName, CHOICES);
-        if (options.size() == 1 && !loneAnswerable(options.getFirst(), System.currentTimeMillis() - lastNpcLineMillis)) {
-            option = null;
-        }
+        Option option = pick(options, lastNpcName, CHOICES, System.currentTimeMillis() - lastNpcLineMillis);
+        List<String> labels = options.stream().map(Option::label).toList();
         if (option == null) {
-            KungDebugRecorder.event(AREA, "skip prompt npc=" + npc + " labels="
-                + options.stream().map(Option::label).toList());
+            KungDebugRecorder.event(AREA, "skip prompt npc=" + npc + " labels=" + labels);
             notifySkipped(options, lastNpcName.isEmpty() ? npc : lastNpcName);
             return;
         }
+        KungDebugRecorder.event(AREA, "prompt npc=" + npc + " labels=" + labels + " -> " + option.label());
         pending = new Pending(option, npc, System.currentTimeMillis() + ANSWER_DELAY_MILLIS);
     }
 
@@ -205,27 +223,68 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         int inventory = inventoryStamp(player);
         // Every tick, before the early returns: a hand-in mid-dialogue must be absorbed, not saved up as a re-arm.
         clickGuard.inventory(inventory, sinceNpcLine);
-        if (McCompat.screen(client) != null || pending != null || sinceNpcLine < QUIET_MILLIS) return;
-        String objective = ryanDue ? TRIAL_OBJECTIVE : sidebarObjective(HypixelInstanceTracker.INSTANCE.sidebarLines());
-        if (objective.isEmpty()) objective = chatObjective;
-        boolean clickable = CLICK_OBJECTIVE.matcher(objective).find();
+        String objective = currentObjective();
+        // The NPC who is talking is left alone until the quiet window ends; another NPC's line is a reason to try now.
+        boolean talking = sinceNpcLine < QUIET_MILLIS && (attemptedLine == lineSeq || objectiveNames(objective, lastNpcName));
+        String waiting = McCompat.screen(client) != null ? "a screen is open"
+            : pending != null ? "an answer is pending"
+            : talking ? "the objective NPC is talking, or this line of another NPC was tried" : "";
+        boolean clickable = clickable(objective);
+        // A shop or hand-in screen right after the click is the NPC's answer too, though no [NPC] line comes.
+        if (McCompat.screen(client) != null && now - lastClickMillis <= CLICK_TO_LINE_MILLIS) clickGuard.spoke(true);
+        if (!waiting.isEmpty()) {
+            // Logged once per reason: a trace saved while Kung waits must not look like Kung ignoring the NPC.
+            if (clickable && !waiting.equals(waitingLogged)) {
+                waitingLogged = waiting;
+                KungDebugRecorder.event(AREA, "waiting objective=\"" + objective + "\": " + waiting);
+            }
+            return;
+        }
+        waitingLogged = "";
+        // No line answered the click by the end of the quiet window: try again (the guard bounds the tries).
+        if (now - lastClickMillis >= QUIET_MILLIS) clickGuard.unanswered();
         if (!objective.isEmpty() && !objective.equals(loggedObjective)) {
             // Without this a trace cannot tell "no objective" from "objective, but no NPC in reach".
             loggedObjective = objective;
+            clickGuard.objectiveChanged(objective);
             KungDebugRecorder.event(AREA, "objective=\"" + objective + "\" clickable=" + clickable);
         }
-        if (!clickable || !clickGuard.allows(objective)) return;
+        if (!clickable) return;
+        if (!clickGuard.allows(objective)) {
+            noClick(now, objective, () -> "the click guard holds this objective");
+            return;
+        }
         NpcTarget target = findNpc(player, objective);
-        if (target == null) return;
+        if (target == null) {
+            noClick(now, objective, () -> "no NPC in reach, nearby=" + NpcDialogueTrace.nearby(player, 6, 6));
+            return;
+        }
 
         Player body = target.body();
         clickGuard.clicked(objective, inventory);
+        attemptedLine = lineSeq;
+        lastClickMillis = now;
         KungDebugRecorder.event(AREA, String.format(Locale.ROOT, "auto-click npc=%s objective=\"%s\" dist=%.1f",
             target.name(), objective, player.distanceTo(body)));
         // What a right-click on the entity does (Minecraft.startUseItem), aimed at the body's center.
         InteractionResult result = client.gameMode.interact(player, body,
             new EntityHitResult(body, body.getBoundingBox().getCenter()), InteractionHand.MAIN_HAND);
         McCompat.swingForResult(player, InteractionHand.MAIN_HAND, result);
+    }
+
+    private String currentObjective() {
+        String objective = ryanDue ? TRIAL_OBJECTIVE : sidebarObjective(HypixelInstanceTracker.INSTANCE.sidebarLines());
+        if (objective.isEmpty()) return chatObjective;
+        boolean chatNamesNpc = !clickable(objective) && clickable(chatObjective)
+            && System.currentTimeMillis() - chatObjectiveMillis < CHAT_OBJECTIVE_MILLIS;
+        return chatNamesNpc ? chatObjective : objective;
+    }
+
+    /** A clickable objective that stays unclicked says why at most every 15 s; the trace could not tell the reasons apart. */
+    private void noClick(long now, String objective, java.util.function.Supplier<String> reason) {
+        if (now - noClickLoggedMillis < NO_CLICK_LOG_MILLIS) return;
+        noClickLoggedMillis = now;
+        KungDebugRecorder.event(AREA, "no click objective=\"" + objective + "\": " + reason.get());
     }
 
     /**
@@ -259,25 +318,46 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         return body != player && body.getUUID().version() != 4 && player.isWithinEntityInteractionRange(body, 0);
     }
 
+    /** An objective that sends the player to an NPC: Kung clicks it once that NPC is in reach. */
+    static boolean clickable(String objective) {
+        return CLICK_OBJECTIVE.matcher(objective).find();
+    }
+
     /**
      * Whether a "Give"/"Talk to"/"Check on" objective names this NPC, case-insensitively. Matching the real stand
      * names instead of parsing the objective keeps multi-word NPCs intact: "Give Lumber Jack Oak Logs".
      */
     static boolean objectiveNames(String objective, String npc) {
-        String text = HypixelLocation.clean(objective).toLowerCase(Locale.ROOT);
         String name = trimSymbols(HypixelLocation.clean(npc).toLowerCase(Locale.ROOT));
         if (name.isEmpty()) return false;
-        if (text.startsWith("give ")) return text.substring(5).startsWith(name + " ");
+        if (namesExactly(objective, Pattern.quote(name))) return true;
+        // From a trace: the sidebar says "Talk to Gerald" while the stand reads "Fisherman Gerald".
+        int space = name.indexOf(' ');
+        if (space > 0 && namesExactly(objective, Pattern.quote(name.substring(space + 1)))) return true;
+        // From a trace: a long surname shrinks to its initial, "Talk to David H." for David Hunterborough.
+        int last = name.lastIndexOf(' ');
+        return last > 0 && namesExactly(objective, Pattern.quote(name.substring(0, last + 1) + name.charAt(last + 1)) + "\\.?");
+    }
+
+    /** {@code name} is a regex, so an abbreviated surname can end in an optional dot. */
+    private static boolean namesExactly(String objective, String name) {
+        String text = HypixelLocation.clean(objective).toLowerCase(Locale.ROOT);
+        if (text.startsWith("give ")) return Pattern.compile(name + " ").matcher(text.substring(5)).lookingAt();
         String rest = text.startsWith("talk to ") ? text.substring(8)
-            : text.startsWith("check on ") ? text.substring(9) : null;
+            : text.startsWith("check on ") ? text.substring(9)
+            // "Find out what Sam wants" (Crop 'n Profit): the NPC sits between the words.
+            : text.startsWith("find out what ") && text.endsWith(" wants") ? text.substring(14, text.length() - 6)
+            // "Buy a Hunting Weapon from Alan": Kung opens the shop, the purchase stays the player's.
+            : text.startsWith("buy ") && text.contains(" from ") ? text.substring(text.lastIndexOf(" from ") + 6) : null;
         if (rest == null) return false;
         rest = trimSymbols(rest);
-        return rest.equals(name) || rest.equals("the " + name);
+        // A place may follow the name: "Talk to Sam at the Composter".
+        return rest.matches("(?:the )?" + name + "(?: (?:at|in|near|by|on|inside|outside) .+)?");
     }
 
     /** Drops trailing punctuation and decorations on both sides: "Charlie!" and the stand "Melody ♫". */
     private static String trimSymbols(String text) {
-        return text.replaceAll("[^\\p{L}\\p{N}]+$", "");
+        return TRAILING_SYMBOLS.matcher(text).replaceAll("");
     }
 
     /** Item and count per slot, so lore or name refreshes do not count as the inventory changing. */
@@ -320,12 +400,31 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         return sinceNpcLineMillis < LONE_ANSWER_WINDOW_MILLIS && !COSTS.matcher(option.label()).find();
     }
 
-    /** The only option, or the curated one for this NPC and exactly these labels; null means leave it to the player. */
+    /**
+     * The answer to click, or null to leave the prompt to the player: the curated one for this NPC, else the first
+     * answer. The first answer is taken only while an NPC is talking, never when a label reads like a payment, and
+     * never for an NPC the list marks manual (its prompts spend coins or swap items).
+     */
+    static Option pick(List<Option> options, String npcName, List<Choice> choices, long sinceNpcLineMillis) {
+        Option curated = choose(options, npcName, choices);
+        if (curated != null && options.size() > 1) return curated;
+        Option first = options.getFirst();
+        boolean manual = options.size() > 1 && manual(choices, first.npcId().orElse(null), npcName);
+        return !manual && options.stream().allMatch(option -> loneAnswerable(option, sinceNpcLineMillis)) ? first : null;
+    }
+
+    private static boolean manual(List<Choice> choices, String npcId, String npcName) {
+        return choices.stream().anyMatch(choice -> choice.manual()
+            && (choice.npcId() != null && choice.npcId().equals(npcId) || choice.npc() != null && choice.npc().equals(npcName)));
+    }
+
+    /** The only option, or the curated one for this NPC and exactly these labels; null when the list names none. */
     static Option choose(List<Option> options, String npcName, List<Choice> choices) {
         if (options.size() == 1) return options.getFirst();
         Set<String> labels = options.stream().map(option -> plain(option.label())).collect(Collectors.toSet());
         String npcId = options.getFirst().npcId().orElse(null);
         for (Choice choice : choices) {
+            if (choice.manual()) continue;
             boolean npc = choice.npcId() != null ? choice.npcId().equals(npcId) : choice.npc().equals(npcName);
             if (!npc || !Set.copyOf(choice.options()).equals(labels)) continue;
             return options.stream().filter(option -> plain(option.label()).equals(choice.choose())).findFirst().orElse(null);
@@ -345,10 +444,13 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         return TRIAL_DONE.matcher(line).find();
     }
 
+    /** "Objective", or "Objective ⬈": traces show a compass arrow after the heading, pointing any way. */
+    private static final Pattern OBJECTIVE_HEADING = Pattern.compile("^Objective(?: [^\\p{L}\\p{N}\\s]+)?$");
+
     /** The line under the sidebar's "Objective" heading, or "" when the sidebar shows none. */
     static String sidebarObjective(List<String> lines) {
         for (int index = 0; index + 1 < lines.size(); index++) {
-            if (HypixelLocation.clean(lines.get(index)).equals("Objective")) return HypixelLocation.clean(lines.get(index + 1));
+            if (OBJECTIVE_HEADING.matcher(HypixelLocation.clean(lines.get(index))).matches()) return HypixelLocation.clean(lines.get(index + 1));
         }
         return "";
     }
@@ -381,8 +483,11 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         }
     }
 
-    /** One curated multi-option answer; npcId when the payload carries a known one, else the [NPC] name. */
-    record Choice(String npcId, String npc, List<String> options, String choose) {
+    /**
+     * One curated multi-option answer; npcId when the payload carries a known one, else the [NPC] name. A manual entry
+     * names an NPC (by npcId, npc or both) whose prompts always stay with the player.
+     */
+    record Choice(String npcId, String npc, List<String> options, String choose, boolean manual) {
     }
 
     private record Choices(String attribution, List<Choice> choices) {
@@ -399,9 +504,31 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
      * talking; a change mid-dialogue (the hand-in itself taking the items) only moves the baseline.
      */
     static final class ClickGuard {
+        static final int MAX_TRIES = 3;
         private String clicked = "";
         private int inventory;
         private boolean rearmed;
+        private boolean confirmed;
+        private String triedObjective = "";
+        private int tries;
+
+        /**
+         * An [NPC] line: one from the clicked NPC (or right after the click) shows the click began its dialogue. A click
+         * that no such line answered, because another NPC was mid-dialogue, may be tried again.
+         */
+        void spoke(boolean answersClick) {
+            if (answersClick) {
+                confirmed = true;
+                tries = 0;
+            } else {
+                unanswered();
+            }
+        }
+
+        /** A click that nothing answered is tried again, up to {@link #MAX_TRIES} times per objective. */
+        void unanswered() {
+            if (!confirmed && tries < MAX_TRIES) clicked = "";
+        }
 
         /** Called every tick with the current inventory and the time since the last [NPC] line. */
         void inventory(int stamp, long sinceNpcLineMillis) {
@@ -413,6 +540,17 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         /** A new reason to talk to the same NPC again (the next trial is done). */
         void forget() {
             clicked = "";
+            triedObjective = "";
+        }
+
+        /**
+         * The sidebar moved on to another objective: coming back to the clicked one is the next step of the quest
+         * ("Talk to Molbert" comes three times in Mole Problems), not the old objective still open.
+         */
+        void objectiveChanged(String objective) {
+            if (objective.equals(clicked)) return;
+            clicked = "";
+            if (!objective.equals(triedObjective)) triedObjective = "";
         }
 
         boolean allows(String objective) {
@@ -420,9 +558,12 @@ public final class NpcDialogueSkipFeature extends ConfigurableFeature<MiscConfig
         }
 
         void clicked(String objective, int stamp) {
+            tries = objective.equals(triedObjective) ? tries + 1 : 1;
+            triedObjective = objective;
             clicked = objective;
             inventory = stamp;
             rearmed = false;
+            confirmed = false;
         }
     }
 

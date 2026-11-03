@@ -141,11 +141,41 @@ public final class NpcDialogueSkipFeatureTest {
             assertNotNull(row[0] + " " + row[1], chosen);
             assertEquals(row[0], row[1], chosen.label());
         }
-        // Trades and swaps stay with the player, and so does any NPC not on the list.
+        // choose knows the curated rows only; manual NPCs and unlisted prompts are pick's business.
         Option yes = new Option("[Yes]", answer("coral", "r_1").getClickEvent());
         Option no = new Option("[No]", answer("coral", "r_2").getClickEvent());
         assertNull(NpcDialogueSkipFeature.choose(List.of(yes, no), "Coral", choices));
         assertNull(NpcDialogueSkipFeature.choose(List.of(yes, no), "Hunter Billy", choices));
+    }
+
+    @Test
+    public void unlistedPromptsTakeTheFirstAnswerWhileAnNpcTalks() {
+        var choices = NpcDialogueSkipFeature.loadChoices();
+        // Michael's answers lead to the same place and no row names him: the first one is clicked, in any order.
+        Option silly = new Option("[No, I am very silly]", answer("mobtypes_michael", "r_4_1").getClickEvent());
+        Option smart = new Option("[Yes, I am very smart]", answer("mobtypes_michael", "r_4_2").getClickEvent());
+        assertSame(silly, NpcDialogueSkipFeature.pick(List.of(silly, smart), "Michael", choices, 2));
+        assertSame(smart, NpcDialogueSkipFeature.pick(List.of(smart, silly), "Michael", choices, 2));
+        // A curated row still wins over the order, and a lone answer is still clicked.
+        Option yeah = new Option("[Yeah]", answer("kelly", "r_1").getClickEvent());
+        Option never = new Option("[Never heard of him]", answer("kelly", "r_2").getClickEvent());
+        assertSame(never, NpcDialogueSkipFeature.pick(List.of(yeah, never), "Kelly", choices, 2));
+        assertSame(silly, NpcDialogueSkipFeature.pick(List.of(silly), "Michael", choices, 2));
+        // No NPC line for a while: a stray prompt stays with the player.
+        assertNull(NpcDialogueSkipFeature.pick(List.of(silly, smart), "Michael", choices,
+            NpcDialogueSkipFeature.LONE_ANSWER_WINDOW_MILLIS));
+        // One label that reads like a payment keeps the whole prompt with the player.
+        Option pay = new Option("[Pay 500 Coins]", answer("mobtypes_michael", "r_4_3").getClickEvent());
+        assertNull(NpcDialogueSkipFeature.pick(List.of(smart, pay), "Michael", choices, 2));
+        // Trades and swaps are marked manual, by name or by npcId.
+        Option hoppityYes = new Option("[Yes]", answer("hoppity", "r_2_1").getClickEvent());
+        Option hoppityNo = new Option("[No]", answer("hoppity", "r_2_2").getClickEvent());
+        assertNull(NpcDialogueSkipFeature.pick(List.of(hoppityYes, hoppityNo), "Hoppity", choices, 2));
+        assertNull(NpcDialogueSkipFeature.pick(List.of(hoppityYes, hoppityNo), "", choices, 2));
+        Option coralYes = new Option("[Yes]", answer("coral_x", "r_1").getClickEvent());
+        Option coralNo = new Option("[No]", answer("coral_x", "r_2").getClickEvent());
+        assertNull(NpcDialogueSkipFeature.pick(List.of(coralYes, coralNo), "Coral", choices, 2));
+        assertNull(NpcDialogueSkipFeature.pick(List.of(coralYes, coralNo), "Hunter Billy", choices, 2));
     }
 
     @Test
@@ -229,13 +259,45 @@ public final class NpcDialogueSkipFeatureTest {
         assertTrue(NpcDialogueSkipFeature.objectiveNames("Give Lumber Jack Oak Logs", "Lumber Jack"));
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Give Lumber Jack Oak Logs", "Jack"));
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to Charlie", "Charlie Jr"));
+        // From a trace: the sidebar drops the title that the name stand carries.
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to Gerald", "Fisherman Gerald"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Give Gerald Raw Cod", "Fisherman Gerald"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to Gerald", "Fisherwoman Enid"));
+        // From a trace: the sidebar shortens "David Hunterborough" to "David H.".
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to David H.", "David Hunterborough"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to David H. at the shop", "David Hunterborough"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to David H.", "David Smith"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to David", "David Hunterborough"));
         // "Check on" is a talk objective; trailing stand decorations such as ♫ do not count.
         assertTrue(NpcDialogueSkipFeature.objectiveNames("Check on Melody", "Melody ♫"));
+        // From a trace: Crop 'n Profit sends the player to Sam with "Find out what Sam wants".
+        assertTrue(NpcDialogueSkipFeature.clickable("Find out what Sam wants"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Find out what Sam wants", "Sam"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Find out what Sam wants", "Samuel"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Find out what happened", "Sam"));
+        assertFalse(NpcDialogueSkipFeature.clickable("Clean your Garden Plot"));
+        // From a trace: the chat line names Alan where the sidebar says "Buy your first Huntaxe".
+        assertTrue(NpcDialogueSkipFeature.clickable("Buy a Hunting Weapon from Alan"));
+        assertFalse(NpcDialogueSkipFeature.clickable("Buy your first Huntaxe"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Buy a Hunting Weapon from Alan", "Alan"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Buy a Hunting Weapon from Alan", "Alana"));
+        // From a trace: the objective may name a place after the NPC.
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to Sam at the Composter", "Sam"));
+        assertTrue(NpcDialogueSkipFeature.objectiveNames("Talk to Sam at the Composter!", "Sam"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to Sam at the Composter", "Samuel"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to Samuel", "Sam"));
+        assertFalse(NpcDialogueSkipFeature.objectiveNames("Talk to Sam Smith", "Sam"));
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Check on Melody", "Ryan"));
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Claim the trousers from Charlie!", "Charlie"));
         assertFalse(NpcDialogueSkipFeature.objectiveNames("Complete Trial of Fire I", "Fire"));
         assertEquals("Talk to Kelly", NpcDialogueSkipFeature.sidebarObjective(
             List.of("SKYBLOCK", " ⏣ The Park", "", "Objective", "§eTalk to Kelly")));
+        // From traces: a compass arrow can follow the heading, pointing any way. Before, such a sidebar read as no objective.
+        for (String arrow : new String[] {"⬈", "⬉", "⬊", "⬋", "⬆", "⬇"}) {
+            assertEquals(arrow, "Talk to Molbert", NpcDialogueSkipFeature.sidebarObjective(
+                List.of("SKYBLOCK", " ⏣ The Park", "", "Objective " + arrow, "§eTalk to Molbert")));
+        }
+        assertEquals("", NpcDialogueSkipFeature.sidebarObjective(List.of("Objectives", "Talk to Molbert")));
     }
 
     @Test
@@ -269,6 +331,41 @@ public final class NpcDialogueSkipFeatureTest {
         assertFalse(guard.allows("Give Ryan Dark Oak Logs"));
         guard.inventory(4, NpcDialogueSkipFeature.QUIET_MILLIS);
         assertTrue("changed after 8 s of quiet", guard.allows("Give Ryan Dark Oak Logs"));
+    }
+
+    @Test
+    public void aQuestThatAsksForTheSameTalkAgainIsAClickAgain() {
+        // From a trace: Mole Problems says "Talk to Molbert", "Place traps", then "Talk to Molbert" once more.
+        ClickGuard guard = new ClickGuard();
+        guard.clicked("Talk to Molbert", 1);
+        guard.objectiveChanged("Talk to Molbert"); // the same objective seen again is still the clicked one
+        assertFalse(guard.allows("Talk to Molbert"));
+        guard.objectiveChanged("Place traps");
+        assertTrue("the quest moved on, so the same words are a new step", guard.allows("Talk to Molbert"));
+        guard.clicked("Talk to Molbert", 1);
+        assertFalse(guard.allows("Talk to Molbert"));
+        // Two steps in a row can share the words, so the sidebar never changes: NEW OBJECTIVE in chat forgets the click.
+        guard.forget();
+        assertTrue(guard.allows("Talk to Molbert"));
+    }
+
+    @Test
+    public void aClickThatAnotherNpcsLineOutlivedIsTriedAgain() {
+        ClickGuard guard = new ClickGuard();
+        guard.clicked("Talk to Joel", 1);
+        guard.spoke(false); // the NPC still mid-dialogue talks on: the click came to nothing
+        assertTrue(guard.allows("Talk to Joel"));
+        guard.clicked("Talk to Joel", 1);
+        guard.spoke(true); // Joel answered
+        guard.spoke(false);
+        assertFalse("an answered click stays answered", guard.allows("Talk to Joel"));
+        guard.forget();
+        for (int i = 0; i < ClickGuard.MAX_TRIES; i++) {
+            assertTrue(guard.allows("Talk to Joel"));
+            guard.clicked("Talk to Joel", 1);
+            guard.unanswered();
+        }
+        assertFalse("three silent tries are enough", guard.allows("Talk to Joel"));
     }
 
     private static Style answer(String npcId, String responseKey) {

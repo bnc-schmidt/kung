@@ -121,9 +121,7 @@ public final class NpcDialogueTrace {
         clickedId = entity.getId();
         clickedMillis = System.currentTimeMillis();
         UUID uuid = entity.getUUID();
-        List<String> stands = nameStands(entity).stream()
-            .map(stand -> '"' + KungDebugRecorder.compact(stand.getCustomName().getString()) + '"')
-            .toList();
+        List<String> stands = standNames(entity);
         KungDebugRecorder.event(AREA, String.format(Locale.ROOT,
             "%s hand=%s sneak=%s entity=%s id=%d name=\"%s\" uuidV=%d npcBody=%s dist=%.1f stands=%s location=\"%s\"",
             action, hand, player.isShiftKeyDown(), EntityType.getKey(entity.getType()).getPath(), entity.getId(),
@@ -131,6 +129,22 @@ public final class NpcDialogueTrace {
             // Same test as DungeonDebuffFeature.sprayCandidate: real accounts have version-4 UUIDs.
             entity.getType() == McCompat.PLAYER && uuid.version() != 4, player.distanceTo(entity), stands,
             HypixelInstanceTracker.INSTANCE.instanceLine()));
+    }
+
+    private static List<String> standNames(Entity entity) {
+        return nameStands(entity).stream()
+            .map(stand -> '"' + KungDebugRecorder.compact(stand.getCustomName().getString()) + '"')
+            .toList();
+    }
+
+    /** The {@code limit} entities closest to the player, stands left out: what stood there when no NPC was found to click. */
+    static String nearby(Player player, double radius, int limit) {
+        return player.level().getEntities(player, player.getBoundingBox().inflate(radius)).stream()
+            .filter(entity -> !(entity instanceof ArmorStand))
+            .sorted(Comparator.comparingDouble(player::distanceToSqr)).limit(limit)
+            .map(entity -> String.format(Locale.ROOT, "%s v%d %.1f stands=%s", EntityType.getKey(entity.getType()).getPath(),
+                entity.getUUID().version(), player.distanceTo(entity), standNames(entity)))
+            .toList().toString();
     }
 
     /** Id of the entity clicked within the last {@code millis}, else -1. The one thing here the dialogue skip reads. */
