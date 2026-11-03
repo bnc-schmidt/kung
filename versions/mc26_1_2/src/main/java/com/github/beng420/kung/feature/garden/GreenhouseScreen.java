@@ -4,6 +4,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.feature.garden.GreenhouseSession.Tone;
+import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.ui.UiMenuFont;
 import com.github.beng420.kung.ui.UiScale;
@@ -19,6 +20,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Optional;
+import java.util.OptionalLong;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
@@ -32,7 +35,7 @@ import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Greenhouse planner: choose mutation goals, optionally lock plot cells, solve, and read, rotate or share the
+ * Greenhouse planner: choose mutation goals, optionally lock plot cells, solve, and read or share the
  * layout. Left column sets the problem, the middle shows the solution, the right column holds crop priorities.
  *
  * <p>Draw budget: the vanilla GUI compares each new element with those before it (about quadratic), so a frame
@@ -115,6 +118,9 @@ public final class GreenhouseScreen extends Screen {
     private static final int RESULT_ROWS = 5;
     private static final int HALF = 146;
     private static final int CROPS_X = MX + 156;
+    /** Room at the right of a crop row for what the Sacks hold (see {@link GreenhouseStock.Stock#badge}). */
+    private static final int STOCK_W = 46;
+    private static final int CROP_TEXT_W = HALF - 26 - STOCK_W;
     private static final int SOIL_Y = 459;
     private static final int COST_Y = SOIL_Y + 11;
     private static final int NOTE_Y = COST_Y + 12;
@@ -145,8 +151,8 @@ public final class GreenhouseScreen extends Screen {
         "Applies to the next solve.");
     private static final List<String> IRONMAN_TIP = List.of("Prices: Ironman", "Minimises difficulty by rarity,",
         "not coins. Applies to the next solve.");
-    private static final String[] TOOLS = {"Rotate left", "Rotate right", "Mirror", "Clear", "Paste", "Copy code"};
-    private static final String[] TOOL_RESULTS = {"Rotated left", "Rotated right", "Mirrored", "Layout cleared"};
+    private static final String[] TOOLS = {"Clear", "Copy code"};
+    private static final String[] TOOL_RESULTS = {"Layout cleared"};
     /** Room kept free left and right of a button label before it counts as too long. */
     private static final int BUTTON_PAD = 3;
     private static final int KIND_TARGET_NAME = 1;
@@ -156,6 +162,7 @@ public final class GreenhouseScreen extends Screen {
     private static final int KIND_GOAL = 5;
     private static final int KIND_CROP = 6;
     private static final String CROP_CLICK_TIP = "Click: pull what is missing from your Sacks";
+    private static final GreenhouseStock.Source SACKS = GreenhouseScreen::trackedCount;
     private static final int KIND_STATUS = 7;
     private static final int KIND_SOIL = 8;
     private static final int KIND_COST = 9;
@@ -226,7 +233,7 @@ public final class GreenhouseScreen extends Screen {
     private final Fit dropRequirement = new Fit(132);
     private final Fit priorityName = new Fit(150);
     private final Fit goalText = new Fit(HALF - 6);
-    private final Fit cropText = new Fit(HALF - 26);
+    private final Fit cropText = new Fit(CROP_TEXT_W);
     private final Fit statusText = new Fit(MW);
     private final Fit soilFit = new Fit(MW);
     private final Fit noticeFit = new Fit(NOTICE_MAX_W - 40);
@@ -322,6 +329,8 @@ public final class GreenhouseScreen extends Screen {
         session.viewerOpened();
         // Bazaar prices are fetched in the background and only when missing or old; never waited for here.
         session.refreshPrices();
+        // The Sack Tracker reads the crops' Sack counts from now on without showing them; the rows below show them.
+        SackTrackerFeature.watch(GreenhouseStock.sackNames());
         layout();
     }
 
@@ -531,9 +540,9 @@ public final class GreenhouseScreen extends Screen {
         button(graphics, left + LW - 88, y + CARD_Y + 4, 80, 18, "Edit cells",
             inside(mx, my, left + LW - 88, y + CARD_Y + 4, 80, 18), editingCells ? THEME.accent() : THEME.control(),
             THEME.text());
-        button(graphics, left + 8, y + CARD_Y + 28, 124, 18, "Select all",
+        button(graphics, left + 8, y + CARD_Y + 28, 124, 18, "Unlock all",
             inside(mx, my, left + 8, y + CARD_Y + 28, 124, 18), THEME.control(), THEME.text());
-        button(graphics, left + 138, y + CARD_Y + 28, 124, 18, "Reset",
+        button(graphics, left + 138, y + CARD_Y + 28, 124, 18, "Start area",
             inside(mx, my, left + 138, y + CARD_Y + 28, 124, 18), THEME.control(), THEME.text());
 
         text(graphics, "Mutation targets", left, y + SEARCH_LABEL_Y, THEME.muted());
@@ -711,7 +720,7 @@ public final class GreenhouseScreen extends Screen {
             int bx = left + toolLeft[i];
             int by = y + TOOL_Y;
             button(graphics, bx, by, toolWidth[i], TOOL_H, TOOLS[i], inside(mx, my, bx, by, toolWidth[i], TOOL_H),
-                THEME.control(), i == 3 ? THEME.error() : THEME.text());
+                THEME.control(), i == 0 ? THEME.error() : THEME.text());
         }
 
         // Compass: the letters come from GreenhouseOrientation, the mapping the hologram uses, so the two agree:
@@ -761,8 +770,11 @@ public final class GreenhouseScreen extends Screen {
             int top = y + RESULT_Y + slot * RESULT_ROW;
             icon(graphics, row.name(), x + CROPS_X + 1, top + 1);
             fitted(graphics, cropText, row.text(), x + CROPS_X + 20, top + 5, THEME.text(),
-                inside(mx, my, x + CROPS_X + 20, top, HALF - 26, RESULT_ROW), KIND_CROP, cropScroll.offset() + slot);
-            if (inside(mx, my, x + CROPS_X, top, MW - 156, RESULT_ROW)) tooltip = cropTooltip(row);
+                inside(mx, my, x + CROPS_X + 20, top, CROP_TEXT_W, RESULT_ROW), KIND_CROP, cropScroll.offset() + slot);
+            GreenhouseStock.Stock stock = GreenhouseStock.of(row.name(), row.count(), SACKS);
+            String badge = stock.badge();
+            text(graphics, badge, x + CROPS_X + MW - 156 - 6 - width(badge), top + 5, stockColor(stock.level()));
+            if (inside(mx, my, x + CROPS_X, top, MW - 156, RESULT_ROW)) tooltip = cropTooltip(row, stock);
         }
         scrollbar(graphics, x + MX + MW - 3, y + RESULT_Y, RESULT_ROWS * RESULT_ROW, cropScroll, cropRows.size(),
             RESULT_ROWS);
@@ -784,15 +796,37 @@ public final class GreenhouseScreen extends Screen {
     }
 
     /** What one crop of the shopping list costs and what all of its cells cost, for the weighting chosen now. */
-    private List<String> cropTooltip(CropRow row) {
+    private List<String> cropTooltip(CropRow row, GreenhouseStock.Stock stock) {
         var quotes = session.quotes();
         var quote = quotes.get(GreenhouseCrops.canonical(row.name()));
         String each = GreenhouseCosts.describe(row.name(), quotes);
+        List<String> lines = new ArrayList<>();
+        lines.add(row.name() + " x" + row.count());
         if (quote == null || quote.basis() == GreenhouseCosts.Basis.FREE) {
-            return List.of(row.name() + " x" + row.count(), each, CROP_CLICK_TIP);
+            lines.add(each);
+        } else {
+            lines.add("Each: " + each);
+            lines.add("All: " + GreenhouseCosts.formatTotal(quote.cost() * row.count(), state.costMode()));
         }
-        return List.of(row.name() + " x" + row.count(), "Each: " + each,
-            "All: " + GreenhouseCosts.formatTotal(quote.cost() * row.count(), state.costMode()), CROP_CLICK_TIP);
+        lines.addAll(stock.lines());
+        lines.add(CROP_CLICK_TIP);
+        return lines;
+    }
+
+    /** What the Sack Tracker holds for a sack item; the planner only reads it. */
+    private static Optional<GreenhouseStock.Count> trackedCount(String sackName) {
+        OptionalLong amount = SackTrackerFeature.trackedAmount(sackName);
+        return amount.isEmpty() ? Optional.empty()
+            : Optional.of(new GreenhouseStock.Count(amount.getAsLong(), SackTrackerFeature.trackedApproximate(sackName)));
+    }
+
+    private int stockColor(GreenhouseStock.Level level) {
+        return switch (level) {
+            case ENOUGH -> THEME.success();
+            case SHORT -> THEME.warning();
+            case UNKNOWN -> THEME.muted();
+            case NO_SACK -> THEME.text();
+        };
     }
 
     /** The lines are rebuilt only when the hovered cell, the grid or the lock on the cell changes, not every frame. */
@@ -933,7 +967,7 @@ public final class GreenhouseScreen extends Screen {
         if (plan != shownPlan) {
             shownPlan = plan;
             List<CropRow> rows = new ArrayList<>();
-            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, crop + " x" + count, count)));
+            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, crop, count)));
             cropRows = List.copyOf(rows);
             // A live preview replaces the lists several times a second: keep the player's scroll position then,
             // but never past the end of a list that just got shorter.
@@ -1014,11 +1048,7 @@ public final class GreenhouseScreen extends Screen {
 
     private void tool(int index) {
         switch (index) {
-            case 0 -> refused(session.change(GreenhouseGrid::rotatedLeft, true, TOOL_RESULTS[0]));
-            case 1 -> refused(session.change(GreenhouseGrid::rotatedRight, true, TOOL_RESULTS[1]));
-            case 2 -> refused(session.change(GreenhouseGrid::mirrored, true, TOOL_RESULTS[2]));
-            case 3 -> refused(session.change(GreenhouseGrid::cleared, false, TOOL_RESULTS[3]));
-            case 4 -> load(Minecraft.getInstance().keyboardHandler.getClipboard());
+            case 0 -> refused(session.change(GreenhouseGrid::cleared, false, TOOL_RESULTS[0]));
             default -> copy();
         }
     }
@@ -1205,10 +1235,10 @@ public final class GreenhouseScreen extends Screen {
             return true;
         }
         if (inside(mx, my, left + 138, y + CARD_Y + 28, 124, 18)) {
-            state.unlockAll();
+            state.unlockStartArea();
             editingCells = false;
             session.persist();
-            say("Cells reset", Tone.MUTED);
+            say("Only the start area is unlocked", Tone.MUTED);
             return true;
         }
         if (inside(mx, my, left, y + SOLVE_Y, 84, 22)) {

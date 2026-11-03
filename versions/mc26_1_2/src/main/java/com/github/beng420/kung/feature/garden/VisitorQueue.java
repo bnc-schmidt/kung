@@ -6,23 +6,11 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 
-/** Parses the server's ordered Visitors tab widget, never rendered mod overlays. */
+/** Parses the server's ordered Visitors tab widget, never rendered mod overlays. A full queue reads "Queue Full!". */
 final class VisitorQueue {
-    private static final Pattern HEADER = Pattern.compile("Visitors: \\(([0-5])\\)");
+    // Max Occupancy raises the cap from 5 to 10.
+    private static final Pattern HEADER = Pattern.compile("Visitors: \\((10|[0-9])\\)");
     private static final Pattern DURATION = Pattern.compile("(?:(\\d{1,2})m(?: )?)?(?:(\\d{1,2})s)?");
-    private static final Pattern PEST = Pattern.compile("You received [0-9,]+x (.+) for killing an? (.+)!");
-
-    record PestReward(String item, String pest) {
-        boolean countsAsKill() {
-            // These pests emit several reward lines for ONE kill. Use one guaranteed reward,
-            // not a time/name debounce: several actual kills can arrive in the same packet batch.
-            return switch (pest) {
-                case "Field Mouse" -> item.equals("Dung");
-                case "Lunar Moth" -> item.equals("Enchanted Sunflower");
-                default -> !item.equals("Overclocker 3000");
-            };
-        }
-    }
 
     record Snapshot(Set<String> visitors, Long remainingMillis, boolean full) {
         Snapshot { visitors = Set.copyOf(visitors); }
@@ -62,16 +50,6 @@ final class VisitorQueue {
         long minutes = match.group(1) == null ? 0 : Long.parseLong(match.group(1));
         long seconds = match.group(2) == null ? 0 : Long.parseLong(match.group(2));
         return seconds >= 60 || minutes > 15 ? null : (minutes * 60 + seconds) * 1_000;
-    }
-
-    static boolean pestKill(String message) {
-        var reward = pestReward(message);
-        return reward != null && reward.countsAsKill();
-    }
-
-    static PestReward pestReward(String message) {
-        var match = PEST.matcher(clean(message).replaceFirst("^\\[\\d{2}:\\d{2}:\\d{2}] ", ""));
-        return match.matches() ? new PestReward(match.group(1), match.group(2)) : null;
     }
 
     static boolean ownGarden(String instance, List<String> sidebar, List<String> visible) {

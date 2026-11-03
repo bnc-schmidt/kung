@@ -334,6 +334,29 @@ public final class GreenhouseStateTest {
     }
 
     @Test
+    public void startAreaIsTheMiddleFourByFourWithoutItsCorners() {
+        GreenhouseState state = new GreenhouseState();
+
+        state.unlockStartArea();
+
+        assertEquals(12, state.unlockedCount());
+        // Rows and columns 3 to 6: the thick plus, with (3, 3), (3, 6), (6, 3) and (6, 6) still locked.
+        for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
+            for (int column = 0; column < GreenhouseGrid.SIZE; column++) {
+                boolean plus = row >= 3 && row <= 6 && column >= 3 && column <= 6
+                    && !((row == 3 || row == 6) && (column == 3 || column == 6));
+                assertEquals(row + "," + column, plus, state.isUnlocked(row * GreenhouseGrid.SIZE + column));
+            }
+        }
+        assertTrue(state.isUnlocked(3 * 10 + 4));
+        assertFalse(state.isUnlocked(3 * 10 + 3));
+
+        // It replaces whatever was unlocked before, and "unlock all" still opens everything again.
+        state.unlockAll();
+        assertEquals(100, state.unlockedCount());
+    }
+
+    @Test
     public void mutationFilterIgnoresCaseAndSeparators() {
         List<GreenhouseMutations.Mutation> all = GreenhouseMutations.all();
 

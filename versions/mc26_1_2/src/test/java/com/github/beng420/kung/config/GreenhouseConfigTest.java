@@ -146,6 +146,7 @@ public final class GreenhouseConfigTest {
         assertTrue("Deactivating a finished hologram is on by default", config.hideWhenComplete());
         assertTrue("No models over wrong soil by default", config.hideModelsOverWrongSoil());
         assertTrue("The crosshair label is on by default", config.showCrosshairLabel());
+        assertTrue("The hologram follows the held item by default", config.focusOnHeldItem());
         assertEquals("key:75:0", config.toggleKeybind());
         assertEquals("K", 75, config.toggleKey());
         assertEquals("U unloads", "key:85:0", config.unloadKeybind());

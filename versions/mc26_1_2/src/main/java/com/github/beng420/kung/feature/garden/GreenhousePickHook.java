@@ -256,7 +256,7 @@ public final class GreenhousePickHook {
 
         @Override public List<GreenhouseHologramShapes.CellBox> cells() { return GreenhouseHologram.cellBoxes(); }
 
-        @Override public List<GreenhouseHologram.SoilGhost> soilGhosts() { return GreenhouseHologram.soilGhosts(); }
+        @Override public List<GreenhouseHologram.SoilGhost> soilGhosts() { return GreenhouseHologram.shownSoilGhosts(); }
 
         @Override public List<GreenhouseScanLogic.Footprint> blockedFootprints() {
             return GreenhouseHologram.blockedFootprints();

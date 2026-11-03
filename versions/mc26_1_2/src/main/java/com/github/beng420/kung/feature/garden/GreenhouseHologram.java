@@ -1,11 +1,16 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.skyblock.SkyblockItemId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.component.CustomData;
 import net.minecraft.world.phys.AABB;
 
 /**
@@ -33,6 +38,10 @@ public final class GreenhouseHologram {
     private static int version;
     /** The player's own show/hide (the toggle key): independent of showing a layout. */
     private static boolean visible = true;
+    /** The stack in hand and its data at the last {@link #heldId()}, so the id is read again only when they change. */
+    private static ItemStack heldStack = ItemStack.EMPTY;
+    private static CustomData heldData;
+    private static String heldId = "";
 
     private GreenhouseHologram() { }
 
@@ -224,12 +233,49 @@ public final class GreenhouseHologram {
      * when no soil layer is known, the same conditions the renderer hides under.
      */
     static List<GreenhouseScanLogic.Footprint> blockedFootprints() {
-        if (!isDrawn() || !GreenhouseHologramSettings.hideModelsOverWrongSoil()
-            || GreenhouseScanner.soilLayer(version) < 0) {
-            return List.of();
+        List<GreenhouseScanLogic.Footprint> out = new ArrayList<>();
+        if (isDrawn() && GreenhouseHologramSettings.hideModelsOverWrongSoil()
+            && GreenhouseScanner.soilLayer(version) >= 0) {
+            out.addAll(GreenhouseSoilCheck.blockedFootprints(GreenhouseScanLogic.footprints(shown.placements()),
+                GreenhouseScanner.ghosts(version)));
         }
-        return GreenhouseSoilCheck.blockedFootprints(GreenhouseScanLogic.footprints(shown.placements()),
+        // What the held item leaves out is not drawn either, so it is not claimed.
+        focus().ifPresent(focus -> out.addAll(focus.hidden()));
+        return List.copyOf(out);
+    }
+
+    /** The SkyBlock id of the item in the main hand ("" for none), read again only when the stack or its data changed. */
+    static String heldId() {
+        Minecraft client = Minecraft.getInstance();
+        ItemStack stack = client == null || client.player == null ? ItemStack.EMPTY : client.player.getMainHandItem();
+        CustomData data = stack.get(DataComponents.CUSTOM_DATA);
+        if (stack != heldStack || data != heldData) {
+            heldStack = stack;
+            heldData = data;
+            heldId = stack.isEmpty() ? "" : SkyblockItemId.of(stack);
+        }
+        return heldId;
+    }
+
+    /**
+     * What the held item narrows the hologram to (see {@link GreenhouseFocus}), or empty when the whole hologram shows:
+     * the setting is off, nothing is drawn, the item is no crop or soil, or the layout has nothing left to place for it.
+     */
+    static Optional<GreenhouseFocus.Focus> focus() {
+        if (!isDrawn() || !GreenhouseHologramSettings.focusOnHeldItem()) return Optional.empty();
+        String id = heldId();
+        if (id.isEmpty()) return Optional.empty();
+        return GreenhouseFocus.of(id, shown.placements(), GreenhouseScanner.states(version),
             GreenhouseScanner.ghosts(version));
+    }
+
+    /** {@link #soilGhosts()} without the ones the held item leaves out: what is drawn, so what a pick or label may name. */
+    static List<SoilGhost> shownSoilGhosts() {
+        List<SoilGhost> all = soilGhosts();
+        Optional<GreenhouseFocus.Focus> focus = focus();
+        if (focus.isEmpty()) return all;
+        return all.stream().filter(ghost -> focus.get().showsGhost(
+            new GreenhouseSoilCheck.Ghost(ghost.dx(), ghost.dz(), ghost.soil(), ghost.kind()))).toList();
     }
 
     /** Test seam for {@link #correctlyPlaced(String)}. */

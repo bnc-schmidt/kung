@@ -30,6 +30,7 @@ final class GreenhouseCrosshairLabel {
     private static int builtScan = -1;
     private static BlockPos builtCorner;
     private static boolean builtHideOverWrongSoil;
+    private static String builtHeld = "";
     private static List<Cell> cells = List.of();
     /** After an error the label rests this long, then tries again: one transient failure must not end it for good. */
     private static final long RETRY_NANOS = 10_000_000_000L;
@@ -71,15 +72,17 @@ final class GreenhouseCrosshairLabel {
         int version = GreenhouseHologram.version();
         int scan = GreenhouseScanner.version();
         boolean hideOverWrongSoil = GreenhouseHologramSettings.hideModelsOverWrongSoil();
+        String held = GreenhouseHologram.heldId();
         if (version != builtVersion || scan != builtScan || !corner.equals(builtCorner)
-            || hideOverWrongSoil != builtHideOverWrongSoil) {
+            || hideOverWrongSoil != builtHideOverWrongSoil || !held.equals(builtHeld)) {
             // Built before the key is set: a throw leaves the key stale, so the retry builds again.
-            cells = GreenhousePickHook.labelCells(GreenhouseHologram.cellBoxes(), GreenhouseHologram.soilGhosts(),
+            cells = GreenhousePickHook.labelCells(GreenhouseHologram.cellBoxes(), GreenhouseHologram.shownSoilGhosts(),
                 GreenhouseHologram.blockedFootprints(), GreenhouseScanner.extras(version), corner);
             builtVersion = version;
             builtScan = scan;
             builtCorner = corner;
             builtHideOverWrongSoil = hideOverWrongSoil;
+            builtHeld = held;
         }
         return cells;
     }

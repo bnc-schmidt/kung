@@ -34,6 +34,8 @@ final class GreenhouseState {
     /** The longest a solve may run; the solver may stop sooner. A saved value is kept as it is. */
     static final int DEFAULT_SECONDS = 30;
     private static final int FILE_VERSION = 1;
+    /** Side of the square a new greenhouse starts with, before its corners are cut off. */
+    private static final int START_SIDE = 4;
     /**
      * How the saved mask and layout are drawn: files without the field (or with 1) were drawn under the old compass
      * (east on top, see {@link GreenhouseOrientation}) and are turned a quarter clockwise on load; 2 is north-up.
@@ -102,6 +104,24 @@ final class GreenhouseState {
     boolean[] mask() { return unlocked.clone(); }
 
     void unlockAll() { Arrays.fill(unlocked, true); }
+
+    /**
+     * Opens only the cells a new greenhouse starts with: the middle 4x4 without its four corners, a thick plus. Every
+     * other cell is locked until the player buys it. UNVERIFIED in game: that this is the shape the game starts with.
+     */
+    void unlockStartArea() {
+        for (int index = 0; index < CELLS; index++) {
+            unlocked[index] = inStartArea(index / GreenhouseGrid.SIZE, index % GreenhouseGrid.SIZE);
+        }
+    }
+
+    /** Whether a cell is part of the start area (see {@link #unlockStartArea()}). */
+    static boolean inStartArea(int row, int column) {
+        int first = (GreenhouseGrid.SIZE - START_SIDE) / 2;
+        int last = first + START_SIDE - 1;
+        if (row < first || row > last || column < first || column > last) return false;
+        return (row != first && row != last) || (column != first && column != last);
+    }
 
     /**
      * Starts a drag: the cell under the pointer flips, and every cell the drag reaches gets that same new

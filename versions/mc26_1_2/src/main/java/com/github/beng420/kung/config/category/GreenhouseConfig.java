@@ -34,6 +34,7 @@ public final class GreenhouseConfig extends ConfigCategory {
     private boolean hideWhenComplete = true;
     private boolean hideModelsOverWrongSoil = true;
     private boolean showCrosshairLabel = true;
+    private boolean focusOnHeldItem = true;
     private String toggleKeybind = DEFAULT_TOGGLE_KEYBIND;
     private String unloadKeybind = DEFAULT_UNLOAD_KEYBIND;
 
@@ -64,6 +65,10 @@ public final class GreenhouseConfig extends ConfigCategory {
     /** A small name label under the crosshair while it is aimed at a hologram cell or soil marker. */
     public boolean showCrosshairLabel() { return showCrosshairLabel; }
     public void setShowCrosshairLabel(boolean value) { showCrosshairLabel = value; save(); }
+
+    /** While a crop, mutation or soil item is in hand, only the hologram cells it belongs to are shown. */
+    public boolean focusOnHeldItem() { return focusOnHeldItem; }
+    public void setFocusOnHeldItem(boolean value) { focusOnHeldItem = value; save(); }
 
     /** Raw keybind text; empty means unbound. */
     public String toggleKeybind() { return toggleKeybind == null ? DEFAULT_TOGGLE_KEYBIND : toggleKeybind; }
@@ -118,7 +123,7 @@ public final class GreenhouseConfig extends ConfigCategory {
         for (String name : new String[] {"hologramOpacity", "colorToPlace", "colorWrong", "colorExtra", "colorWrongState"}) {
             keepIf(json, name, JsonPrimitive::isNumber);
         }
-        for (String name : new String[] {"hideWhenComplete", "hideModelsOverWrongSoil", "showCrosshairLabel"}) {
+        for (String name : new String[] {"hideWhenComplete", "hideModelsOverWrongSoil", "showCrosshairLabel", "focusOnHeldItem"}) {
             keepIf(json, name, JsonPrimitive::isBoolean);
         }
         keepIf(json, "toggleKeybind", JsonPrimitive::isString);

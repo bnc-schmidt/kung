@@ -19,39 +19,39 @@ public class VisitorOfferTest {
             assertTrue(state.acknowledge());
             assertFalse(state.ringing());
             assertEquals(VISITORS, state.queue().visitors());
-            state.tick(1_000);
-            state.observe(FULL, 5_000);
-            state.reduce(30_000, 6_000);
-            state.seed(360_000, 0, 7_000);
-            state.observe(null, 8_000);
-            state.tick(1_000_000);
+            state.tick();
+            state.observe(FULL);
+            state.observe(null);
+            state.tick();
             assertFalse("Unchanged, delayed or missing data cannot restart the acknowledged alarm", state.ringing());
         }
     }
 
     @Test
-    public void nextCycleCanRingAfterImmediateReplacementAtFiveVisitors() {
+    public void nextFillCanRingAfterImmediateReplacementOnceRoomOpened() {
         var state = ringing();
         state.acknowledge();
         var replaced = new VisitorQueue.Snapshot(Set.of("Beth", "Trinity", "Maeve", "Ludleth", "Taylor"), null, true);
-        state.observe(replaced, 10_000);
-        state.tick(369_999);
+        state.observe(replaced);
+        state.tick();
         assertFalse(state.ringing());
-        state.tick(370_000);
+        state.observe(new VisitorQueue.Snapshot(Set.of("Trinity", "Maeve", "Ludleth", "Taylor"), 300_000L, false));
+        state.observe(replaced);
+        state.tick();
         assertTrue(state.ringing());
     }
 
     @Test
     public void clicksBeforeAnAlarmAndResetDoNotSuppressFutureAlarms() {
         var state = new VisitorAlarmState();
-        state.observe(FULL, 0);
+        state.observe(FULL);
         assertFalse(state.acknowledge());
-        state.seed(360_000, 0, 0);
+        state.tick();
         assertTrue(state.ringing());
         state.acknowledge();
         state.reset();
-        state.observe(FULL, 1_000);
-        state.seed(360_000, 0, 1_000);
+        state.observe(FULL);
+        state.tick();
         assertTrue(state.ringing());
     }
 
@@ -68,8 +68,8 @@ public class VisitorOfferTest {
 
     private static VisitorAlarmState ringing() {
         var state = new VisitorAlarmState();
-        state.observe(FULL, 0);
-        state.seed(360_000, 0, 0);
+        state.observe(FULL);
+        state.tick();
         assertTrue(state.ringing());
         return state;
     }

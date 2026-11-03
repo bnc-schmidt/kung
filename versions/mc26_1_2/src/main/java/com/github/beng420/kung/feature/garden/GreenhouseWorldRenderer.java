@@ -37,6 +37,7 @@ final class GreenhouseWorldRenderer {
     private static int builtScan = -1;
     private static int builtPalette;
     private static boolean builtHideOverWrongSoil;
+    private static String builtHeld = "";
     private static BlockPos builtCorner;
     private static Frame built = Frame.EMPTY;
 
@@ -113,15 +114,18 @@ final class GreenhouseWorldRenderer {
         if (!GreenhouseHologram.isShowing()) return Frame.EMPTY;
         int palette = GreenhousePalette.fingerprint();
         boolean hideOverWrongSoil = GreenhouseHologramSettings.hideModelsOverWrongSoil();
+        // What the player holds narrows the hologram, so a change of item rebuilds it (only with the setting on).
+        String held = GreenhouseHologramSettings.focusOnHeldItem() ? GreenhouseHologram.heldId() : "";
         if (builtVersion != GreenhouseHologram.version() || !corner.equals(builtCorner)
             || builtEpoch != GreenhouseModels.epoch() || builtScan != GreenhouseScanner.version()
-            || builtPalette != palette || builtHideOverWrongSoil != hideOverWrongSoil) {
+            || builtPalette != palette || builtHideOverWrongSoil != hideOverWrongSoil || !held.equals(builtHeld)) {
             builtVersion = GreenhouseHologram.version();
             builtCorner = corner;
             builtEpoch = GreenhouseModels.epoch();
             builtScan = GreenhouseScanner.version();
             builtPalette = palette;
             builtHideOverWrongSoil = hideOverWrongSoil;
+            builtHeld = held;
             built = buildFrame(corner, hideOverWrongSoil);
         }
         return built;
@@ -137,6 +141,21 @@ final class GreenhouseWorldRenderer {
         // Ghosts only exist (and are only drawn) with a known soil layer; a spot over one of them is not drawn.
         boolean[] blocked = hideOverWrongSoil && soilLayer >= 0
             ? GreenhouseSoilCheck.blocked(GreenhouseScanLogic.footprints(placements), ghosts) : null;
+        var layout = GreenhouseHologram.layout();
+        var markers = GreenhouseHologram.shapes();
+        List<GreenhouseScanLogic.Extra> extras = GreenhouseScanner.extras(version);
+        // The item in hand leaves out everything but its own spots and soil (and the marker with them).
+        var focus = GreenhouseHologram.focus();
+        if (focus.isPresent()) {
+            GreenhouseFocus.View view = focus.get().narrow(layout, states, blocked, ghosts);
+            layout = view.layout();
+            placements = layout.placements();
+            states = view.states();
+            blocked = view.blocked();
+            ghosts = view.ghosts();
+            markers = List.of();
+            extras = List.of();
+        }
         GreenhouseModels.Prepared prepared;
         try {
             prepared = GreenhouseModels.prepare(placements, states, ghosts, soilLayer, blocked, corner, palette);
@@ -147,9 +166,9 @@ final class GreenhouseWorldRenderer {
                 cubesOf(placements, blocked, corner, palette));
         }
         // The (0, 0) marker, then the outlines, slabs, wrong and unplanned boxes, then the stand-in cubes.
-        List<Box> boxes = new ArrayList<>(worldBoxes(GreenhouseHologram.shapes(), corner));
-        boxes.addAll(worldBoxes(GreenhouseOverlay.boxes(GreenhouseHologram.layout(), states,
-            GreenhouseScanner.extras(version), ghosts, soilLayer, blocked, palette), corner));
+        List<Box> boxes = new ArrayList<>(worldBoxes(markers, corner));
+        boxes.addAll(worldBoxes(GreenhouseOverlay.boxes(layout, states, extras, ghosts, soilLayer, blocked, palette),
+            corner));
         boxes.addAll(prepared.cubes());
         return new Frame(List.copyOf(boxes), prepared.models());
     }

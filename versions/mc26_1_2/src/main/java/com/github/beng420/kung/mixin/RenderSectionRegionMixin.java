@@ -2,6 +2,7 @@ package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
 import com.github.beng420.kung.feature.dungeon.ColoredPillarsFeature;
+import com.github.beng420.kung.feature.garden.PlotCleaningHelperFeature;
 import com.llamalad7.mixinextras.injector.ModifyReturnValue;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.renderer.chunk.RenderSectionRegion;
@@ -19,11 +20,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 public abstract class RenderSectionRegionMixin {
     @Shadow @Final private ClientLevel level;
     @Unique private PillarMaterial kung$pillarMaterial;
+    @Unique private PlotCleaningHelperFeature.Plot kung$cleaningPlot;
 
     @Inject(method = "<init>", at = @At("RETURN"))
     private void kung$capturePillarMaterial(CallbackInfo ci) {
         // Keep each worker's render snapshot consistent across a settings/context change.
         kung$pillarMaterial = ColoredPillarsFeature.materialFor(level);
+        kung$cleaningPlot = PlotCleaningHelperFeature.plotFor(level);
+    }
+
+    @ModifyReturnValue(method = "getBlockState", at = @At("RETURN"))
+    private BlockState kung$sponge(BlockState original, BlockPos pos) {
+        return PlotCleaningHelperFeature.replace(pos.getX(), pos.getZ(), original, kung$cleaningPlot);
     }
 
     @ModifyReturnValue(method = "getBlockState", at = @At("RETURN"))

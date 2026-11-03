@@ -1,6 +1,7 @@
 package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.github.beng420.kung.feature.garden.EffectAlarmsFeature;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
@@ -24,7 +25,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 public abstract class MultiPlayerGameModeMixin {
     @Inject(method = {"startDestroyBlock", "continueDestroyBlock"}, at = @At("HEAD"))
     private void kung$observeCropClick(BlockPos pos, Direction direction, CallbackInfoReturnable<Boolean> callbackInfo) {
-        VisitorAlarmFeature.observeCropClick(pos);
+        EffectAlarmsFeature.observeCropClick(pos);
         FeastOverlayFeature.observeCropClick(pos);
     }
 

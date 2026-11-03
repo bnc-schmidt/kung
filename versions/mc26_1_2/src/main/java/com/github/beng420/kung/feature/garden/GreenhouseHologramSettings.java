@@ -36,6 +36,9 @@ public final class GreenhouseHologramSettings {
     /** Whether the crosshair names the hologram cell or soil marker it is aimed at. */
     static boolean showCrosshairLabel() { return config().showCrosshairLabel(); }
 
+    /** Whether holding a crop, mutation or soil item narrows the hologram to the cells it belongs to. */
+    static boolean focusOnHeldItem() { return config().focusOnHeldItem(); }
+
     /** The GLFW key code of the toggle key, or -1 when it is unbound or bound to a mouse button. */
     static int toggleKey() { return config().toggleKey(); }
 
