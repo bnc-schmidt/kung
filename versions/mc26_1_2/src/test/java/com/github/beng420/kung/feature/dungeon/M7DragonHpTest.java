@@ -31,6 +31,43 @@ public final class M7DragonHpTest {
         assertEquals("5", M7DragonHp.format(5F));
     }
 
+    @Test public void serverHealthStaysShownWhileTheDragonsOwnFieldIsClamped() {
+        // EnderDragon.aiStep clamps the live field to max health every client tick (here 1024).
+        // Before the fix the text read that field, so it vanished after every tick until the next packet.
+        assertTrue(M7DragonHp.visible(6.040881E8F, 6.040881E8F));
+        assertTrue(M7DragonHp.visible(6.040881E8F, 1024F));
+        assertTrue(M7DragonHp.visible(6.040881E8F, 200F));
+        // The same server value gives the same text on every frame, so the digits only move with real HP changes.
+        assertEquals(M7DragonHp.format(6.040881E8F), M7DragonHp.format(6.040881E8F));
+    }
+
+    @Test public void deadDragonAndMissingServerValueHideTheText() {
+        assertFalse(M7DragonHp.visible(6.040881E8F, 0F));
+        assertFalse(M7DragonHp.visible(6.040881E8F, Float.NaN));
+        assertFalse(M7DragonHp.visible(1024F, 1024F));
+        assertFalse(M7DragonHp.visible(0F, 1024F));
+    }
+
+    @Test public void textGrowsWhenNearAndStaysReadableWhenFar() {
+        assertEquals(4F, M7DragonHp.textScale(5.0, 100), 1e-6F);
+        assertEquals(4F, M7DragonHp.textScale(0.0, 100), 1e-6F);
+        assertEquals(2F, M7DragonHp.textScale(40.0, 100), 1e-6F);
+        assertEquals(1.5F, M7DragonHp.textScale(53.3, 100), 0.01F);
+        assertEquals(1.5F, M7DragonHp.textScale(200.0, 100), 1e-6F);
+        float previous = Float.MAX_VALUE;
+        for (double distance = 1; distance <= 120; distance += 1) {
+            float scale = M7DragonHp.textScale(distance, 100);
+            assertTrue(scale <= previous);
+            assertTrue(scale >= 1.5F && scale <= 4F);
+            previous = scale;
+        }
+    }
+
+    @Test public void sizeSettingScalesTheDistanceSize() {
+        assertEquals(3F, M7DragonHp.textScale(200.0, 200), 1e-6F);
+        assertEquals(0.75F, M7DragonHp.textScale(200.0, 50), 1e-6F);
+    }
+
     @Test public void colourFollowsTheShareOfTheHighestHealthSeen() {
         assertEquals(0x55FF55, M7DragonHp.color(900F, 900F));
         assertEquals(0x55FF55, M7DragonHp.color(675F, 900F));

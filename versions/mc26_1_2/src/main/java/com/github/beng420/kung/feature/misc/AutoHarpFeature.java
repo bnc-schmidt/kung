@@ -33,6 +33,7 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
     /** One pacer per column, so two notes lit together each wait their own delay. */
     private final AutoPacer[] pacers = new AutoPacer[HarpPlanner.COLUMNS];
     private HarpPlanner planner = new HarpPlanner();
+    private int[] behind = new int[HarpPlanner.COLUMNS];
     private AbstractContainerMenu activeMenu;
     private boolean layoutLogged;
     private String lastLogged = "";
@@ -67,7 +68,8 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
             if (pacer.poll(planner.note(slot), now, delay, false) && ExperimentAutoClicker.pickBlockClick(client, activeMenu, slot)) {
                 planner.markClicked(slot);
                 KungDebugRecorder.event(AREA, "click slot=" + slot + " note=" + planner.note(slot) + " wait=" + delay
-                    + " ping=" + ping + " set=" + config().autoHarpDelayMillis());
+                    + " ping=" + ping + " set=" + config().autoHarpDelayMillis() + " behind="
+                    + behind[slot - HarpPlanner.FIRST_BUTTON_SLOT]);
                 // One click per tick, like a hand: a second note lit together waits for the next tick.
                 break;
             }
@@ -92,11 +94,13 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
             resetState("closed-or-disabled");
             return false;
         }
-        List<String> buttons = new ArrayList<>(HarpPlanner.COLUMNS);
-        for (int column = 0; column < HarpPlanner.COLUMNS; column++) {
-            buttons.add(itemId(activeMenu.slots.get(HarpPlanner.FIRST_BUTTON_SLOT + column).getItem()));
+        List<String> top = new ArrayList<>(TOP_SLOT_COUNT);
+        for (int slot = 0; slot < TOP_SLOT_COUNT; slot++) {
+            top.add(itemId(activeMenu.slots.get(slot).getItem()));
         }
-        List<Integer> expired = planner.observe(buttons);
+        behind = HarpPlanner.notesBehind(top);
+        List<Integer> expired = planner.observe(top.subList(HarpPlanner.FIRST_BUTTON_SLOT,
+            HarpPlanner.FIRST_BUTTON_SLOT + HarpPlanner.COLUMNS), behind);
         if (!expired.isEmpty()) {
             KungDebugRecorder.event(AREA, "note went dark unclicked " + expired);
         }
@@ -148,7 +152,8 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
         for (int slot = HarpPlanner.FIRST_BUTTON_SLOT; slot < HarpPlanner.FIRST_BUTTON_SLOT + HarpPlanner.COLUMNS; slot++) {
             if (planner.note(slot) != 0) {
                 lit.append(lit.length() > 1 ? ", " : "").append(slot).append(" \"")
-                    .append(activeMenu.slots.get(slot).getItem().getHoverName().getString()).append('"');
+                    .append(activeMenu.slots.get(slot).getItem().getHoverName().getString()).append("\" note=")
+                    .append(planner.note(slot)).append(" behind=").append(behind[slot - HarpPlanner.FIRST_BUTTON_SLOT]);
             }
         }
         String state = lit.append(']').toString();
@@ -165,6 +170,7 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
         KungDebugRecorder.event(AREA, "reset container=" + activeMenu.containerId + " reason=" + reason);
         activeMenu = null;
         planner = new HarpPlanner();
+        behind = new int[HarpPlanner.COLUMNS];
         layoutLogged = false;
         lastLogged = "";
         for (AutoPacer pacer : pacers) {

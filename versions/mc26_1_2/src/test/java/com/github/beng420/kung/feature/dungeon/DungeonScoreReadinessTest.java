@@ -89,13 +89,14 @@ public final class DungeonScoreReadinessTest {
         }
     }
 
-    @Test public void bloodAndBossProjectionCannotCoverAnOpenOrdinaryRoom() {
+    @Test public void bloodAndBossCreditFillsTheTabTotalEvenWhileTheMapKeepsARoomOpen() {
         var stats = new DungeonRunStats();
         stats.configureForFloor(7, true);
         stats.observeTabLine(null, "Completed Rooms: 34/36", null);
         stats.observeTabLine(null, "Crypts: 5", null);
         stats.observeTabLine(null, "Secrets Found: 87.5%", null);
-        assertEquals(295, stats.score(plan(RoomType.TRAP, false, false), 40));
+        // The tab count is the server's: 34 rooms plus Blood and boss are all 36, so the open map cell is not owed.
+        assertEquals(300, stats.score(plan(RoomType.TRAP, false, false), 40));
         assertEquals(300, stats.score(plan(RoomType.TRAP, true, false), 40));
     }
 
@@ -325,13 +326,35 @@ public final class DungeonScoreReadinessTest {
 
     @Test public void serverCompletedRoomsAreNeverCappedBelowByUnfinishedMapCells() {
         var map = planWithOpenRooms(2); // the map kept two clear cells open for the whole run
-        // 19:40:57, 17/20: Blood done, boss forecast. Matches the logged score=258 (skill 87, explore 71).
-        assertEquals(258, floorOneRun(17, 85.0, 4, 12.9, 0).score(map, 31));
+        // 19:40:57, 17/20: Blood done, boss forecast. The logged 258 (skill 87, explore 71) held the open cells back.
+        assertEquals(272, floorOneRun(17, 85.0, 4, 12.9, 0).score(map, 31));
         // 19:40:58, 19/20: the old cap (20 - 2 open cells = 18) was below the 19 the server had counted.
         assertTrue(floorOneRun(19, 95.0, 4, 12.9, 0).score(map, 31) > 258);
         // 19:41:20, 20/20 at boss entry: reported 263 = 20+72-5 + 54+21 + 100 + 1 instead of the full room credit.
         // Estimate = 20+80-5 + 60+21 + 100 + 1; Kung assumes a Legendary Spirit pet (first death costs 1, not 2).
         assertEquals(277, floorOneRun(20, 100.0, 5, 16.1, 1).score(map, 31));
+    }
+
+    /**
+     * Floor 1 run of 2026-11-02 04:14:03 (score-calc): 18/20 rooms at "Cleared: 90% (226)", two clear cells open on
+     * the map, Blood and boss still ahead, one death, 2 secrets (9.1%). Kung showed 257 with the rooms held at 18/20;
+     * Skyblocker announced 270 at 04:13:58 and the final Team Score at 04:15:06 was 270.
+     */
+    @Test public void bloodAndBossCreditAlsoCoversClearRoomsStillOpenOnTheMap() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(1, false);
+        stats.observeTabLine(null, "Completed Rooms: 18", null);
+        stats.observeTabLine(null, "Opened Rooms: 19", null);
+        stats.observeTabLine(null, "Secrets Found: 2", null);
+        stats.observeTabLine(null, "Secrets Found: 9.1%", null);
+        stats.observeTabLine(null, "Crypts: 0", null);
+        stats.observeTabLine(null, "Team Deaths: 1", null);
+        stats.observeScoreboardLine(null, "Cleared: 90% (226)");
+        var map = planWithOpenRooms(2);
+        // Skill 20+80-1, explore 60+12, speed 100; the 270 is one lower because the first death had no Spirit pet.
+        assertEquals(271, stats.score(map, 22));
+        stats.observeStatLine(null, "Team Score: 270 (S) (NEW RECORD!)");
+        assertEquals(270, stats.score(map, 22));
     }
 
     @Test public void sidebarScoreIsAuthoritativeOnceEveryRoomIsCredited() {

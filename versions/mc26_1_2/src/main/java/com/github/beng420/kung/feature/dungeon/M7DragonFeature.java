@@ -239,10 +239,15 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
      */
     private void noteHealth(EnderDragon dragon) {
         float health = dragon.getHealth();
-        if (!config().dragonHpEnabled() || !M7DragonHp.known(health) || !ready()) return;
+        // Exactly max health is the client's own clamp (see M7DragonHp.visible), not a server value.
+        if (!config().dragonHpEnabled() || !M7DragonHp.known(health) || health == dragon.getMaxHealth() || !ready()) return;
         UUID uuid = dragon.getUUID();
         HpSeen seen = hpSeen.get(uuid);
-        if (seen != null && seen.last() == health) return;
+        if (seen != null && seen.last() == health) {
+            // A re-tracked dragon is a new entity under the same UUID; the old one never draws again.
+            if (seen.dragon() != dragon) hpSeen.put(uuid, new HpSeen(dragon, health, seen.peak()));
+            return;
+        }
         hpSeen.put(uuid, new HpSeen(dragon, health, seen == null ? health : Math.max(seen.peak(), health)));
         var attempt = tracker.attempt(uuid);
         KungDebugRecorder.event("m7-dragon", "hp " + (attempt == null ? "unidentified" : attempt.statue().label())
@@ -1080,27 +1085,39 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     }
 
     /**
-     * Dragon HP: each dragon's live health as text on its body, projected like the Mimic ESP label.
-     * Reads the health field the client already holds; no packets, no entity scan - a float and one
-     * projection per dragon, and a dragon only counts once an entity-data packet has named it.
+     * Dragon HP: each dragon's health as text on its body, projected like the Mimic ESP label.
+     * Draws the last value the server sent (noteHealth), not the dragon's own field: the client
+     * tick clamps that field to max health, so reading it per frame showed the text only between a
+     * packet and the next tick. No extra packets, no entity scan - one projection per dragon, and a
+     * dragon only counts once an entity-data packet has named it.
      */
     private void renderHp(GuiGraphicsExtractor graphics, float partialTick) {
         Minecraft client = Minecraft.getInstance();
         if (!config().dragonHpEnabled() || hpSeen.isEmpty() || !ready() || client.player == null
             || McCompat.hudHidden(client)) return;
+        Vec3 eye = McCompat.camera(client).position();
         for (HpSeen seen : hpSeen.values()) {
             EnderDragon dragon = seen.dragon();
-            float health = dragon.getHealth();
-            if (dragon.isRemoved() || !M7DragonHp.known(health)) continue;
+            if (dragon.isRemoved() || !M7DragonHp.visible(seen.last(), dragon.getHealth())) continue;
             // Same interpolation carry-over as the core markers, or the text steps at 20 Hz.
             Vec3 core = trailPoint(dragon, DungeonConfig.DragonPart.BODY)
                 .add(dragon.getPosition(partialTick).subtract(dragon.position()));
             Vec3 screen = client.gameRenderer.projectPointToScreen(core);
             if (!Double.isFinite(screen.x) || !Double.isFinite(screen.y) || screen.z < -1.0 || screen.z > 1.0) continue;
-            String text = M7DragonHp.format(health);
-            int x = (int) Math.round((screen.x + 1.0) * 0.5 * graphics.guiWidth()) - client.font.width(text) / 2;
-            int y = (int) Math.round((1.0 - screen.y) * 0.5 * graphics.guiHeight()) - client.font.lineHeight / 2;
-            graphics.text(client.font, text, x, y, 0xFF000000 | M7DragonHp.color(health, Math.max(seen.peak(), health)), true);
+            String text = M7DragonHp.format(seen.last());
+            float scale = M7DragonHp.textScale(core.distanceTo(eye), config().dragonHpScale());
+            int x = -client.font.width(text) / 2;
+            int y = -client.font.lineHeight / 2;
+            graphics.pose().pushMatrix();
+            try {
+                graphics.pose().translate((float) ((screen.x + 1.0) * 0.5 * graphics.guiWidth()),
+                    (float) ((1.0 - screen.y) * 0.5 * graphics.guiHeight()));
+                graphics.pose().scale(scale, scale);
+                graphics.fill(x - 2, y - 1, x + client.font.width(text) + 2, y + client.font.lineHeight + 1, 0x90000000);
+                graphics.text(client.font, text, x, y, 0xFF000000 | M7DragonHp.color(seen.last(), seen.peak()), true);
+            } finally {
+                graphics.pose().popMatrix();
+            }
         }
     }
 

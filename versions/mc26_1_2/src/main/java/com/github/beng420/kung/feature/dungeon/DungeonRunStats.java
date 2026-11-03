@@ -23,6 +23,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
@@ -675,7 +676,7 @@ public final class DungeonRunStats {
             return;
         }
 
-        String plainMessage = rawMessage.replaceAll("§.", "");
+        String plainMessage = HypixelLocation.stripFormatting(rawMessage);
         Matcher matcher = ROOM_SECRETS_PATTERN.matcher(plainMessage);
         if (!matcher.find()) {
             return;
@@ -1266,9 +1267,9 @@ public final class DungeonRunStats {
             return;
         }
 
-        for (String line : component.getString().split("\\R")) {
+        for (String line : HypixelLocation.lines(component.getString())) {
             if (!line.isBlank()) {
-                observeTabLine(client, line.replaceAll("\\s+", " ").trim(), null);
+                observeTabLine(client, HypixelLocation.collapseSpaces(line), null);
             }
         }
     }
@@ -2061,10 +2062,9 @@ public final class DungeonRunStats {
         if (!bloodRoomCompleted) {
             projected++;
         }
-        // Blood/boss credit cannot pay for an unfinished clear room elsewhere on the map, but the map
-        // can never take back rooms the tab already counted as completed (completedRooms <= totalCells).
-        int cappedTotal = Math.max(0, totalCells - unfinishedClearRoomCells(renderPlan));
-        return Math.clamp(projected, 0, Math.max(cappedTotal, completedRooms));
+        // Hypixel counts Blood and boss as rooms of their own, so their credit also covers up to two clear rooms
+        // still open on the map (2026-11-02 floor 1: 18/20 + Blood + boss, open map cells, final Team Score 270).
+        return Math.clamp(projected, 0, totalCells);
     }
 
     private static boolean scoreCellCleared(DungeonLiveMapWriter.MatchRenderPlan plan, DungeonLiveMapWriter.CellKey cell) {

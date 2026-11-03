@@ -10,11 +10,31 @@ final class M7DragonHp {
      */
     private static final float PLACEHOLDER = 1024F;
 
+    /** The text is 80 / distance times the font size: 4x up close, 1.5x from ~53 blocks, the far end of the arena. */
+    private static final double REFERENCE_DISTANCE = 80.0;
+    private static final float NEAR_SCALE = 4F;
+    private static final float FAR_SCALE = 1.5F;
+
     private M7DragonHp() { }
 
     /** False for a dead dragon, a garbage value and the placeholder. */
     static boolean known(float health) {
         return Float.isFinite(health) && health > 0 && health != PLACEHOLDER;
+    }
+
+    /**
+     * Whether to draw the server's last health. The dragon's own field cannot decide that: its
+     * client tick clamps it to max health (EnderDragon.aiStep calls setHealth(getHealth()), which
+     * clamps), so only the dead state, a live value of 0, is read from it.
+     */
+    static boolean visible(float serverHealth, float liveHealth) {
+        return known(serverHealth) && liveHealth > 0;
+    }
+
+    /** Text size on screen: bigger when near, never below FAR_SCALE or above NEAR_SCALE, times the Text Size setting. */
+    static float textScale(double distance, int sizePercent) {
+        float byDistance = (float) Math.clamp(REFERENCE_DISTANCE / Math.max(distance, 1.0), FAR_SCALE, NEAR_SCALE);
+        return byDistance * sizePercent / 100F;
     }
 
     /** 604.09m, 1.02b, 7.5k: two decimals above a million, since the last stretch is what matters. */
