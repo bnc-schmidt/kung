@@ -13,6 +13,16 @@ public record HypixelLocation(Kind kind, String name) {
     private static final Pattern FIELD = Pattern.compile("^(?:Area|Location|Dungeon)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern CATACOMBS = Pattern.compile("^(?:The )?Catacombs(?:\\s*\\((?:E|[FM]?[0-7])\\))?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern SERVER = Pattern.compile("\\b(?:mini\\d{1,5}|mega\\d{1,5}|m\\d{2,5})[a-z]{0,4}\\b", Pattern.CASE_INSENSITIVE);
+    // String.replaceAll, matches and split compile their regex on every call; these run per packet and chat line.
+    private static final Pattern KUUDRA_AREA = Pattern.compile("kuudra's hollow(?:\\s*\\(t[1-5]\\))?");
+    private static final Pattern SERVER_LINE = Pattern.compile(
+        "^(?:\\d{1,2}/\\d{1,2}/\\d{2,4}.*|(?:Server|Server ID):.*|(?:mini|mega|m)\\d+[a-z]*)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FORMAT_CODE = Pattern.compile("§.");
+    private static final Pattern BLANKS = Pattern.compile("\\s+");
+    private static final Pattern LINE_BREAK = Pattern.compile("\\R");
+    private static final Pattern BRACKETED = Pattern.compile("\\[[^\\]]+]");
+    private static final Pattern RANK_DOT = Pattern.compile("[\\u25cf\\u25cb]");
+    private static final Pattern NOT_NAME_TEXT = Pattern.compile("[^A-Za-z0-9_ ]");
 
     public static HypixelLocation parse(List<String> lines) {
         HypixelLocation result = UNKNOWN;
@@ -37,7 +47,7 @@ public record HypixelLocation(Kind kind, String name) {
             return new HypixelLocation(Kind.CATACOMBS, name);
         }
         if (lower.equals("dungeon hub")) return new HypixelLocation(Kind.DUNGEON_HUB, "Dungeon Hub");
-        if (lower.equals("kuudra") || lower.matches("kuudra's hollow(?:\\s*\\(t[1-5]\\))?")) return new HypixelLocation(Kind.KUUDRA, "Kuudra's Hollow");
+        if (lower.equals("kuudra") || KUUDRA_AREA.matcher(lower).matches()) return new HypixelLocation(Kind.KUUDRA, "Kuudra's Hollow");
         if (locationField && !name.isBlank() && !lower.equals("unknown")) return new HypixelLocation(Kind.SKYBLOCK, name);
         return UNKNOWN;
     }
@@ -45,7 +55,7 @@ public record HypixelLocation(Kind kind, String name) {
     public static String serverId(List<String> lines) {
         for (String raw : lines) {
             String line = clean(raw);
-            if (!line.matches("(?i)^(?:\\d{1,2}/\\d{1,2}/\\d{2,4}.*|(?:Server|Server ID):.*|(?:mini|mega|m)\\d+[a-z]*)$")) continue;
+            if (!SERVER_LINE.matcher(line).matches()) continue;
             Matcher matcher = SERVER.matcher(line);
             if (matcher.find()) return matcher.group().toLowerCase(Locale.ROOT);
         }
@@ -53,7 +63,33 @@ public record HypixelLocation(Kind kind, String name) {
     }
 
     public static String clean(String text) {
-        return text == null ? "" : text.replaceAll("§.", "").replaceAll("\\s+", " ").trim();
+        return collapseSpaces(stripFormatting(text));
+    }
+
+    /** Text without its "§x" formatting codes; "" for null. */
+    public static String stripFormatting(String text) {
+        return text == null ? "" : FORMAT_CODE.matcher(text).replaceAll("");
+    }
+
+    /** Runs of whitespace become one space, ends trimmed. */
+    public static String collapseSpaces(String text) {
+        return BLANKS.matcher(text).replaceAll(" ").trim();
+    }
+
+    /** Like {@code text.split("\\R")}, without compiling the pattern each time. */
+    public static String[] lines(String text) {
+        return LINE_BREAK.split(text);
+    }
+
+    /** Clean text with its [bracketed] ranks dropped: "[MVP+] Name" becomes "Name". */
+    public static String withoutBrackets(String clean) {
+        return collapseSpaces(BRACKETED.matcher(clean).replaceAll(" "));
+    }
+
+    /** Only the letters, digits, underscores and spaces of a player list line, so names can be scanned out of it. */
+    static String nameText(String line) {
+        String text = BRACKETED.matcher(line).replaceAll(" ");
+        return NOT_NAME_TEXT.matcher(RANK_DOT.matcher(text).replaceAll(" ")).replaceAll(" ");
     }
 
     public static boolean isHypixelAddress(String address) {

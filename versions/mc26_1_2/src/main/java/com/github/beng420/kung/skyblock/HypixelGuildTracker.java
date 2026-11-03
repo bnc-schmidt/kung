@@ -154,10 +154,7 @@ public final class HypixelGuildTracker {
     }
 
     private void observeGuildListNames(String text) {
-        String normalized = text
-            .replaceAll("\\[[^\\]]+]", " ")
-            .replaceAll("[\\u25cf\\u25cb]", " ")
-            .replaceAll("[^A-Za-z0-9_ ]", " ");
+        String normalized = HypixelLocation.nameText(text);
         Matcher matcher = PLAYER_NAME_PATTERN.matcher(normalized);
         while (matcher.find()) {
             String name = matcher.group();
@@ -214,7 +211,7 @@ public final class HypixelGuildTracker {
     }
 
     private static String senderName(String rawSender) {
-        String clean = HypixelLocation.clean(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
+        String clean = HypixelLocation.withoutBrackets(HypixelLocation.clean(rawSender));
         Matcher matcher = PLAYER_NAME_PATTERN.matcher(clean);
         String last = "";
         while (matcher.find()) {

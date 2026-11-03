@@ -9,7 +9,8 @@ import java.util.regex.Pattern;
 public record HypixelDungeonFloor(int floor, boolean masterMode) {
     public static final HypixelDungeonFloor UNKNOWN = new HypixelDungeonFloor(-1, false);
     private static final String FLOOR_TOKEN = "(?:VII|VI|IV|V|III|II|I|[1-7])";
-    private static final Pattern FIELD = Pattern.compile("^(?:Area|Location|Dungeon)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
+    private static final Pattern FLOOR_WORD = Pattern.compile("^FLOOR\\s+");
+    private static final Pattern FIELD =Pattern.compile("^(?:Area|Location|Dungeon)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern FLOOR = Pattern.compile(
         "^(?:(Master Mode|MM)\\s+)?(?:The )?Catacombs(?:\\s*\\(([FM]?[0-7]|E)\\)|\\s*[-,]\\s*(Entrance|Floor\\s+" + FLOOR_TOKEN + "))$",
         Pattern.CASE_INSENSITIVE
@@ -51,7 +52,7 @@ public record HypixelDungeonFloor(int floor, boolean masterMode) {
             master |= token.startsWith("M");
             if (token.startsWith("M") || token.startsWith("F")) token = token.substring(1);
         } else {
-            token = matcher.group(3).toUpperCase(Locale.ROOT).replaceFirst("^FLOOR\\s+", "");
+            token = FLOOR_WORD.matcher(matcher.group(3).toUpperCase(Locale.ROOT)).replaceFirst("");
         }
         int floor = switch (token) {
             case "E", "ENTRANCE", "0" -> 0;

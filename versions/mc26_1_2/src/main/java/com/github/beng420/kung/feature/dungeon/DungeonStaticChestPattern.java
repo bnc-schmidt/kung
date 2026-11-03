@@ -10,6 +10,8 @@ import net.minecraft.core.BlockPos;
 record DungeonStaticChestPattern(String room, List<Cell> cells, Point chest, List<Probe> probes) {
     static final int MIN_PROBES = 12;
     static final int MAX_PROBES = 48;
+    private static final java.util.regex.Pattern COLORED_BLOCK = java.util.regex.Pattern.compile(
+        "(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_(?:terracotta|wool)");
 
     DungeonStaticChestPattern {
         if (room == null || room.isBlank() || room.length() > 100 || cells == null || cells.isEmpty() || cells.size() > 4
@@ -98,7 +100,7 @@ record DungeonStaticChestPattern(String room, List<Cell> cells, Point chest, Lis
             case "stone", "cobblestone", "mossy_cobblestone", "stone_bricks", "mossy_stone_bricks",
                 "cracked_stone_bricks", "chiseled_stone_bricks", "smooth_stone", "andesite", "polished_andesite",
                 "diorite", "polished_diorite", "granite", "polished_granite", "bricks", "obsidian", "terracotta" -> true;
-            default -> name.matches("(?:white|orange|magenta|light_blue|yellow|lime|pink|gray|light_gray|cyan|purple|blue|brown|green|red|black)_(?:terracotta|wool)");
+            default -> COLORED_BLOCK.matcher(name).matches();
         };
     }
 

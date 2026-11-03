@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog.RoomBounds;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -1846,7 +1847,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
 
     private static String decorationPlayerName(MapDecoration decoration) {
         String name = decoration.name().map(component -> component.getString().trim()).orElse("");
-        return name.replaceAll("\u00a7.", "").trim();
+        return HypixelLocation.stripFormatting(name).trim();
     }
 
     private static void drawFallbackPlayerMarker(

@@ -151,7 +151,7 @@ final class DungeonMapCheckmarkReader {
 
     static String decorationName(MapDecoration decoration) {
         return decoration.name()
-            .map(component -> component.getString().replaceAll("§.", "").trim())
+            .map(component -> com.github.beng420.kung.skyblock.HypixelLocation.stripFormatting(component.getString()).trim())
             .orElse("");
     }
 

@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.config.category.DungeonChatFilterConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
@@ -94,9 +95,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
         if (end <= BOSS_PREFIX.length()) {
             return "";
         }
-        return message.substring(BOSS_PREFIX.length(), end)
-            .replaceAll("\\s+", " ")
-            .trim()
+        return HypixelLocation.collapseSpaces(message.substring(BOSS_PREFIX.length(), end))
             .toLowerCase(java.util.Locale.ROOT);
     }
 

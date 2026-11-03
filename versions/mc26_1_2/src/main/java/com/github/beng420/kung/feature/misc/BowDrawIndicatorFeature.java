@@ -27,6 +27,8 @@ import static com.github.beng420.kung.feature.misc.BowDrawProgress.*;
 
 public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfig> {
     public static final BowDrawIndicatorFeature INSTANCE = new BowDrawIndicatorFeature();
+    private static final java.util.regex.Pattern SHORTBOW_LINE =
+        java.util.regex.Pattern.compile("(?:.*\\s)?shortbow(?:\\s.*|:.*)?", java.util.regex.Pattern.CASE_INSENSITIVE);
     private static final int WIDTH = 200;
     private static final int HEIGHT = 41;
     private static final int BAR_X = 6;
@@ -108,7 +110,7 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
         if (!(stack.getItem() instanceof BowItem)) return false;
         var lore = stack.get(DataComponents.LORE);
         return lore == null || lore.lines().stream().noneMatch(line ->
-            HypixelLocation.clean(line.getString()).matches("(?i)(?:.*\\s)?shortbow(?:\\s.*|:.*)?"));
+            SHORTBOW_LINE.matcher(HypixelLocation.clean(line.getString())).matches());
     }
 
     private void validateDraw(Minecraft client) {

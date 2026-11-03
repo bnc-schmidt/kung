@@ -89,8 +89,10 @@ final class InvisibugTracker {
         return false;
     }
 
+    private static final java.util.regex.Pattern AREA_SYMBOL = java.util.regex.Pattern.compile("^[⏣ф\\p{Co}]+\\s*");
+
     private static boolean isArea(String name) {
-        return AREAS.contains(HypixelLocation.clean(name).replaceFirst("^[⏣ф\\p{Co}]+\\s*", "").toLowerCase(Locale.ROOT));
+        return AREAS.contains(AREA_SYMBOL.matcher(HypixelLocation.clean(name)).replaceFirst("").toLowerCase(Locale.ROOT));
     }
 
     /**

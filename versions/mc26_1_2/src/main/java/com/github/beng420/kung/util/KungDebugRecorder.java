@@ -23,8 +23,11 @@ public final class KungDebugRecorder {
     private static final int MAX_SPLIT_EVENTS = 128;
     private static final int MAX_SCORE_EVENTS = 256;
     private static final int MAX_ROOM_EVENTS = 128;
+    /** A capsule throw is 5-8 lines, and fitting the physics needs a few dozen of them. */
+    private static final int MAX_THROW_EVENTS = 1500;
     /** Everything the rings can hold at once, so asking for more lines than this changes nothing. */
-    public static final int MAX_STORED_LINES = MAX_EVENTS + MAX_SPLIT_EVENTS + MAX_SCORE_EVENTS + MAX_ROOM_EVENTS;
+    public static final int MAX_STORED_LINES = MAX_EVENTS + MAX_SPLIT_EVENTS + MAX_SCORE_EVENTS + MAX_ROOM_EVENTS
+        + MAX_THROW_EVENTS;
     private static final int MAX_EVENT_LENGTH = 900;
     private static final long DEFAULT_DEDUPE_MILLIS = 15_000L;
     private static final DateTimeFormatter CLOCK_FORMAT =
@@ -36,6 +39,7 @@ public final class KungDebugRecorder {
     private static final ArrayDeque<String> SPLIT_EVENTS = new ArrayDeque<>(MAX_SPLIT_EVENTS);
     private static final ArrayDeque<String> SCORE_EVENTS = new ArrayDeque<>(MAX_SCORE_EVENTS);
     private static final ArrayDeque<String> ROOM_EVENTS = new ArrayDeque<>(MAX_ROOM_EVENTS);
+    private static final ArrayDeque<String> THROW_EVENTS = new ArrayDeque<>(MAX_THROW_EVENTS);
     private static final Map<String, AreaState> AREA_STATES = new HashMap<>();
 
     private static long sequence;
@@ -94,6 +98,10 @@ public final class KungDebugRecorder {
                 SCORE_EVENTS.addLast(line);
                 while (SCORE_EVENTS.size() > MAX_SCORE_EVENTS) SCORE_EVENTS.removeFirst();
             }
+            if (cleanArea.equals("safari-throw") || cleanArea.equals("sack-api")) {
+                THROW_EVENTS.addLast(line);
+                while (THROW_EVENTS.size() > MAX_THROW_EVENTS) THROW_EVENTS.removeFirst();
+            }
             if (initialRoomPoint(cleanArea, cleanMessage)) {
                 ROOM_EVENTS.addLast(line);
                 while (ROOM_EVENTS.size() > MAX_ROOM_EVENTS) ROOM_EVENTS.removeFirst();
@@ -113,6 +121,7 @@ public final class KungDebugRecorder {
             SPLIT_EVENTS.clear();
             SCORE_EVENTS.clear();
             ROOM_EVENTS.clear();
+            THROW_EVENTS.clear();
             AREA_STATES.clear();
             sequence = 0L;
             suppressedTotal = 0L;
@@ -135,6 +144,7 @@ public final class KungDebugRecorder {
             for (String line : SPLIT_EVENTS) ordered.put(eventSequence(line), line);
             for (String line : SCORE_EVENTS) ordered.put(eventSequence(line), line);
             for (String line : ROOM_EVENTS) ordered.put(eventSequence(line), line);
+            for (String line : THROW_EVENTS) ordered.put(eventSequence(line), line);
             snapshot = new ArrayList<>(ordered.values());
             storedCount = snapshot.size();
             snapshot = new ArrayList<>(snapshot.subList(Math.max(0, storedCount - limit), storedCount));
@@ -148,6 +158,7 @@ public final class KungDebugRecorder {
         builder.append("reservedSplitLimit=").append(MAX_SPLIT_EVENTS).append('\n');
         builder.append("reservedScoreLimit=").append(MAX_SCORE_EVENTS).append('\n');
         builder.append("reservedRoomLimit=").append(MAX_ROOM_EVENTS).append('\n');
+        builder.append("reservedThrowLimit=").append(MAX_THROW_EVENTS).append('\n');
         builder.append("suppressed=").append(suppressedTotal).append('\n');
         builder.append("focus=door-title,map-change,map-check,map-discovery,map-topology,mimic-esp,mimic-rejected,player-markers,player-slots,dungeon-state,context-state,npc-dialogue\n");
         appendAreaSummary(builder);
@@ -176,14 +187,17 @@ public final class KungDebugRecorder {
         return sanitize(value).replace(" | ", " / ");
     }
 
+    private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("\u00a7.");
+    private static final java.util.regex.Pattern BLANKS = java.util.regex.Pattern.compile("\\s+");
+    private static final java.util.regex.Pattern NUMBER = java.util.regex.Pattern.compile("-?\\d+(?:\\.\\d+)?");
+
     private static String sanitize(String value) {
         if (value == null) {
             return "";
         }
-        return value.replaceAll("\u00a7.", "")
+        return BLANKS.matcher(FORMAT_CODE.matcher(value).replaceAll("")
             .replace('\r', ' ')
-            .replace('\n', ' ')
-            .replaceAll("\\s+", " ")
+            .replace('\n', ' ')).replaceAll(" ")
             .trim();
     }
 
@@ -238,7 +252,7 @@ public final class KungDebugRecorder {
 
     private static String fingerprint(String area, String message, AreaPolicy policy) {
         String text = policy.similarDedupe()
-            ? message.replaceAll("-?\\d+(?:\\.\\d+)?", "#")
+            ? NUMBER.matcher(message).replaceAll("#")
             : message;
         return area + '\n' + text;
     }
@@ -264,6 +278,10 @@ public final class KungDebugRecorder {
             case "bow-draw", "rag" -> new AreaPolicy(80, 60_000L, 0L, false, false);
             // Two lines per Sack pull (at most one per 2 s): never deduped, so every send shows up as evidence.
             case "greenhouse-supply" -> new AreaPolicy(0, 60_000L, 0L, false, important);
+            // Capsule throw lines are the data for fitting the flight: never rate-limited or deduped.
+            case "safari-throw" -> new AreaPolicy(0, 60_000L, 0L, false, false);
+            // The sack API probe compares API polls with [Sacks] messages by time: every line is evidence.
+            case "sack-api" -> new AreaPolicy(0, 60_000L, 0L, false, false);
             case "map-change" -> new AreaPolicy(120, 60_000L, 3_000L, false, important);
             case "map-check" -> new AreaPolicy(30, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
             case "mimic-esp" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);

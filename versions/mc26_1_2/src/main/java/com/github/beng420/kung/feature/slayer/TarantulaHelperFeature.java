@@ -1040,7 +1040,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     }
 
     private boolean isEggSacTimer(String name) {
-        return name.matches("\\d+s \\d+/\\d+");
+        return EGG_SAC_TIMER.matcher(name).matches();
     }
 
     private void primeEggSacPhase(Minecraft client, Entity boss, String reason) {
@@ -1120,17 +1120,15 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
         debug(client, DebugMessage.EGG_SAC_PHASE_DONE, "egg sac phase done");
     }
 
+    private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("(?:\\u00a7|\\u00c2\\u00a7).");
+    private static final java.util.regex.Pattern EGG_SAC_TIMER = java.util.regex.Pattern.compile("\\d+s \\d+/\\d+");
+
     private String clean(String text) {
-        return plain(text)
-            .replaceAll("\\s+", " ")
-            .trim()
-            .toLowerCase(Locale.ROOT);
+        return plain(text).toLowerCase(Locale.ROOT);
     }
 
     private String plain(String text) {
-        return text.replaceAll("(?:\\u00a7|\\u00c2\\u00a7).", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+        return com.github.beng420.kung.skyblock.HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(text).replaceAll(""));
     }
 
     private int phaseFor(Minecraft client, Entity boss) {

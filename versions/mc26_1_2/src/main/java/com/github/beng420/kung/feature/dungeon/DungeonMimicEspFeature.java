@@ -5,6 +5,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -453,12 +454,14 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return false;
     }
 
+    /** A format code, also as the "Â§" a double-decoded text leaves. */
+    private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("(?:\\u00a7|\\u00c2\\u00a7).");
+    private static final java.util.regex.Pattern NOT_ALPHANUMERIC = java.util.regex.Pattern.compile("[^a-z0-9]+");
+
     private static String entityName(Entity entity) {
         net.minecraft.network.chat.Component customName = entity.getCustomName();
-        return (customName != null ? customName.getString() : entity.getName().getString())
-            .replaceAll("(?:\\u00a7|\\u00c2\\u00a7).", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+        return HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(
+            customName != null ? customName.getString() : entity.getName().getString()).replaceAll(""));
     }
 
     private void observeMessage(Minecraft client, String rawMessage) {
@@ -466,9 +469,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             return;
         }
 
-        String message = rawMessage.replaceAll("(?:\\u00a7|\\u00c2\\u00a7).", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+        String message = HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(rawMessage).replaceAll(""));
         if (message.isBlank()) {
             return;
         }
@@ -612,7 +613,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         if (name == null) {
             return "";
         }
-        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]+", "");
+        return NOT_ALPHANUMERIC.matcher(name.toLowerCase(Locale.ROOT)).replaceAll("");
     }
 
     private static Marker drawScreenWaypoint(

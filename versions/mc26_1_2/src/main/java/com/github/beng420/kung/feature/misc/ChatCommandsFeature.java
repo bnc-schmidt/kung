@@ -391,7 +391,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private static String senderName(String rawSender) {
-        String clean = HypixelLocation.clean(rawSender).replaceAll("\\[[^\\]]+]", " ").replaceAll("\\s+", " ").trim();
+        String clean = HypixelLocation.withoutBrackets(HypixelLocation.clean(rawSender));
         Matcher matcher = USERNAME_PATTERN.matcher(clean);
         return matcher.find() ? matcher.group() : "";
     }

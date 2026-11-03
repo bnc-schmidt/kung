@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.regex.Pattern;
 
 public final class DungeonLifecycleSignals {
@@ -68,6 +69,6 @@ public final class DungeonLifecycleSignals {
     }
 
     public static String clean(String message) {
-        return message == null ? "" : message.replaceAll("\u00a7.", "").replaceAll("\\s+", " ").trim();
+        return HypixelLocation.clean(message);
     }
 }

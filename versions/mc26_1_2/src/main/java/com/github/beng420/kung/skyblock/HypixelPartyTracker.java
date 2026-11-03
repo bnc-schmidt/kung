@@ -129,7 +129,7 @@ public final class HypixelPartyTracker {
             return;
         }
 
-        String plainMessage = stripFormatting(message).replaceAll("\\s+", " ").trim();
+        String plainMessage = HypixelLocation.clean(message);
         String lower = plainMessage.toLowerCase(Locale.ROOT);
         if (isPartyResetMessage(lower)) {
             partyPlayerNames.clear();
@@ -184,10 +184,7 @@ public final class HypixelPartyTracker {
     private void observePartyListNames(Minecraft client, String namesText) {
         registerSelf(client);
 
-        String normalized = stripFormatting(namesText)
-            .replaceAll("\\[[^\\]]+]", " ")
-            .replaceAll("[\\u25cf\\u25cb]", " ")
-            .replaceAll("[^A-Za-z0-9_ ]", " ");
+        String normalized = HypixelLocation.nameText(stripFormatting(namesText));
         Matcher matcher = PLAYER_NAME_PATTERN.matcher(normalized);
         while (matcher.find()) {
             String name = matcher.group();
@@ -245,7 +242,7 @@ public final class HypixelPartyTracker {
     }
 
     private static String stripFormatting(String text) {
-        return text == null ? "" : text.replaceAll("\u00a7.", "");
+        return HypixelLocation.stripFormatting(text);
     }
 
     private static boolean isPartyResetMessage(String lowerMessage) {

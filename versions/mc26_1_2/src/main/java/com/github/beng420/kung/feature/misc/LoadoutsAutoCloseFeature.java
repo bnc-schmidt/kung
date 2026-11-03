@@ -4,6 +4,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.Locale;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -519,9 +520,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         if (text == null) {
             return "";
         }
-        return text.replaceAll("\\u00a7.", "")
-            .replaceAll("\\s+", " ")
-            .trim();
+        return HypixelLocation.clean(text);
     }
 
     private static int matchingKeybindIndex(KeyEvent event) {
@@ -556,7 +555,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return "";
         }
 
-        String normalized = label.replaceAll("\\s+", " ").trim();
+        String normalized = HypixelLocation.collapseSpaces(label);
         String lower = normalized.toLowerCase(Locale.ROOT);
         if (lower.contains("caps lock")) {
             return "Caps";
@@ -822,7 +821,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return true;
         }
 
-        String name = hoverName.replaceAll("\\s+", " ").trim().toLowerCase(Locale.ROOT);
+        String name = HypixelLocation.collapseSpaces(hoverName).toLowerCase(Locale.ROOT);
         return !(name.contains("close")
             || name.contains("go back")
             || name.contains("previous")
@@ -866,7 +865,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         }
 
         String itemPath = BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath();
-        String name = stack.getHoverName().getString().replaceAll("\\s+", " ").trim();
+        String name = HypixelLocation.collapseSpaces(stack.getHoverName().getString());
         return itemPath + " \"" + name + "\" x" + stack.getCount();
     }
 

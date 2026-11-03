@@ -246,7 +246,7 @@ public final class HypixelInstanceTracker {
     }
 
     private static void addLines(List<String> lines, Component component) {
-        if (component != null) lines.addAll(List.of(component.getString().split("\\R")));
+        if (component != null) lines.addAll(List.of(HypixelLocation.lines(component.getString())));
     }
 
     private static void recordMessage(Component message, boolean overlay) {

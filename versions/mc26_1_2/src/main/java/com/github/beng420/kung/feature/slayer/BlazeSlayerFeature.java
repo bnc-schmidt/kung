@@ -609,8 +609,10 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
         return customName != null ? customName.getString() : entity.getName().getString();
     }
 
+    private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("(?:\\u00a7|\\u00c2\\u00a7).");
+
     private static String plain(String text) {
-        return text.replaceAll("(?:\\u00a7|\\u00c2\\u00a7).", "").replaceAll("\\s+", " ").trim();
+        return com.github.beng420.kung.skyblock.HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(text).replaceAll(""));
     }
 
     private static String clean(String text) {
