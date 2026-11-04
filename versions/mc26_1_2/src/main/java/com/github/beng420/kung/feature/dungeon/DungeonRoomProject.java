@@ -24,6 +24,11 @@ public final class DungeonRoomProject {
         return project.isBlank() ? KungPaths.dungeonDataDirectory() : Path.of(project).resolve(DATA_DIRECTORY);
     }
 
+    /** Validates the project linked in the Dungeon settings. */
+    public static Path validateProject() throws IOException {
+        return validateProject(KungConfig.get().dungeon.roomDataProjectDirectory());
+    }
+
     public static Path validateProject(String root) throws IOException {
         try {
             if (root == null || root.isBlank()) throw new IOException("Specify the Kung project directory.");

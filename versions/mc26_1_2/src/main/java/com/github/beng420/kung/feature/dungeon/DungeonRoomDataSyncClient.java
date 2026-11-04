@@ -91,9 +91,7 @@ public final class DungeonRoomDataSyncClient {
                     + " variants=" + result.variantCount()
                     + " cells=" + result.componentCount());
             } catch (IOException | InterruptedException | RuntimeException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
+                KungErrors.restoreInterrupt(exception);
                 statusMessage = "Pull failed";
                 KungMod.LOGGER.warn("Failed to pull dungeon room sync data.", exception);
                 send(client, KungMessages.Type.ERROR, "Pull failed. See latest.log.");
@@ -110,9 +108,7 @@ public final class DungeonRoomDataSyncClient {
             try {
                 pushRoomReport(roomReportJson);
             } catch (IOException | InterruptedException | RuntimeException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
+                KungErrors.restoreInterrupt(exception);
                 statusMessage = "Push failed";
                 KungMod.LOGGER.warn("Failed to push dungeon room report.", exception);
             }
@@ -132,9 +128,7 @@ public final class DungeonRoomDataSyncClient {
                 statusMessage = "Pushed";
                 send(client, KungMessages.Type.SUCCESS, "Push ok: " + result);
             } catch (IOException | InterruptedException | RuntimeException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
+                KungErrors.restoreInterrupt(exception);
                 statusMessage = "Push failed";
                 KungMod.LOGGER.warn("Failed to push dungeon room report.", exception);
                 send(client, KungMessages.Type.ERROR, "Push failed. See latest.log.");
@@ -176,9 +170,7 @@ public final class DungeonRoomDataSyncClient {
                     + KungServerSession.INSTANCE.status()
                     + ".");
             } catch (IOException | InterruptedException | RuntimeException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
+                KungErrors.restoreInterrupt(exception);
                 statusMessage = "Ping failed";
                 KungMod.LOGGER.warn("Failed to ping dungeon room sync server.", exception);
                 send(client, KungMessages.Type.ERROR, "Ping failed: " + KungErrors.brief(exception) + ".");
@@ -262,9 +254,7 @@ public final class DungeonRoomDataSyncClient {
                     + ", doors " + remoteSnapshot.doors().size()
                     + ", players " + remoteSnapshot.players().size();
             } catch (IOException | InterruptedException | RuntimeException exception) {
-                if (exception instanceof InterruptedException) {
-                    Thread.currentThread().interrupt();
-                }
+                KungErrors.restoreInterrupt(exception);
                 statusMessage = "Live sync failed";
                 KungDebugRecorder.event("room-sync", "live failed runKey="
                     + runKey

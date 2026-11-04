@@ -97,12 +97,7 @@ public final class DungeonRoomRenderLayoutTest {
         var matches = List.of(new DungeonKnownRoomCatalog.MatchedRoom(template, upperCells),
             new DungeonKnownRoomCatalog.MatchedRoom(template, lowerCells));
         DungeonRoomRepository rooms = new DungeonRoomRepository() {
-            @Override public long revision() { return 0; }
             @Override public List<DungeonKnownRoomCatalog.MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) { return matches; }
-            @Override public DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int coreHash) { return null; }
-            @Override public DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
-                DungeonKnownRoomCatalog.MatchedRoom match, DungeonMapSnapshot snapshot) { return null; }
-            @Override public boolean hasPrince(String name) { return false; }
         };
         for (boolean extraMapConnection : List.of(false, true)) {
             DungeonMapSnapshot snapshot = new DungeonMapSnapshot();
@@ -246,8 +241,6 @@ public final class DungeonRoomRenderLayoutTest {
 
     private static DungeonRoomRepository repository(boolean matchTemplates) {
         return new DungeonRoomRepository() {
-            @Override public long revision() { return 0; }
-
             @Override public List<DungeonKnownRoomCatalog.MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) {
                 return matchTemplates
                     ? DungeonKnownRoomCatalog.matchKnownRooms(snapshot, List.of(LAYERS), HINTS)
@@ -257,12 +250,6 @@ public final class DungeonRoomRenderLayoutTest {
             @Override public DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int coreHash) {
                 return HINTS.get(coreHash);
             }
-
-            @Override public DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
-                DungeonKnownRoomCatalog.MatchedRoom match, DungeonMapSnapshot snapshot
-            ) { return null; }
-
-            @Override public boolean hasPrince(String roomName) { return false; }
         };
     }
 }

@@ -27,7 +27,7 @@ public final class DungeonScanUtils {
     private static final int MIN_CORE_HEIGHT = 11;
     private static final int MAX_CORE_HEIGHT = 140;
     private static final int DOOR_FLOOR_Y = 68;
-    private static final int MIN_DOOR_SCAN_Y = 69;
+    static final int MIN_DOOR_SCAN_Y = 69;
     private static final int MAX_DOOR_SCAN_Y = 72;
     private static final int DOOR_CEILING_Y = 73;
     private static final int DOOR_SKY_Y = 74;

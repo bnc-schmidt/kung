@@ -10,7 +10,6 @@ import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.runtime.AppServices;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.google.gson.Gson;
-import java.io.IOException;
 import java.util.List;
 import java.util.function.Consumer;
 import org.junit.Test;
@@ -23,31 +22,8 @@ public final class BloodRushHelperReliabilityTest {
 
     private static final DungeonRoomRepository EMPTY_REPOSITORY = new DungeonRoomRepository() {
         @Override
-        public long revision() {
-            return 0L;
-        }
-
-        @Override
         public List<DungeonKnownRoomCatalog.MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) {
             return List.of();
-        }
-
-        @Override
-        public DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int coreHash) {
-            return null;
-        }
-
-        @Override
-        public DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
-            DungeonKnownRoomCatalog.MatchedRoom match,
-            DungeonMapSnapshot snapshot
-        ) throws IOException {
-            return null;
-        }
-
-        @Override
-        public boolean hasPrince(String roomName) {
-            return false;
         }
     };
 

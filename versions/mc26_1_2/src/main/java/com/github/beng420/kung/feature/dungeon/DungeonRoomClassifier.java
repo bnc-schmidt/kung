@@ -13,6 +13,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collection;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 
@@ -60,7 +61,7 @@ public final class DungeonRoomClassifier {
         }
 
         if (DungeonRoomProject.enabled()) {
-            DungeonRoomProject.validateProject(KungConfig.get().dungeon.roomDataProjectDirectory());
+            DungeonRoomProject.validateProject();
         }
 
         Path file = knownRoomTypesFile();
@@ -111,11 +112,8 @@ public final class DungeonRoomClassifier {
     private static Properties bundledProperties() {
         Properties properties = new Properties();
         try (InputStream stream = DungeonRoomClassifier.class.getResourceAsStream(BUNDLED_ROOM_TYPES_RESOURCE)) {
-            if (stream == null) {
-                return properties;
-            }
-            try (Reader reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
-                properties.load(reader);
+            if (stream != null) {
+                properties.load(new InputStreamReader(stream, StandardCharsets.UTF_8));
             }
         } catch (IOException | RuntimeException exception) {
             KungMod.LOGGER.warn("Failed to load bundled dungeon room types.", exception);
@@ -126,7 +124,7 @@ public final class DungeonRoomClassifier {
     private static void loadPropertiesInto(Map<Integer, RoomType> roomTypes, Properties properties) {
         for (String key : properties.stringPropertyNames()) {
             int coreHash = Integer.parseInt(key.trim());
-            RoomType roomType = RoomType.valueOf(properties.getProperty(key).trim().toUpperCase());
+            RoomType roomType = RoomType.valueOf(properties.getProperty(key).trim().toUpperCase(Locale.ROOT));
             // Old profiles saved rare rooms as NORMAL before RARE existed.
             roomTypes.merge(coreHash, roomType,
                 (previous, next) -> previous == RoomType.RARE && next == RoomType.NORMAL ? previous : next);
@@ -135,7 +133,7 @@ public final class DungeonRoomClassifier {
 
     private static void writeRoomTypes(Path file, Properties properties) throws IOException {
         if (DungeonRoomProject.enabled()) {
-            DungeonRoomProject.validateProject(KungConfig.get().dungeon.roomDataProjectDirectory());
+            DungeonRoomProject.validateProject();
         }
         StringWriter writer = new StringWriter();
         properties.store(writer,

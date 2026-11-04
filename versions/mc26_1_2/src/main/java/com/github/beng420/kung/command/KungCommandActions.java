@@ -291,7 +291,7 @@ final class KungCommandActions {
         if (input.hasExplicitMetadata()) {
             return input;
         }
-        DungeonKnownRoomCatalog.KnownRoomInfo info = client.player == null
+        DungeonKnownRoomCatalog.KnownCoreHint info = client.player == null
             ? knownRoomInfo(context, input.name())
             : knownRoomInfo(context, client, client.player.blockPosition(), input.name());
         return info == null
@@ -487,7 +487,7 @@ final class KungCommandActions {
         return result.learned() ? 1 : 0;
     }
 
-    static DungeonKnownRoomCatalog.KnownRoomInfo knownRoomInfo(
+    static DungeonKnownRoomCatalog.KnownCoreHint knownRoomInfo(
         CommandContext<FabricClientCommandSource> context,
         String name
     ) {
@@ -496,7 +496,7 @@ final class KungCommandActions {
             return null;
         }
 
-        List<DungeonKnownRoomCatalog.KnownRoomInfo> infos = DungeonKnownRoomCatalog.knownRoomInfos(name);
+        List<DungeonKnownRoomCatalog.KnownCoreHint> infos = DungeonKnownRoomCatalog.knownRoomInfos(name);
         if (infos.isEmpty()) {
             context.getSource().sendFeedback(commandMessage(
                 "Room \"" + name + "\" is not known yet. Use secrets/type when saving it for the first time."
@@ -518,7 +518,7 @@ final class KungCommandActions {
         BlockPos roomPosition,
         RoomLearnInput input
     ) {
-        List<DungeonKnownRoomCatalog.KnownRoomInfo> infos = DungeonKnownRoomCatalog.knownRoomInfos(input.name());
+        List<DungeonKnownRoomCatalog.KnownCoreHint> infos = DungeonKnownRoomCatalog.knownRoomInfos(input.name());
         if (infos.isEmpty()) {
             context.getSource().sendFeedback(commandMessage(
                 "Room \"" + input.name() + "\" is not known yet. Saving it as NORMAL with 0 secrets."
@@ -526,7 +526,7 @@ final class KungCommandActions {
             return new RoomLearnInput(input.name(), 0, RoomType.NORMAL, 0, true);
         }
         if (infos.size() == 1) {
-            DungeonKnownRoomCatalog.KnownRoomInfo info = infos.get(0);
+            DungeonKnownRoomCatalog.KnownCoreHint info = infos.get(0);
             return new RoomLearnInput(info.name(), info.secrets(), info.type(), info.crypts(), true);
         }
         if (client == null || roomPosition == null) {
@@ -545,10 +545,10 @@ final class KungCommandActions {
             return null;
         }
 
-        List<DungeonKnownRoomCatalog.KnownRoomInfo> matchingInfos =
+        List<DungeonKnownRoomCatalog.KnownCoreHint> matchingInfos =
             DungeonKnownRoomCatalog.knownRoomInfos(input.name(), roomCore.coreHash(), roomCore.stableCoreHash());
         if (matchingInfos.size() == 1) {
-            DungeonKnownRoomCatalog.KnownRoomInfo info = matchingInfos.get(0);
+            DungeonKnownRoomCatalog.KnownCoreHint info = matchingInfos.get(0);
             return new RoomLearnInput(info.name(), info.secrets(), info.type(), info.crypts(), true);
         }
 
@@ -558,7 +558,7 @@ final class KungCommandActions {
         return null;
     }
 
-    static DungeonKnownRoomCatalog.KnownRoomInfo knownRoomInfo(
+    static DungeonKnownRoomCatalog.KnownCoreHint knownRoomInfo(
         CommandContext<FabricClientCommandSource> context,
         Minecraft client,
         BlockPos roomPosition,
@@ -569,7 +569,7 @@ final class KungCommandActions {
             return null;
         }
 
-        List<DungeonKnownRoomCatalog.KnownRoomInfo> infos = DungeonKnownRoomCatalog.knownRoomInfos(name);
+        List<DungeonKnownRoomCatalog.KnownCoreHint> infos = DungeonKnownRoomCatalog.knownRoomInfos(name);
         if (infos.isEmpty()) {
             context.getSource().sendFeedback(commandMessage(
                 "Room \"" + name + "\" is not known yet. Use secrets/type when saving it for the first time."
@@ -589,7 +589,7 @@ final class KungCommandActions {
             return null;
         }
 
-        List<DungeonKnownRoomCatalog.KnownRoomInfo> matchingInfos =
+        List<DungeonKnownRoomCatalog.KnownCoreHint> matchingInfos =
             DungeonKnownRoomCatalog.knownRoomInfos(name, roomCore.coreHash(), roomCore.stableCoreHash());
         if (matchingInfos.size() == 1) {
             return matchingInfos.getFirst();

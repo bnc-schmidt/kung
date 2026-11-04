@@ -137,11 +137,8 @@ public final class DungeonMapTrapTest {
 
     private static DungeonRoomRepository repository(KnownCoreHint hint) {
         return new DungeonRoomRepository() {
-            @Override public long revision() { return 0; }
             @Override public List<MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) { return List.of(); }
             @Override public KnownCoreHint knownCoreHint(int hash) { return hint; }
-            @Override public AutoLearnResult autoLearnStableHashes(MatchedRoom match, DungeonMapSnapshot snapshot) { return null; }
-            @Override public boolean hasPrince(String roomName) { return false; }
         };
     }
 }

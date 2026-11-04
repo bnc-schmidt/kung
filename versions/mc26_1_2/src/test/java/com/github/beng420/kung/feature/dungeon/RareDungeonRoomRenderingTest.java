@@ -147,15 +147,10 @@ public final class RareDungeonRoomRenderingTest {
 
     private static DungeonRoomRepository repository(DungeonKnownRoomCatalog.RoomTemplate template) {
         return new DungeonRoomRepository() {
-            @Override public long revision() { return 0; }
             @Override public List<DungeonKnownRoomCatalog.MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) {
                 return template == null ? List.of() : List.of(new DungeonKnownRoomCatalog.MatchedRoom(
                     template, List.of(new DungeonKnownRoomCatalog.MatchedComponent(0, 0, template.components().getFirst().coreHash()))));
             }
-            @Override public DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int hash) { return null; }
-            @Override public DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
-                DungeonKnownRoomCatalog.MatchedRoom match, DungeonMapSnapshot snapshot) { return null; }
-            @Override public boolean hasPrince(String name) { return false; }
         };
     }
 }

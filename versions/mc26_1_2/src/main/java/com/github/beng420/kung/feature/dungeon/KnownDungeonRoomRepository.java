@@ -57,9 +57,4 @@ public enum KnownDungeonRoomRepository implements DungeonRoomRepository {
     ) throws IOException {
         return DungeonKnownRoomCatalog.autoLearnStableHashes(match, snapshot);
     }
-
-    @Override
-    public boolean hasPrince(String roomName) {
-        return DungeonKnownRoomCatalog.hasPrince(roomName);
-    }
 }

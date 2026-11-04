@@ -5,7 +5,9 @@ import java.util.List;
 
 /** Read-oriented boundary around the persisted dungeon room catalog. */
 public interface DungeonRoomRepository {
-    long revision();
+    default long revision() {
+        return 0L;
+    }
 
     List<DungeonKnownRoomCatalog.MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot);
 
@@ -13,17 +15,19 @@ public interface DungeonRoomRepository {
         return List.of();
     }
 
-    DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int coreHash);
+    default DungeonKnownRoomCatalog.KnownCoreHint knownCoreHint(int coreHash) {
+        return null;
+    }
 
     default DungeonKnownRoomCatalog.KnownCoreHint knownHintForPoint(DungeonMapSnapshot snapshot, DungeonScanPoint point) {
         var hint = knownCoreHint(point.coreHash());
         return hint != null || point.stableCoreHash() == 0 ? hint : knownCoreHint(point.stableCoreHash());
     }
 
-    DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
+    default DungeonKnownRoomCatalog.AutoLearnResult autoLearnStableHashes(
         DungeonKnownRoomCatalog.MatchedRoom match,
         DungeonMapSnapshot snapshot
-    ) throws IOException;
-
-    boolean hasPrince(String roomName);
+    ) throws IOException {
+        return DungeonKnownRoomCatalog.AutoLearnResult.none();
+    }
 }

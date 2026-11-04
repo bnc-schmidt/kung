@@ -77,10 +77,7 @@ def kungProfileDir = providers.gradleProperty("kungProfileDir")
     "${appData}\\ModrinthApp\\profiles\\Dungeons 26.1.2"
   })
 def bundledDungeonScanDir = rootProject.layout.projectDirectory.dir("versions/mc26_1_2/src/main/resources/kung-dungeon-scans")
-def localDungeonScanDir = kungProfileDir.map { profileDir ->
-  File current = file("${profileDir}/config/kung/dungeon-data")
-  current.isDirectory() ? current : file("${profileDir}/kung-dungeon-scans")
-}
+def localDungeonScanDir = kungProfileDir.map { profileDir -> file("${profileDir}/config/kung/dungeon-data") }
 tasks.register("syncLocalDungeonRoomData") {
   group = "kung"
   description = "Copies locally learned dungeon room data from the active Modrinth profile into bundled jar resources."
@@ -88,7 +85,6 @@ tasks.register("syncLocalDungeonRoomData") {
   inputs.files(localDungeonScanDir.map { scanDir ->
     files(
       new File(scanDir, "known-rooms.json"),
-      new File(scanDir, "known-rooms.jsonl"),
       new File(scanDir, "known-room-preloads.jsonl"),
       new File(scanDir, "known-room-types.properties")
     )
@@ -104,7 +100,7 @@ tasks.register("syncLocalDungeonRoomData") {
     }
 
     resourceScanDir.mkdirs()
-    ["known-rooms.json", "known-rooms.jsonl", "known-room-preloads.jsonl", "known-room-types.properties"].each { name ->
+    ["known-rooms.json", "known-room-preloads.jsonl", "known-room-types.properties"].each { name ->
       File target = new File(resourceScanDir, name)
       if (target.exists() && !target.delete()) {
         throw new GradleException("Failed to remove stale bundled dungeon room data file: ${target}")
@@ -121,17 +117,6 @@ tasks.register("syncLocalDungeonRoomData") {
         }
         copied++
       }
-    }
-
-    File canonicalJson = new File(profileScanDir, "known-rooms.json")
-    File legacyJsonl = new File(profileScanDir, "known-rooms.jsonl")
-    if (!canonicalJson.exists() && legacyJsonl.exists()) {
-      copy {
-        from legacyJsonl
-        into resourceScanDir
-      }
-      copied++
-      logger.lifecycle("Copied legacy local known-rooms.jsonl. Prefer running /kung room learn once on the current build so known-rooms.json exists.")
     }
 
     logger.lifecycle("Synced ${copied} local dungeon room data file(s) from ${profileScanDir}.")

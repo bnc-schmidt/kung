@@ -23,45 +23,7 @@ set "PROFILE_26_2=test"
 set "PROFILE_NAME=%~1"
 if "%PROFILE_NAME%"=="" set "PROFILE_NAME=%DEFAULT_PROFILE%"
 set "PROFILE_DIR=%APPDATA%\ModrinthApp\profiles\%PROFILE_NAME%"
-set "SCAN_DIR=%APPDATA%\ModrinthApp\profiles\%DEFAULT_PROFILE%\kung-dungeon-scans"
-set "RESOURCE_SCAN_DIR=%ROOT%versions\mc26_1_2\src\main\resources\kung-dungeon-scans"
 
-if /I "%KUNG_SYNC_LOCAL_ROOM_DATA%"=="true" goto sync_room_data
-if "%KUNG_SYNC_LOCAL_ROOM_DATA%"=="1" goto sync_room_data
-echo Using bundled room data from the repository. Set KUNG_SYNC_LOCAL_ROOM_DATA=true to bake local profile room data into the jar.
-goto after_room_sync
-
-:sync_room_data
-echo Syncing learned room data into the jar resources...
-if not exist "!RESOURCE_SCAN_DIR!" mkdir "!RESOURCE_SCAN_DIR!"
-
-if exist "!SCAN_DIR!\known-rooms.json" (
-    copy /Y "!SCAN_DIR!\known-rooms.json" "!RESOURCE_SCAN_DIR!\known-rooms.json" >nul
-) else if exist "!SCAN_DIR!\known-rooms.jsonl" (
-    copy /Y "!SCAN_DIR!\known-rooms.jsonl" "!RESOURCE_SCAN_DIR!\known-rooms.jsonl" >nul
-) else (
-    echo No known-rooms.json or known-rooms.jsonl found yet.
-)
-
-if exist "!SCAN_DIR!\known-room-preloads.jsonl" (
-    copy /Y "!SCAN_DIR!\known-room-preloads.jsonl" "!RESOURCE_SCAN_DIR!\known-room-preloads.jsonl" >nul
-)
-
-if exist "!SCAN_DIR!\known-room-types.properties" (
-    copy /Y "!SCAN_DIR!\known-room-types.properties" "!RESOURCE_SCAN_DIR!\known-room-types.properties" >nul
-)
-
-if exist "!RESOURCE_SCAN_DIR!\known-rooms.json" (
-    node "%ROOT%tools\ensure-room-prince-field.mjs" "!RESOURCE_SCAN_DIR!\known-rooms.json"
-    if errorlevel 1 (
-        echo.
-        echo Could not normalize Prince room data.
-        pause
-        exit /b 1
-    )
-)
-
-:after_room_sync
 echo Building kung jars for 26.1.2, 26.2 and 26.3...
 pushd "!ROOT!" >nul
 call "!ROOT!gradlew.bat" :versions:mc26_1_2:build :versions:mc26_2:build :versions:mc26_3:build

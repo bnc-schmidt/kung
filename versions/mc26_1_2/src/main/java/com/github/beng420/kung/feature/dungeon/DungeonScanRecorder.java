@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.dungeon;
 import com.github.beng420.kung.config.KungConfig;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.HashSet;
@@ -22,7 +23,6 @@ public final class DungeonScanRecorder {
     private static final int NORMAL_BATCH_SIZE = 8;
     private static final int DISCOVERY_BATCH_SIZE = 24;
     private static final long CHECKMARK_INTERVAL_TICKS = 5;
-    private static final int DOOR_SAMPLE_Y = 69;
     private static final DateTimeFormatter FILE_TIMESTAMP =
         DateTimeFormatter.ofPattern("yyyyMMdd-HHmmss");
 
@@ -60,18 +60,11 @@ public final class DungeonScanRecorder {
             return;
         }
 
-        if (!recording) {
-            startRecording();
-        }
-        if (!com.github.beng420.kung.skyblock.HypixelInstanceTracker.INSTANCE.positionKnown()) return;
-        tracker.seedScanEntrance(mapSnapshot);
-
-        if (!observePlayer(PlayerScanContext.from(client))) {
+        startRecording();
+        if (!observeRunState(client, tracker)) {
             return;
         }
 
-        observeVisibleTeammateRooms(client, tracker.runStats());
-        observeMapState(client, tracker.runStats(), tracker.dungeonTick());
         lastScanTick = tracker.dungeonTick();
         scanBatch(client, tracker, true);
     }
@@ -93,16 +86,11 @@ public final class DungeonScanRecorder {
         }
 
         startRecording();
-        if (!com.github.beng420.kung.skyblock.HypixelInstanceTracker.INSTANCE.positionKnown()) return;
-        tracker.seedScanEntrance(mapSnapshot);
-        if (!observePlayer(PlayerScanContext.from(client))) {
+        if (!observeRunState(client, tracker)) {
             return;
         }
 
-        observeVisibleTeammateRooms(client, tracker.runStats());
         long nowTick = tracker.dungeonTick();
-        observeMapState(client, tracker.runStats(), nowTick);
-
         if (nowTick == lastScanTick) {
             return;
         }
@@ -114,6 +102,21 @@ public final class DungeonScanRecorder {
             if (!doors.isEmpty()) recordScan(client, tracker.runStats(), doors);
         }
         scanBatch(client, tracker, tracker.shouldFastScanDoors());
+    }
+
+    /** Records the player, teammates and map state; false while the position is unknown or the player is off the grid. */
+    private boolean observeRunState(Minecraft client, DungeonStateTracker tracker) {
+        if (!HypixelInstanceTracker.INSTANCE.positionKnown()) {
+            return false;
+        }
+        tracker.seedScanEntrance(mapSnapshot);
+        if (!observePlayer(PlayerScanContext.from(client))) {
+            return false;
+        }
+
+        observeVisibleTeammateRooms(client, tracker.runStats());
+        observeMapPlayerRooms(client, tracker.runStats(), tracker.dungeonTick());
+        return true;
     }
 
     /** Records the player's room; false while the player is outside the dungeon grid. */
@@ -179,15 +182,11 @@ public final class DungeonScanRecorder {
         observeVisibleTeammateRooms(client, stats);
     }
 
-    private void observeMapState(Minecraft client, DungeonRunStats stats, long nowTick) {
+    private void observeMapPlayerRooms(Minecraft client, DungeonRunStats stats, long nowTick) {
         if (!DungeonScanSchedule.due(nowTick, lastCheckmarkTick, CHECKMARK_INTERVAL_TICKS)) {
             return;
         }
         lastCheckmarkTick = nowTick;
-        observeMapPlayerRooms(client, stats, nowTick);
-    }
-
-    private void observeMapPlayerRooms(Minecraft client, DungeonRunStats stats, long nowTick) {
         MapItemSavedData mapData = DungeonMapItems.mapData(client);
         if (mapData == null || client.player == null) {
             return;
@@ -230,10 +229,6 @@ public final class DungeonScanRecorder {
         }
     }
 
-    static int doorSampleY() {
-        return DOOR_SAMPLE_Y;
-    }
-
     private void observeVisibleTeammateRooms(Minecraft client, DungeonRunStats stats) {
         if (!KungConfig.get().dungeon.playerTrackingEnabled()) {
             return;
@@ -242,7 +237,7 @@ public final class DungeonScanRecorder {
             return;
         }
 
-        for (java.util.UUID uuid : stats.knownTrackedPlayerUuids()) {
+        for (UUID uuid : stats.knownTrackedPlayerUuids()) {
             if (uuid.equals(client.player.getUUID())) {
                 continue;
             }

@@ -12,22 +12,6 @@ public final class DungeonScan {
         return DungeonScanUtils.SCAN_GRID_SIZE * DungeonScanUtils.SCAN_GRID_SIZE;
     }
 
-    public List<DungeonScanPoint> scan(ClientLevel level) {
-        return scan(level, null);
-    }
-
-    public List<DungeonScanPoint> scan(ClientLevel level, DungeonMapSnapshot snapshot) {
-        List<DungeonScanPoint> points = new ArrayList<>();
-
-        for (int gridX = 0; gridX < DungeonScanUtils.SCAN_GRID_SIZE; gridX++) {
-            for (int gridZ = 0; gridZ < DungeonScanUtils.SCAN_GRID_SIZE; gridZ++) {
-                points.add(scanPoint(level, snapshot, gridX, gridZ));
-            }
-        }
-
-        return points;
-    }
-
     public List<DungeonScanPoint> scanBatch(ClientLevel level, DungeonMapSnapshot snapshot, int startIndex, int limit) {
         long deadline = System.nanoTime() + 2_000_000L;
         int total = scanPointCount();
@@ -65,14 +49,14 @@ public final class DungeonScan {
         int stableCoreHash = NO_CORE_HASH;
         int doorBlockId = NO_DOOR_BLOCK;
         DungeonDoorKind doorKind = DungeonDoorKind.NONE;
-        DungeonMapSnapshot.ObservedPoint previous = snapshot == null ? null : snapshot.pointAt(gridX, gridZ);
+        DungeonMapSnapshot.ObservedPoint previous = snapshot.pointAt(gridX, gridZ);
         if (loaded && kind == DungeonScanPointKind.ROOM) {
             coreHash = DungeonScanUtils.getCoreHash(level, worldX, worldZ);
             stableCoreHash = DungeonScanUtils.getStableCoreHash(level, worldX, worldZ);
         }
 
         if (loaded && kind == DungeonScanPointKind.DOOR) {
-            doorBlockId = DungeonScanUtils.getBlockId(level, worldX, DungeonScanRecorder.doorSampleY(), worldZ);
+            doorBlockId = DungeonScanUtils.getBlockId(level, worldX, DungeonScanUtils.MIN_DOOR_SCAN_Y, worldZ);
             doorKind = DungeonScanUtils.detectDoorKind(level, gridX, gridZ, worldX, worldZ,
                 previous == null ? DungeonDoorKind.NONE : previous.point().doorKind());
         }

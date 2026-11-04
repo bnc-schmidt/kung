@@ -41,7 +41,6 @@ public final class DungeonPrinceOverrideTest {
         assertEquals(scanRevision, tracker.mapSnapshot().scanRevision());
         assertEquals(original.components(), room("Doors", RoomType.NORMAL).components());
         assertEquals(original.crypts(), room("Doors", RoomType.NORMAL).crypts());
-        assertFalse(DungeonKnownRoomCatalog.hasPrince("Doors"));
         assertFalse(KungConfig.get().dungeon.localRoomDataEnabled());
 
         DungeonKnownRoomCatalog.updateRoomPrince("Doors", original.type(), original.secrets(), true);

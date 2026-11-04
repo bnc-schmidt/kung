@@ -238,7 +238,6 @@ public final class DungeonRoomPredictionTest {
         Map<Integer, KnownCoreHint> hints = new HashMap<>();
         template.components().forEach(c -> hints.put(c.coreHash(), new KnownCoreHint(template.name(), template.type(), template.secrets())));
         return new DungeonRoomRepository() {
-            @Override public long revision() { return 0; }
             @Override public List<MatchedRoom> matchKnownRooms(DungeonMapSnapshot snapshot) {
                 return DungeonKnownRoomCatalog.matchKnownRooms(snapshot, List.of(template), hints);
             }
@@ -246,8 +245,6 @@ public final class DungeonRoomPredictionTest {
                 return DungeonRoomPrediction.predict(snapshot, List.of(template));
             }
             @Override public KnownCoreHint knownCoreHint(int hash) { return hints.get(hash); }
-            @Override public AutoLearnResult autoLearnStableHashes(MatchedRoom match, DungeonMapSnapshot snapshot) { return null; }
-            @Override public boolean hasPrince(String name) { return false; }
         };
     }
 }
