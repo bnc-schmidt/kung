@@ -859,7 +859,7 @@ final class KungCommandActions {
                 + " catacombs="
                 + tracker.catacombs()
                 + " dungeonContext="
-                + tracker.dungeonRunContext()
+                + tracker.catacombs()
                 + " server="
                 + blankAsUnknown(tracker.serverId())
                 + " instance="
@@ -890,7 +890,7 @@ final class KungCommandActions {
 
     static int saveDebugLog(CommandContext<FabricClientCommandSource> context) {
         try {
-            Path path = KungDebugRecorder.saveToFile(context.getSource().getClient()).toAbsolutePath();
+            Path path = KungDebugRecorder.saveToFile().toAbsolutePath();
             context.getSource().sendFeedback(KungMessages.info("Log", "Trace saved: " + path));
             return 1;
         } catch (IOException exception) {

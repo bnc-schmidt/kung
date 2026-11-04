@@ -3,6 +3,8 @@ package com.github.beng420.kung.feature.dungeon;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungErrors;
+import com.github.beng420.kung.util.KungHttp;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import com.mojang.authlib.exceptions.AuthenticationException;
@@ -14,7 +16,6 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.LongSupplier;
@@ -40,9 +41,7 @@ public final class KungServerSession {
     /** Joins the challenge at Mojang and returns the account name to log in with. */
     private final UnaryOperator<String> mojangJoin;
     LongSupplier clock = System::currentTimeMillis;
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(10))
-        .build();
+    private final HttpClient httpClient = KungHttp.api();
     private Session session;
     private CompletableFuture<String> signIn;
     private URI signInBase;
@@ -133,7 +132,7 @@ public final class KungServerSession {
             if (exception instanceof InterruptedException) {
                 Thread.currentThread().interrupt();
             }
-            String message = exception.getMessage() == null ? exception.getClass().getSimpleName() : exception.getMessage();
+            String message = KungErrors.brief(exception);
             boolean refused = NOT_ALLOWED.equals(message);
             status = refused ? message : "Sign-in failed: " + message;
             if (refused) {
@@ -167,9 +166,7 @@ public final class KungServerSession {
     }
 
     private HttpResponse<String> post(String path, String body) throws IOException, InterruptedException {
-        HttpRequest request = HttpRequest.newBuilder(DungeonRoomDataSyncClient.endpoint(path))
-            .timeout(Duration.ofSeconds(20))
-            .header("User-Agent", "Kung-RoomSync")
+        HttpRequest request = KungHttp.json(DungeonRoomDataSyncClient.endpoint(path), 20, "Kung-RoomSync")
             .header("Content-Type", "application/json")
             .POST(HttpRequest.BodyPublishers.ofString(body))
             .build();

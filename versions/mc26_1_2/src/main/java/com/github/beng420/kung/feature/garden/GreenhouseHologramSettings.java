@@ -1,9 +1,12 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.mojang.blaze3d.platform.InputConstants;
 import java.util.function.Supplier;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.KeyEvent;
 
 /**
@@ -62,6 +65,12 @@ public final class GreenhouseHologramSettings {
     static void onUnloadKey() {
         Runnable handler = unloadHandler;
         if (handler != null) handler.run();
+    }
+
+    /** A press (no repeat, no release) while playing with no screen open: the only input the mixins pass on. */
+    public static boolean inWorldPress(int action) {
+        Minecraft client = Minecraft.getInstance();
+        return action == InputConstants.PRESS && client.player != null && McCompat.screen(client) == null;
     }
 
     /** Called by KeyboardHandlerMixin for key presses while no screen is open. Never cancels the key. */

@@ -227,7 +227,9 @@ public class JerryTimelineTest {
     public void relativeTimesUseTheTwoLargestUnits() {
         assertEquals("2d 23h", JerryMessages.relative(71 * HOUR + 59 * 60_000L));
         assertEquals("1d 0h", JerryMessages.relative(24 * HOUR));
+        assertEquals("4h 23m", JerryMessages.relative(4 * HOUR + 23 * 60_000L + 59_000L));
         assertEquals("5h 15m", JerryMessages.relative(5 * HOUR + 15 * 60_000L));
+        assertEquals("59m", JerryMessages.relative(59 * 60_000L));
         assertEquals("40m", JerryMessages.relative(40 * 60_000L));
         assertEquals("<1m", JerryMessages.relative(59_000L));
         assertEquals("<1m", JerryMessages.relative(-5L));

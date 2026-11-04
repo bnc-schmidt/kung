@@ -62,7 +62,7 @@ public final class CatacombsCalculatorTest {
     public void matchesExactAdjectilsSaltyWhaleExampleWithoutMayor() {
         ProfileData profile = parse(fixture()).player().selectedProfile();
         var xp = selectedXp(profile.classPerks(), 1);
-        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp);
+        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp, 50);
         assertEquals(420_000, xp.get(DungeonClass.ARCHER), 0.0001);
         assertEquals(1538, result.total());
         assertEquals(484, result.perClass(DungeonClass.ARCHER));
@@ -90,15 +90,15 @@ public final class CatacombsCalculatorTest {
         assertEquals(full, stripped);
         ProfileData a = full.player().selectedProfile();
         ProfileData b = stripped.player().selectedProfile();
-        assertEquals(CatacombsAverageCalculator.calculateBreakdown(a.classXp(), selectedXp(a.classPerks(), 1)),
-            CatacombsAverageCalculator.calculateBreakdown(b.classXp(), selectedXp(b.classPerks(), 1)));
+        assertEquals(CatacombsAverageCalculator.calculateBreakdown(a.classXp(), selectedXp(a.classPerks(), 1), 50),
+            CatacombsAverageCalculator.calculateBreakdown(b.classXp(), selectedXp(b.classPerks(), 1), 50));
     }
 
     @Test
     public void derpyReducesRealProfileTo1026RunsAndIncludesPassiveClassXp() {
         ProfileData profile = parse(fixture()).player().selectedProfile();
         var xp = selectedXp(profile.classPerks(), 1.5);
-        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp);
+        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp, 50);
         assertEquals(630_000, xp.get(DungeonClass.ARCHER), 0.0001);
         assertEquals(1026, result.total());
         assertEquals(0, result.perClass(DungeonClass.HEALER));
@@ -109,7 +109,7 @@ public final class CatacombsCalculatorTest {
     @Test
     public void oldWrongProfileReproducesTheReported2436Runs() {
         var xp = selectedXp(Map.of(), 1.5);
-        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(Map.of(), xp);
+        Breakdown result = CatacombsAverageCalculator.calculateBreakdown(Map.of(), xp, 50);
         assertEquals(2436, result.total());
         assertEquals(488, result.perClass(DungeonClass.ARCHER));
         assertEquals(487, result.perClass(DungeonClass.HEALER));
@@ -119,8 +119,8 @@ public final class CatacombsCalculatorTest {
     public void handlesCompletedClassesAndCapsAuraLikeAdjectils() {
         EnumMap<DungeonClass, Double> completed = new EnumMap<>(DungeonClass.class);
         for (DungeonClass dungeonClass : DungeonClass.values()) completed.put(dungeonClass, LEVEL_50_XP);
-        assertEquals(0, CatacombsAverageCalculator.calculateBreakdown(completed, Map.of()).total());
-        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.calculateBreakdown(Map.of(), Map.of()).total());
+        assertEquals(0, CatacombsAverageCalculator.calculateBreakdown(completed, Map.of(), 50).total());
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.calculateBreakdown(Map.of(), Map.of(), 50).total());
         assertEquals(selectedXp(Map.of(), 1.5), selectedXp(Map.of(), 1.59));
     }
 
@@ -277,7 +277,7 @@ public final class CatacombsCalculatorTest {
     public void onlyPlayingOneClassNeverBeatsTheBestMixOnARealProfile() {
         ProfileData profile = parse(fixture("salty-whale-profiles.json")).player().selectedProfile();
         var xp = selectedXp(profile.classPerks(), 1.0);
-        Breakdown mixed = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp);
+        Breakdown mixed = CatacombsAverageCalculator.calculateBreakdown(profile.classXp(), xp, 50);
         for (DungeonClass dungeonClass : DungeonClass.values()) {
             long runs = CatacombsAverageCalculator.runsWithOnly(dungeonClass, profile.classXp(), xp, 50);
             assertTrue(dungeonClass.label(), runs >= mixed.total());

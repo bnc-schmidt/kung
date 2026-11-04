@@ -43,9 +43,8 @@ public final class HypixelInstanceTracker {
     public static void initializeClient() {
         ClientTickEvents.END_CLIENT_TICK.register(INSTANCE::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> INSTANCE.disconnect(client));
-        ClientReceiveMessageEvents.GAME.register(HypixelInstanceTracker::recordMessage);
+        KungMessages.onText(HypixelInstanceTracker::recordMessage);
         registerFloorEntryObserver(message -> INSTANCE.dungeonFloor.entryMessage(message, System.currentTimeMillis()));
-        ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, received) -> recordMessage(message, false));
     }
 
     static void registerFloorEntryObserver(Consumer<String> observer) {
@@ -59,7 +58,6 @@ public final class HypixelInstanceTracker {
     public boolean tracking() { return observedLevel != null; }
     public boolean dungeonHub() { return state.location().kind() == HypixelLocation.Kind.DUNGEON_HUB; }
     public boolean catacombs() { return tracking() && state.catacombs(); }
-    public boolean dungeonRunContext() { return catacombs(); }
     public HypixelLocation location() { return state.location(); }
     public String instanceLine() { return state.location().name(); }
     public String serverId() { return state.serverId(); }

@@ -1,20 +1,20 @@
 package com.github.beng420.kung.skyblock;
 
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 
 public final class HypixelGuildTracker {
     public static final HypixelGuildTracker INSTANCE = new HypixelGuildTracker();
 
-    private static final Pattern PLAYER_NAME_PATTERN = Pattern.compile("\\b[A-Za-z0-9_]{3,16}\\b");
     private static final Pattern GUILD_CHAT_PATTERN =
         Pattern.compile("^Guild\\s*>\\s*(?<sender>.+?)\\s*:\\s*(?<message>.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern GUILD_JOIN_PATTERN =
@@ -23,13 +23,18 @@ public final class HypixelGuildTracker {
         Pattern.compile("^Guild\\s*>\\s*(?<name>[A-Za-z0-9_]{3,16})\\s+left\\.?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern GUILD_LIST_PAGE_PATTERN =
         Pattern.compile(".*\\bPage\\s+(?<page>\\d+)\\s*(?:/|of)\\s*(?<pages>\\d+)\\b.*", Pattern.CASE_INSENSITIVE);
+    private static final List<String> LIST_LINE_MARKERS = List.of("guild members", "guild name", "online members",
+        "offline members", "guild master", "guild officers");
+    private static final List<String> NAMELESS_LIST_LINES = List.of("guild name", "online members", "offline members");
+    private static final Set<String> IGNORED_LIST_TOKENS = Set.of("guild", "name", "members", "member", "online",
+        "offline", "master", "officer", "officers", "rank", "ranks", "page", "of", "status", "total", "vip", "mvp",
+        "mvp_", "gm", "joined", "left");
     private static final long REFRESH_TTL_MILLIS = 5L * 60L * 1000L;
     private static final long REFRESH_COOLDOWN_MILLIS = 10_000L;
     private static final int LIST_CAPTURE_TICKS = 120;
     private static final int NEXT_PAGE_DELAY_TICKS = 12;
 
     private final Map<String, String> guildPlayerNames = new HashMap<>();
-    private boolean initialized;
     private int listCaptureTicks;
     private int pendingNextPage;
     private int pendingNextPageDelayTicks;
@@ -41,7 +46,8 @@ public final class HypixelGuildTracker {
     }
 
     public static void initializeClient() {
-        INSTANCE.registerClientHooks();
+        ClientTickEvents.END_CLIENT_TICK.register(INSTANCE::tick);
+        KungMessages.onText((message, overlay) -> INSTANCE.observeMessage(message.getString()));
     }
 
     public synchronized Set<String> knownGuildMemberNames() {
@@ -67,17 +73,6 @@ public final class HypixelGuildTracker {
         client.player.connection.sendCommand("g list");
         KungDebugRecorder.event("guild", "requested member list refresh");
         return true;
-    }
-
-    private void registerClientHooks() {
-        if (initialized) {
-            return;
-        }
-        initialized = true;
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> observeMessage(message.getString()));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message.getString()));
     }
 
     private synchronized void tick(Minecraft client) {
@@ -155,10 +150,10 @@ public final class HypixelGuildTracker {
 
     private void observeGuildListNames(String text) {
         String normalized = HypixelLocation.nameText(text);
-        Matcher matcher = PLAYER_NAME_PATTERN.matcher(normalized);
+        Matcher matcher = HypixelLocation.PLAYER_NAME.matcher(normalized);
         while (matcher.find()) {
             String name = matcher.group();
-            if (!isIgnoredGuildListToken(name)) {
+            if (!IGNORED_LIST_TOKENS.contains(name.toLowerCase(Locale.ROOT))) {
                 registerGuildPlayerName(name, "list");
             }
         }
@@ -166,24 +161,16 @@ public final class HypixelGuildTracker {
 
     private boolean looksLikeGuildListLine(String message) {
         String lower = message.toLowerCase(Locale.ROOT);
-        return lower.contains("guild members")
-            || lower.contains("guild name")
-            || lower.contains("online members")
-            || lower.contains("offline members")
-            || lower.contains("guild master")
-            || lower.contains("guild officers")
-            || lower.contains("guild members:");
+        return LIST_LINE_MARKERS.stream().anyMatch(lower::contains);
     }
 
     private boolean mayContainGuildMemberNames(String message) {
         String lower = message.toLowerCase(Locale.ROOT);
-        return !lower.startsWith("guild name")
-            && !lower.startsWith("online members")
-            && !lower.startsWith("offline members");
+        return NAMELESS_LIST_LINES.stream().noneMatch(lower::startsWith);
     }
 
     private void registerGuildPlayerName(String name, String reason) {
-        if (!isPlayerName(name)) {
+        if (!HypixelLocation.isPlayerName(name)) {
             return;
         }
         String normalized = normalizeName(name);
@@ -194,7 +181,7 @@ public final class HypixelGuildTracker {
     }
 
     private void removeGuildPlayerName(String name) {
-        if (!isPlayerName(name)) {
+        if (!HypixelLocation.isPlayerName(name)) {
             return;
         }
         String normalized = normalizeName(name);
@@ -212,7 +199,7 @@ public final class HypixelGuildTracker {
 
     private static String senderName(String rawSender) {
         String clean = HypixelLocation.withoutBrackets(HypixelLocation.clean(rawSender));
-        Matcher matcher = PLAYER_NAME_PATTERN.matcher(clean);
+        Matcher matcher = HypixelLocation.PLAYER_NAME.matcher(clean);
         String last = "";
         while (matcher.find()) {
             last = matcher.group();
@@ -228,35 +215,7 @@ public final class HypixelGuildTracker {
         }
     }
 
-    private static boolean isPlayerName(String name) {
-        return name != null && PLAYER_NAME_PATTERN.matcher(name).matches();
-    }
-
     private static String normalizeName(String name) {
         return name.toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean isIgnoredGuildListToken(String name) {
-        return name.equalsIgnoreCase("Guild")
-            || name.equalsIgnoreCase("Name")
-            || name.equalsIgnoreCase("Members")
-            || name.equalsIgnoreCase("Member")
-            || name.equalsIgnoreCase("Online")
-            || name.equalsIgnoreCase("Offline")
-            || name.equalsIgnoreCase("Master")
-            || name.equalsIgnoreCase("Officer")
-            || name.equalsIgnoreCase("Officers")
-            || name.equalsIgnoreCase("Rank")
-            || name.equalsIgnoreCase("Ranks")
-            || name.equalsIgnoreCase("Page")
-            || name.equalsIgnoreCase("of")
-            || name.equalsIgnoreCase("Status")
-            || name.equalsIgnoreCase("Total")
-            || name.equalsIgnoreCase("VIP")
-            || name.equalsIgnoreCase("MVP")
-            || name.equalsIgnoreCase("MVP_")
-            || name.equalsIgnoreCase("GM")
-            || name.equalsIgnoreCase("Joined")
-            || name.equalsIgnoreCase("Left");
     }
 }

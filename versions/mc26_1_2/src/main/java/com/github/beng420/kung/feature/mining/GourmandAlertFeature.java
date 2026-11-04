@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
@@ -56,11 +55,9 @@ public final class GourmandAlertFeature extends ConfigurableFeature<MiningConfig
     @Override
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+        KungMessages.onText((message, overlay) -> {
             if (!overlay) observeMessage(message.getString());
         });
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message.getString()));
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
     }
 

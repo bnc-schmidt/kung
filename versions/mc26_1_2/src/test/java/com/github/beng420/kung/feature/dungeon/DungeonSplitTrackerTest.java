@@ -60,7 +60,7 @@ public final class DungeonSplitTrackerTest {
                 clock.set(endTick * 100L);
                 for (int tick = endTick - batchSize + 1; tick <= endTick; tick++) {
                     for (int id : new int[] {-tick, 0, -tick}) {
-                        if (sequence.accept(id)) tracker.serverTick(clock.get());
+                        if (sequence.accept(id, false)) tracker.serverTick(clock.get());
                     }
                 }
                 assertEquals(-1L, DungeonSplitsOverlayFeature.settledTotalLostTimeMillis(tracker));
@@ -135,7 +135,7 @@ public final class DungeonSplitTrackerTest {
             // First phase: 200 ticks in 10 s; second phase: 100 ticks in 10 s.
             clock.set(tick <= 200 ? tick * 50L : 10_000L + (tick - 200) * 100L);
             for (int id : new int[] {-tick, 0, -tick, 0}) {
-                if (sequence.accept(id)) tracker.serverTick(clock.get());
+                if (sequence.accept(id, false)) tracker.serverTick(clock.get());
             }
             if (tick == 200) tracker.mark("Blood Clear", 0L);
         }

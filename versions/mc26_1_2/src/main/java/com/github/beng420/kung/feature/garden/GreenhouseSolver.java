@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.util.KungErrors;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -151,8 +152,7 @@ final class GreenhouseSolver {
         while (cause instanceof CompletionException && cause.getCause() != null) {
             cause = cause.getCause();
         }
-        String message = cause.getMessage();
-        return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
+        return KungErrors.brief(cause);
     }
 
     /** Time-budget run: uses the whole budget. */

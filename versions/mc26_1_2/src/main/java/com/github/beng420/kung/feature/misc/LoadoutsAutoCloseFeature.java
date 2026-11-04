@@ -4,10 +4,10 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.Locale;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.gui.screens.Screen;
@@ -40,9 +40,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
 
     @Override
     protected void onInitialize() {
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> observeMessage(message));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message));
+        KungMessages.onText((message, overlay) -> observeMessage(message));
     }
 
     @Override

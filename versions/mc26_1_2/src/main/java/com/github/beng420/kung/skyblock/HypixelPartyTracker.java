@@ -1,9 +1,10 @@
 package com.github.beng420.kung.skyblock;
 
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
-import java.util.HashSet;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
@@ -11,13 +12,11 @@ import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.client.Minecraft;
 
 public final class HypixelPartyTracker {
     public static final HypixelPartyTracker INSTANCE = new HypixelPartyTracker();
 
-    private static final Pattern PLAYER_NAME_PATTERN = Pattern.compile("\\b[A-Za-z0-9_]{3,16}\\b");
     private static final Pattern PARTY_LIST_HEADER_PATTERN = Pattern.compile("^Party Members\\s*\\(\\d+\\).*$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PARTY_LIST_LINE_PATTERN = Pattern.compile("^Party (?:Leader|Moderators?|Members?)\\s*:\\s*(?<names>.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PARTY_JOIN_PATTERN = Pattern.compile("^(?:\\[[^\\]]+]\\s*)*(?<name>[A-Za-z0-9_]{3,16})\\s+(?:joined|has joined) the party\\.?$", Pattern.CASE_INSENSITIVE);
@@ -26,17 +25,23 @@ public final class HypixelPartyTracker {
     private static final Pattern PARTY_LEAVE_PATTERN = Pattern.compile("^(?:\\[[^\\]]+]\\s*)*(?<name>[A-Za-z0-9_]{3,16})\\s+(?:has left|left) the party\\.?$", Pattern.CASE_INSENSITIVE);
     private static final Pattern PARTY_REMOVE_PATTERN = Pattern.compile("^(?:(?:\\[[^\\]]+]\\s*)*(?<name>[A-Za-z0-9_]{3,16})\\s+(?:was removed from your party|has been kicked from the party).*|You kicked (?:\\[[^\\]]+]\\s*)*(?<kicked>[A-Za-z0-9_]{3,16}) from the party!?).*$", Pattern.CASE_INSENSITIVE);
 
+    private static final List<String> RESET_PARTS = List.of("you are not currently in a party",
+        "the party was disbanded", "the party has been disbanded", "you have been kicked from the party",
+        "you were kicked from the party");
+    private static final Set<String> IGNORED_LIST_TOKENS = Set.of("party", "leader", "moderator", "moderators",
+        "member", "members", "online", "offline", "status");
+
     private final Map<String, String> partyPlayerNames = new HashMap<>();
     private final Map<String, UUID> playerUuids = new HashMap<>();
     private long tickCounter;
-    private boolean initialized;
     private String lastLoggedPartyState = "";
 
     private HypixelPartyTracker() {
     }
 
     public static void initializeClient() {
-        INSTANCE.registerClientHooks();
+        ClientTickEvents.END_CLIENT_TICK.register(INSTANCE::tick);
+        KungMessages.onText((message, overlay) -> INSTANCE.observeMessage(Minecraft.getInstance(), message.getString()));
     }
 
     public boolean isKnownPartyPlayer(String name) {
@@ -51,14 +56,6 @@ public final class HypixelPartyTracker {
         return Set.copyOf(partyPlayerNames.values());
     }
 
-    public Set<UUID> knownPartyPlayerUuids() {
-        Set<UUID> uuids = new HashSet<>();
-        for (String name : partyPlayerNames.keySet()) {
-            uuids.add(partyPlayerUuid(name));
-        }
-        return Set.copyOf(uuids);
-    }
-
     public UUID partyPlayerUuid(String name) {
         if (name == null || name.isBlank() || !isKnownPartyPlayer(name)) {
             return null;
@@ -68,7 +65,7 @@ public final class HypixelPartyTracker {
     }
 
     public UUID observedOnlinePlayerUuid(String name) {
-        if (!isPlayerName(name)) {
+        if (!HypixelLocation.isPlayerName(name)) {
             return null;
         }
         return playerUuids.get(normalizeName(name));
@@ -87,21 +84,9 @@ public final class HypixelPartyTracker {
     }
 
     public void observeOnlinePlayer(String name, UUID uuid) {
-        if (isPlayerName(name) && uuid != null) {
+        if (HypixelLocation.isPlayerName(name) && uuid != null) {
             playerUuids.put(normalizeName(name), uuid);
         }
-    }
-
-    private void registerClientHooks() {
-        if (initialized) {
-            return;
-        }
-        initialized = true;
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
-            observeMessage(Minecraft.getInstance(), message.getString()));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(Minecraft.getInstance(), message.getString()));
     }
 
     private void tick(Minecraft client) {
@@ -184,11 +169,11 @@ public final class HypixelPartyTracker {
     private void observePartyListNames(Minecraft client, String namesText) {
         registerSelf(client);
 
-        String normalized = HypixelLocation.nameText(stripFormatting(namesText));
-        Matcher matcher = PLAYER_NAME_PATTERN.matcher(normalized);
+        String normalized = HypixelLocation.nameText(HypixelLocation.stripFormatting(namesText));
+        Matcher matcher = HypixelLocation.PLAYER_NAME.matcher(normalized);
         while (matcher.find()) {
             String name = matcher.group();
-            if (!isIgnoredPartyListToken(name)) {
+            if (!IGNORED_LIST_TOKENS.contains(name.toLowerCase(Locale.ROOT))) {
                 registerPartyPlayerName(name, null);
             }
         }
@@ -201,7 +186,7 @@ public final class HypixelPartyTracker {
     }
 
     private UUID registerPartyPlayerName(String name, UUID uuid) {
-        if (!isPlayerName(name)) {
+        if (!HypixelLocation.isPlayerName(name)) {
             return null;
         }
 
@@ -241,34 +226,9 @@ public final class HypixelPartyTracker {
         return UUID.nameUUIDFromBytes(("kung:party-player:" + normalizeName(name)).getBytes(StandardCharsets.UTF_8));
     }
 
-    private static String stripFormatting(String text) {
-        return HypixelLocation.stripFormatting(text);
-    }
-
     private static boolean isPartyResetMessage(String lowerMessage) {
-        return lowerMessage.contains("you are not currently in a party")
-            || lowerMessage.equals("you left the party.")
-            || lowerMessage.equals("you left the party")
-            || lowerMessage.contains("the party was disbanded")
-            || lowerMessage.contains("the party has been disbanded")
-            || lowerMessage.contains("you have been kicked from the party")
-            || lowerMessage.contains("you were kicked from the party");
-    }
-
-    private static boolean isIgnoredPartyListToken(String name) {
-        return name.equalsIgnoreCase("Party")
-            || name.equalsIgnoreCase("Leader")
-            || name.equalsIgnoreCase("Moderator")
-            || name.equalsIgnoreCase("Moderators")
-            || name.equalsIgnoreCase("Member")
-            || name.equalsIgnoreCase("Members")
-            || name.equalsIgnoreCase("Online")
-            || name.equalsIgnoreCase("Offline")
-            || name.equalsIgnoreCase("Status");
-    }
-
-    private static boolean isPlayerName(String name) {
-        return name != null && PLAYER_NAME_PATTERN.matcher(name).matches();
+        return lowerMessage.equals("you left the party.") || lowerMessage.equals("you left the party")
+            || RESET_PARTS.stream().anyMatch(lowerMessage::contains);
     }
 
     private static String normalizeName(String name) {

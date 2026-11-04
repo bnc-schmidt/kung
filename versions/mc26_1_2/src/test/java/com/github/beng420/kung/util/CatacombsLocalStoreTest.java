@@ -82,7 +82,7 @@ public final class CatacombsLocalStoreTest {
         assertTrue(local.success());
         assertTrue(local.local());
         assertEquals("Watermelon", local.player().selectedProfile().cuteName());
-        assertTrue(new CatacombsAverageCalculator().calculate(local.player()).success());
+        assertTrue(new CatacombsAverageCalculator().calculate(local.player(), "", "", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, true).success());
     }
 
     @Test

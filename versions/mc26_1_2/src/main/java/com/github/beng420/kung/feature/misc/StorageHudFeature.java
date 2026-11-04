@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -20,7 +21,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -77,11 +77,9 @@ public final class StorageHudFeature extends ConfigurableFeature<MiscConfig> {
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         // Hypixel sends some lines as chat and some as system messages; take both.
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
+        KungMessages.onText((message, overlay) -> {
             if (!overlay) observeMessage(message.getString());
         });
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message.getString()));
         // A click on a block and one in the air both start a basket's row; observeUse keeps only one per tick.
         UseBlockCallback.EVENT.register((player, level, hand, hit) -> {
             observeUse(player, level, hand, hit.getBlockPos());

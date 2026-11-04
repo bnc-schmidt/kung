@@ -1,9 +1,9 @@
 package com.github.beng420.kung.feature.waypoints;
 
+import com.github.beng420.kung.util.Json;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
-import com.google.gson.JsonPrimitive;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -74,10 +74,10 @@ final class WaypointCodec {
     }
 
     private static WaypointGroup readGroup(JsonObject json, Skipped skipped) {
-        WaypointGroup group = new WaypointGroup(string(json, "name", ""), WaypointIsland.fromId(string(json, "island", "")).id(),
-            WaypointType.parse(string(json, "waypointType", ""), WaypointType.WAYPOINT));
-        group.setOrdered(bool(json, "ordered", false));
-        group.setThroughWalls(bool(json, "renderThroughWalls", true));
+        WaypointGroup group = new WaypointGroup(Json.string(json, "name", ""), WaypointIsland.fromId(Json.string(json, "island", "")).id(),
+            WaypointType.parse(Json.string(json, "waypointType", ""), WaypointType.WAYPOINT));
+        group.setOrdered(Json.bool(json, "ordered", false));
+        group.setThroughWalls(Json.bool(json, "renderThroughWalls", true));
         for (JsonElement element : json.has("waypoints") ? json.getAsJsonArray("waypoints") : new JsonArray()) {
             try {
                 group.waypoints().add(readWaypoint(element.getAsJsonObject()));
@@ -97,7 +97,7 @@ final class WaypointCodec {
             rgb = channel(parts.get(0)) << 16 | channel(parts.get(1)) << 8 | channel(parts.get(2));
         }
         float alpha = json.has("alpha") && json.get("alpha").isJsonPrimitive() ? json.get("alpha").getAsFloat() : Waypoint.DEFAULT_ALPHA;
-        return new Waypoint(pos[0], pos[1], pos[2], plainText(json.get("name")), rgb, alpha, bool(json, "shouldRender", true));
+        return new Waypoint(pos[0], pos[1], pos[2], plainText(json.get("name")), rgb, alpha, Json.bool(json, "shouldRender", true));
     }
 
     /** A position as [x, y, z] or as {"x":, "y":, "z":}. */
@@ -128,15 +128,5 @@ final class WaypointCodec {
             text.append(plainText(object.get("extra")));
         }
         return text.toString();
-    }
-
-    private static String string(JsonObject json, String key, String fallback) {
-        JsonElement element = json.get(key);
-        return element != null && element.isJsonPrimitive() ? element.getAsString() : fallback;
-    }
-
-    private static boolean bool(JsonObject json, String key, boolean fallback) {
-        JsonElement element = json.get(key);
-        return element != null && element.isJsonPrimitive() && ((JsonPrimitive) element).isBoolean() ? element.getAsBoolean() : fallback;
     }
 }

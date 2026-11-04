@@ -17,7 +17,7 @@ public final class HypixelMembershipTest {
         observe(party, "Party Members: Bob");
         UUID bob = party.partyPlayerUuid("bOB");
         assertEquals(Set.of("Alice", "Bob"), party.knownPartyPlayerNames());
-        assertEquals(Set.of(alice, bob), party.knownPartyPlayerUuids());
+        assertEquals(alice, party.partyPlayerUuid("Alice"));
         assertEquals("alice", party.partyPlayerName(alice));
         assertTrue(party.isKnownPartyPlayer("ALICE"));
 
@@ -38,7 +38,7 @@ public final class HypixelMembershipTest {
         observe(party, "Alice joined the dungeon group!");
         assertEquals(alice, party.partyPlayerUuid("alice"));
         observe(party, "The party was disbanded.");
-        assertTrue(party.knownPartyPlayerUuids().isEmpty());
+        assertEquals(0, party.partyPlayerCount());
     }
 
     @Test public void guildChatListsAndDeparturesShareCaseInsensitiveMembershipWithLatestDisplayNames() throws Exception {

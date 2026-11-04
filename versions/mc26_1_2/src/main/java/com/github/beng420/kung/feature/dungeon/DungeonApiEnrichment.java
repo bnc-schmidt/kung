@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.HypixelSkyBlockProfileClient;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.HashMap;
@@ -137,15 +138,11 @@ public final class DungeonApiEnrichment {
     }
 
     private static String resultKey(HypixelSkyBlockProfileClient.SecretResult result, String fallbackName) {
-        String resultName = isPlayerName(result.name()) ? result.name() : fallbackName;
+        String resultName = HypixelLocation.isPlayerName(result.name()) ? result.name() : fallbackName;
         return key(resultName);
     }
 
     private static String key(String name) {
         return name.toLowerCase(Locale.ROOT);
-    }
-
-    private static boolean isPlayerName(String name) {
-        return name != null && name.matches("[A-Za-z0-9_]{3,16}");
     }
 }

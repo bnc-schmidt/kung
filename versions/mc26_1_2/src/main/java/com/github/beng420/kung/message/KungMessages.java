@@ -4,7 +4,9 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.mixin.ChatComponentAccessor;
 import java.util.List;
 import java.util.Locale;
+import java.util.function.BiConsumer;
 import java.util.regex.Pattern;
+import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.chat.GuiMessage;
@@ -121,6 +123,16 @@ public final class KungMessages {
                 client.player.sendSystemMessage(message);
             }
         });
+    }
+
+    /**
+     * Hypixel sends some lines as chat and some as system messages: listens to both. {@code overlay} is true for an
+     * action-bar line, never for chat.
+     */
+    public static void onText(BiConsumer<Component, Boolean> listener) {
+        ClientReceiveMessageEvents.GAME.register(listener::accept);
+        ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) ->
+            listener.accept(message, false));
     }
 
     /** Client-thread only. Retain the returned component to replace this local message next time. */

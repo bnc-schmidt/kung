@@ -5,6 +5,8 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.runtime.KungPaths;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungErrors;
+import com.github.beng420.kung.util.KungHttp;
 import com.mojang.blaze3d.font.GlyphProvider;
 import com.mojang.blaze3d.font.GlyphInfo;
 import com.mojang.blaze3d.font.UnbakedGlyph;
@@ -132,9 +134,9 @@ public final class KungFonts {
                     + " bytes=" + font.length + " file=" + target.getFileName());
             } catch (Exception exception) {
                 KungMod.LOGGER.warn("Could not download the font {}.", family, exception);
-                status = family + " failed: " + shortMessage(exception);
+                status = family + " failed: " + KungErrors.brief(exception);
                 KungDebugRecorder.event("menu-font", "download failed family=" + family
-                    + " reason=" + shortMessage(exception));
+                    + " reason=" + KungErrors.brief(exception));
             }
         });
     }
@@ -186,7 +188,7 @@ public final class KungFonts {
         } catch (Exception exception) {
             KungMod.LOGGER.warn("Could not load the menu font {}.", name, exception);
             KungDebugRecorder.event("menu-font", "load failed name=" + name
-                + " reason=" + shortMessage(exception));
+                + " reason=" + KungErrors.brief(exception));
             if (provider == null && memory != null) MemoryUtil.memFree(memory);
             release();
         }
@@ -282,8 +284,7 @@ public final class KungFonts {
     }
 
     private static byte[] fetch(String family) throws IOException, InterruptedException {
-        HttpClient client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(8))
-            .followRedirects(HttpClient.Redirect.NORMAL).build();
+        HttpClient client = KungHttp.download();
         String css = body(client, "https://fonts.googleapis.com/css2?family=" + family.replace(' ', '+'),
             HttpResponse.BodyHandlers.ofString());
         byte[] font = body(client, ttfUrl(css), HttpResponse.BodyHandlers.ofByteArray());
@@ -310,10 +311,5 @@ public final class KungFonts {
         HttpResponse<T> response = client.send(request, handler);
         if (response.statusCode() != 200) throw new IOException("HTTP " + response.statusCode());
         return response.body();
-    }
-
-    private static String shortMessage(Exception exception) {
-        String message = exception.getMessage();
-        return message == null || message.isBlank() ? exception.getClass().getSimpleName() : message;
     }
 }

@@ -7,6 +7,7 @@ import com.github.beng420.kung.feature.dungeon.KungServerSession;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungHttp;
 import com.github.beng420.kung.util.KungTime;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
@@ -14,7 +15,6 @@ import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -170,7 +170,7 @@ public final class JerryPerkpocalypse {
         }
         if (now >= nextPullMillis && syncActive() && needsPull(year)) {
             nextPullMillis = now + (unknown ? UNKNOWN_PULL_INTERVAL_MILLIS : PULL_INTERVAL_MILLIS);
-            send(HttpRequest.newBuilder(DungeonRoomDataSyncClient.endpoint("jerry?year=" + year)).GET(), year);
+            send(KungHttp.json(DungeonRoomDataSyncClient.endpoint("jerry?year=" + year), 10, "Kung-Jerry").GET(), year);
         }
         readMenu(client, year, now);
         announceSwitch(client, year, now);
@@ -242,12 +242,6 @@ public final class JerryPerkpocalypse {
             syncActive() ? syncStatus : "off (turn on Jerry Mayor under Server Sync in the settings)", KungTime.zone());
     }
 
-    /** "4h 22m"; under a minute "<1m". */
-    static String duration(long millis) {
-        long minutes = Math.max(millis, 0) / 60_000L;
-        return minutes >= 60 ? minutes / 60 + "h " + minutes % 60 + "m" : minutes == 0 ? "<1m" : minutes + "m";
-    }
-
     /** Opt-in on its own: the room sync toggles do not matter, nothing is sent until "Jerry Mayor" is on. */
     private static boolean syncActive() {
         return KungConfig.get().dungeon.jerrySyncEnabled() && DungeonRoomDataSyncClient.INSTANCE.configured();
@@ -297,7 +291,7 @@ public final class JerryPerkpocalypse {
             body.addProperty("year", year);
             body.addProperty("mayor", reading.mayor());
             body.addProperty("slotStart", slotStart);
-            send(HttpRequest.newBuilder(DungeonRoomDataSyncClient.endpoint("jerry/report"))
+            send(KungHttp.json(DungeonRoomDataSyncClient.endpoint("jerry/report"), 10, "Kung-Jerry")
                 .header("Content-Type", "application/json")
                 .POST(HttpRequest.BodyPublishers.ofString(body.toString())), year);
         }
@@ -305,10 +299,7 @@ public final class JerryPerkpocalypse {
 
     /** Both routes answer with the pooled schedule; keep it when it knows at least as much as ours. */
     private void send(HttpRequest.Builder request, long year) {
-        KungServerSession.INSTANCE.send(request
-                .timeout(Duration.ofSeconds(10))
-                .header("Accept", "application/json")
-                .header("User-Agent", "Kung-Jerry"))
+        KungServerSession.INSTANCE.send(request)
             .thenAccept(response -> adopt(response, year))
             .exceptionally(throwable -> {
                 syncStatus = "failed (" + (throwable.getCause() != null ? throwable.getCause() : throwable).getMessage() + ")";
@@ -318,7 +309,7 @@ public final class JerryPerkpocalypse {
     }
 
     private synchronized void adopt(HttpResponse<String> response, long year) {
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        if (!KungHttp.isOk(response.statusCode())) {
             syncStatus = "HTTP " + response.statusCode();
             return;
         }

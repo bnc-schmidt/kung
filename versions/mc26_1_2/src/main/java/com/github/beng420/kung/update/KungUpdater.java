@@ -4,22 +4,19 @@ import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.util.Json;
 import com.github.beng420.kung.util.KungDebugRecorder;
-import com.google.gson.JsonArray;
+import com.github.beng420.kung.util.KungHttp;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.net.URI;
 import java.net.http.HttpClient;
-import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
-import java.time.Duration;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
@@ -50,10 +47,7 @@ public enum KungUpdater {
         thread.setDaemon(true);
         return thread;
     });
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .followRedirects(HttpClient.Redirect.ALWAYS)
-        .connectTimeout(Duration.ofSeconds(8))
-        .build();
+    private final HttpClient httpClient = KungHttp.download();
     private final AtomicBoolean checking = new AtomicBoolean();
     private final AtomicBoolean previewing = new AtomicBoolean();
     private final AtomicBoolean installing = new AtomicBoolean();
@@ -296,7 +290,10 @@ public enum KungUpdater {
     }
 
     public boolean canInstallUpdate() {
-        State snapshot = state.get();
+        return canInstall(state.get());
+    }
+
+    private boolean canInstall(State snapshot) {
         return snapshot.status() == Status.UPDATE_AVAILABLE && snapshot.updateInfo() != null
             && !installing.get() && !installationBlocked;
     }
@@ -321,8 +318,7 @@ public enum KungUpdater {
             case UPDATE_AVAILABLE -> "Installs " + snapshot.latestVersion();
             case DOWNLOADING -> "Downloading...";
             case INSTALL_READY -> "Restart Minecraft";
-            case UNSUPPORTED -> snapshot.message();
-            case FAILED -> snapshot.message();
+            case UNSUPPORTED, FAILED -> snapshot.message();
         };
     }
 
@@ -334,12 +330,8 @@ public enum KungUpdater {
     }
 
     public void installLatestAsync(Minecraft client) {
-        if (!canInstallUpdate()) return;
         State snapshot = state.get();
-        if (snapshot.status() != Status.UPDATE_AVAILABLE || snapshot.updateInfo() == null) {
-            return;
-        }
-        if (!installing.compareAndSet(false, true)) {
+        if (!canInstall(snapshot) || !installing.compareAndSet(false, true)) {
             return;
         }
 
@@ -348,9 +340,9 @@ public enum KungUpdater {
             try {
                 Path currentJar = installTarget();
                 String originalHash = KungUpdateInstaller.sha256(currentJar);
-                UpdateInfo update = snapshot.updateInfo();
+                UpdateAsset update = snapshot.updateInfo();
                 Path downloadedJar = KungUpdateDownload.download(httpClient, URI.create(update.downloadUrl()),
-                    updateDirectory(), update.size(), update.digest(), update.version(), installedVersions());
+                    updateDirectory(), update.size(), update.digest(), snapshot.latestVersion(), installedVersions());
                 KungUpdateInstaller.writePlan(updateDirectory(), new KungUpdateInstaller.Plan(downloadedJar,
                     currentJar, KungUpdateInstaller.sha256(downloadedJar), originalHash));
                 installerProcess.launch(updateDirectory(), com.github.beng420.kung.runtime.KungPaths.fileLayout().logDirectory());
@@ -386,24 +378,13 @@ public enum KungUpdater {
     private State checkForUpdates() throws IOException, InterruptedException {
         String currentVersion = currentVersion();
         String minecraftVersion = minecraftVersion();
-        HttpRequest request = HttpRequest.newBuilder(URI.create(RELEASE_API))
-            .timeout(Duration.ofSeconds(15))
-            .header("Accept", "application/vnd.github+json")
-            .header("User-Agent", "Kung-Updater")
-            .GET()
-            .build();
-        HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.limiting(
-            HttpResponse.BodyHandlers.ofString(StandardCharsets.UTF_8), 1_048_576));
+        HttpResponse<String> response = KungReleaseNotes.requestJson(httpClient, URI.create(RELEASE_API));
         if (response.statusCode() == 404) {
             return new State(Status.UP_TO_DATE, currentVersion, "", "No releases found", null);
         }
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
-            throw new IOException("GitHub returned HTTP " + response.statusCode());
-        }
 
         JsonObject release = JsonParser.parseString(response.body()).getAsJsonObject();
-        String tagName = stringValue(release, "tag_name");
-        String latestVersion = releaseVersion(tagName);
+        String latestVersion = releaseVersion(Json.string(release, "tag_name", ""));
         if (!isNewerVersion(latestVersion, currentVersion)) {
             return new State(Status.UP_TO_DATE, currentVersion, latestVersion, "Version " + currentVersion, null);
         }
@@ -419,50 +400,36 @@ public enum KungUpdater {
             );
         }
 
-        UpdateInfo updateInfo = new UpdateInfo(latestVersion, asset.get().name(), asset.get().downloadUrl(),
-            asset.get().size(), asset.get().digest());
         return new State(
             Status.UPDATE_AVAILABLE,
             currentVersion,
             latestVersion,
             "Update " + latestVersion + " available",
-            updateInfo
+            asset.get()
         );
     }
 
-    private Optional<UpdateAsset> findCompatibleJar(JsonObject release, String minecraftVersion) {
-        if (!release.has("assets") || !release.get("assets").isJsonArray()) {
+    private static Optional<UpdateAsset> findCompatibleJar(JsonObject release, String minecraftVersion) {
+        JsonElement assets = release.get("assets");
+        if (assets == null || !assets.isJsonArray()) {
             return Optional.empty();
         }
-
-        JsonArray assets = release.getAsJsonArray("assets");
-        List<UpdateAsset> installableAssets = new ArrayList<>();
-        for (JsonElement element : assets) {
-            if (!element.isJsonObject()) {
-                continue;
-            }
-            Optional<UpdateAsset> asset = assetFromJson(element.getAsJsonObject());
-            if (asset.isPresent() && isInstallableJar(asset.get().name())) {
-                installableAssets.add(asset.get());
-            }
-        }
-
-        Optional<UpdateAsset> minecraftAsset = installableAssets.stream()
+        List<UpdateAsset> installable = assets.getAsJsonArray().asList().stream()
+            .filter(JsonElement::isJsonObject)
+            .map(element -> assetFromJson(element.getAsJsonObject()))
+            .flatMap(Optional::stream)
+            .filter(asset -> isInstallableJar(asset.name()))
+            .toList();
+        return installable.stream()
             .filter(asset -> asset.name().startsWith("kung-" + minecraftVersion + "-"))
-            .findFirst();
-        if (minecraftAsset.isPresent()) {
-            return minecraftAsset;
-        }
-
-        if (minecraftVersion.isBlank() && installableAssets.size() == 1) {
-            return Optional.of(installableAssets.getFirst());
-        }
-        return Optional.empty();
+            .findFirst()
+            .or(() -> minecraftVersion.isBlank() && installable.size() == 1
+                ? Optional.of(installable.getFirst()) : Optional.empty());
     }
 
     private static Optional<UpdateAsset> assetFromJson(JsonObject object) {
-        String name = stringValue(object, "name");
-        String downloadUrl = stringValue(object, "browser_download_url");
+        String name = Json.string(object, "name", "");
+        String downloadUrl = Json.string(object, "browser_download_url", "");
         if (name.isBlank() || downloadUrl.isBlank()) {
             return Optional.empty();
         }
@@ -471,24 +438,16 @@ public enum KungUpdater {
             || !uri.getPath().startsWith("/bnc-schmidt/kung/releases/download/") || uri.getUserInfo() != null) {
             return Optional.empty();
         }
-        long size = object.has("size") ? object.get("size").getAsLong() : 0;
+        long size = Json.longValue(object, "size", 0);
         if (size <= 0 || size > KungUpdateDownload.MAX_BYTES) return Optional.empty();
-        String digest = stringValue(object, "digest");
+        String digest = Json.string(object, "digest", "");
         if (!digest.matches("(?i)sha256:[0-9a-f]{64}")) return Optional.empty();
         return Optional.of(new UpdateAsset(name, downloadUrl, size, digest));
     }
 
     private static boolean isInstallableJar(String name) {
         String lowerName = name.toLowerCase(Locale.ROOT);
-        if (!lowerName.endsWith(".jar")) {
-            return false;
-        }
-        for (String skippedPart : SKIPPED_ASSET_PARTS) {
-            if (lowerName.contains(skippedPart)) {
-                return false;
-            }
-        }
-        return true;
+        return lowerName.endsWith(".jar") && SKIPPED_ASSET_PARTS.stream().noneMatch(lowerName::contains);
     }
 
     private Optional<Path> currentModJar() {
@@ -535,10 +494,7 @@ public enum KungUpdater {
     private static String releaseVersion(String tagName) {
         String trimmed = tagName == null ? "" : tagName.trim();
         Matcher matcher = VERSION_PATTERN.matcher(trimmed);
-        if (matcher.matches()) {
-            return matcher.group(1);
-        }
-        return trimmed.startsWith("v") || trimmed.startsWith("V") ? trimmed.substring(1) : trimmed;
+        return matcher.matches() ? matcher.group(1) : KungReleaseNotes.normalizedVersion(trimmed);
     }
 
     static boolean isNewerVersion(String latestVersion, String currentVersion) {
@@ -561,13 +517,6 @@ public enum KungUpdater {
             .results()
             .map(result -> Integer.parseInt(result.group()))
             .toList();
-    }
-
-    private static String stringValue(JsonObject object, String key) {
-        if (!object.has(key) || object.get(key).isJsonNull()) {
-            return "";
-        }
-        return object.get(key).getAsString();
     }
 
     private static Path updateDirectory() {
@@ -593,7 +542,7 @@ public enum KungUpdater {
         String currentVersion,
         String latestVersion,
         String message,
-        UpdateInfo updateInfo
+        UpdateAsset updateInfo
     ) {
         static State checking(String currentVersion) {
             return new State(Status.CHECKING, currentVersion, "", "Checking GitHub", null);
@@ -602,9 +551,6 @@ public enum KungUpdater {
         State withStatus(Status status, String message) {
             return new State(status, currentVersion, latestVersion, message, updateInfo);
         }
-    }
-
-    private record UpdateInfo(String version, String assetName, String downloadUrl, long size, String digest) {
     }
 
     private record UpdateAsset(String name, String downloadUrl, long size, String digest) {

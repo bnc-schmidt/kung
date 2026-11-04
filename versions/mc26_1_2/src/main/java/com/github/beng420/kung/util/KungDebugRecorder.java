@@ -1,5 +1,6 @@
 package com.github.beng420.kung.util;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -9,13 +10,12 @@ import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
-import net.minecraft.client.Minecraft;
 
 public final class KungDebugRecorder {
     /** General ring: once full, each new line evicts the oldest. */
@@ -29,6 +29,10 @@ public final class KungDebugRecorder {
     public static final int MAX_STORED_LINES = MAX_EVENTS + MAX_SPLIT_EVENTS + MAX_SCORE_EVENTS + MAX_ROOM_EVENTS
         + MAX_THROW_EVENTS;
     private static final int MAX_EVENT_LENGTH = 900;
+    private static final long RATE_WINDOW_MILLIS = 60_000L;
+    private static final Set<String> SPLIT_AREAS = Set.of("dungeon-splits", "necron-end");
+    private static final Set<String> SCORE_AREAS = Set.of("score-calc", "score-bonus", "mimic-kill");
+    private static final Set<String> THROW_AREAS = Set.of("safari-throw", "sack-api", "beacon");
     private static final long DEFAULT_DEDUPE_MILLIS = 15_000L;
     private static final DateTimeFormatter CLOCK_FORMAT =
         DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());
@@ -89,30 +93,21 @@ public final class KungDebugRecorder {
                 cleanArea,
                 cleanMessage
             );
-            EVENTS.addLast(line);
-            if (cleanArea.equals("dungeon-splits") || cleanArea.equals("necron-end")) {
-                SPLIT_EVENTS.addLast(line);
-                while (SPLIT_EVENTS.size() > MAX_SPLIT_EVENTS) SPLIT_EVENTS.removeFirst();
-            }
-            if (cleanArea.equals("score-calc") || cleanArea.equals("score-bonus") || cleanArea.equals("mimic-kill")) {
-                SCORE_EVENTS.addLast(line);
-                while (SCORE_EVENTS.size() > MAX_SCORE_EVENTS) SCORE_EVENTS.removeFirst();
-            }
-            if (cleanArea.equals("safari-throw") || cleanArea.equals("sack-api") || cleanArea.equals("beacon")) {
-                THROW_EVENTS.addLast(line);
-                while (THROW_EVENTS.size() > MAX_THROW_EVENTS) THROW_EVENTS.removeFirst();
-            }
-            if (initialRoomPoint(cleanArea, cleanMessage)) {
-                ROOM_EVENTS.addLast(line);
-                while (ROOM_EVENTS.size() > MAX_ROOM_EVENTS) ROOM_EVENTS.removeFirst();
-            }
+            keep(EVENTS, line, MAX_EVENTS);
+            if (SPLIT_AREAS.contains(cleanArea)) keep(SPLIT_EVENTS, line, MAX_SPLIT_EVENTS);
+            if (SCORE_AREAS.contains(cleanArea)) keep(SCORE_EVENTS, line, MAX_SCORE_EVENTS);
+            if (THROW_AREAS.contains(cleanArea)) keep(THROW_EVENTS, line, MAX_THROW_EVENTS);
+            if (initialRoomPoint(cleanArea, cleanMessage)) keep(ROOM_EVENTS, line, MAX_ROOM_EVENTS);
             state.recorded++;
             state.lastFingerprint = fingerprint;
             state.lastRecordedAtMillis = nowMillis;
-            while (EVENTS.size() > MAX_EVENTS) {
-                EVENTS.removeFirst();
-            }
         }
+    }
+
+    /** Appends to a ring and evicts the oldest lines beyond {@code max}. */
+    private static void keep(ArrayDeque<String> ring, String line, int max) {
+        ring.addLast(line);
+        while (ring.size() > max) ring.removeFirst();
     }
 
     public static void clear() {
@@ -171,12 +166,8 @@ public final class KungDebugRecorder {
         return Long.parseLong(line.substring(0, line.indexOf(' ')));
     }
 
-    public static Path saveToFile(Minecraft client) throws IOException {
-        Path gameDirectory = client == null
-            ? Path.of(".")
-            : client.gameDirectory.toPath();
-        Path directory = new com.github.beng420.kung.runtime.KungFileLayout(gameDirectory,
-            gameDirectory.resolve("config")).logDirectory();
+    public static Path saveToFile() throws IOException {
+        Path directory = com.github.beng420.kung.runtime.KungPaths.fileLayout().logDirectory();
         Files.createDirectories(directory);
         Path path = directory.resolve("kung-trace-" + FILE_FORMAT.format(Instant.now()) + ".log");
         Files.writeString(path, dump(), StandardCharsets.UTF_8);
@@ -187,18 +178,10 @@ public final class KungDebugRecorder {
         return sanitize(value).replace(" | ", " / ");
     }
 
-    private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("\u00a7.");
-    private static final java.util.regex.Pattern BLANKS = java.util.regex.Pattern.compile("\\s+");
     private static final java.util.regex.Pattern NUMBER = java.util.regex.Pattern.compile("-?\\d+(?:\\.\\d+)?");
 
     private static String sanitize(String value) {
-        if (value == null) {
-            return "";
-        }
-        return BLANKS.matcher(FORMAT_CODE.matcher(value).replaceAll("")
-            .replace('\r', ' ')
-            .replace('\n', ' ')).replaceAll(" ")
-            .trim();
+        return HypixelLocation.clean(value);
     }
 
     private static void appendAreaSummary(StringBuilder builder) {
@@ -207,13 +190,12 @@ public final class KungDebugRecorder {
                 return;
             }
 
-            List<String> areas = new ArrayList<>(AREA_STATES.keySet());
-            Collections.sort(areas);
             builder.append("areas=");
             boolean first = true;
-            for (String area : areas) {
-                AreaState state = AREA_STATES.get(area);
-                if (state == null || state.seen <= 0L) {
+            for (Map.Entry<String, AreaState> entry : new TreeMap<>(AREA_STATES).entrySet()) {
+                String area = entry.getKey();
+                AreaState state = entry.getValue();
+                if (state.seen <= 0L) {
                     continue;
                 }
                 if (!first) {
@@ -239,7 +221,7 @@ public final class KungDebugRecorder {
 
     private static boolean rateLimited(AreaState state, AreaPolicy policy, long nowMillis) {
         if (state.windowStartedAtMillis <= 0L
-            || nowMillis - state.windowStartedAtMillis >= policy.windowMillis()) {
+            || nowMillis - state.windowStartedAtMillis >= RATE_WINDOW_MILLIS) {
             state.windowStartedAtMillis = nowMillis;
             state.windowRecorded = 0;
         }
@@ -260,41 +242,41 @@ public final class KungDebugRecorder {
     private static AreaPolicy policyFor(String area, String message) {
         boolean important = important(area, message);
         return switch (area) {
-            case "packet" -> new AreaPolicy(12, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
-            case "message" -> new AreaPolicy(20, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
-            case "actionbar" -> new AreaPolicy(6, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "packet" -> new AreaPolicy(12, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "message" -> new AreaPolicy(20, DEFAULT_DEDUPE_MILLIS, false, important);
+            case "actionbar" -> new AreaPolicy(6, DEFAULT_DEDUPE_MILLIS, true, important);
             // No dedupe: repeated NPC reminders and re-sent answers are the timing evidence.
-            case "npc-dialogue" -> new AreaPolicy(120, 60_000L, 0L, false, important);
+            case "npc-dialogue" -> new AreaPolicy(120, 0L, false, important);
             // Low-volume M7 Necron-to-dragons evidence: never rate-limited or deduped, kept in the split ring.
-            case "necron-end" -> new AreaPolicy(0, 60_000L, 0L, false, important);
-            case "screen" -> new AreaPolicy(12, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "necron-end" -> new AreaPolicy(0, 0L, false, important);
+            case "screen" -> new AreaPolicy(12, DEFAULT_DEDUPE_MILLIS, true, important);
             case "chat-filter", "chat-command", "chat-name" ->
-                new AreaPolicy(20, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
-            case "loadouts-auto-close" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
+                new AreaPolicy(20, DEFAULT_DEDUPE_MILLIS, false, important);
+            case "loadouts-auto-close" -> new AreaPolicy(40, DEFAULT_DEDUPE_MILLIS, true, important);
             // One state line per second; digits are normalised so only changes in which signals exist (and one sample per 15 s) are kept.
-            case "frozen-blaze" -> new AreaPolicy(0, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "frozen-blaze" -> new AreaPolicy(0, DEFAULT_DEDUPE_MILLIS, true, important);
             // Stand scans repeat every half second: digits are normalised, so one sample per 15 s and at most 40 a minute.
-            case "nametag", "hitbox" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
-            case "bow-draw", "rag" -> new AreaPolicy(80, 60_000L, 0L, false, false);
+            case "nametag", "hitbox" -> new AreaPolicy(40, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "bow-draw", "rag" -> new AreaPolicy(80, 0L, false, false);
             // Two lines per Sack pull (at most one per 2 s): never deduped, so every send shows up as evidence.
-            case "greenhouse-supply" -> new AreaPolicy(0, 60_000L, 0L, false, important);
+            case "greenhouse-supply" -> new AreaPolicy(0, 0L, false, important);
             // Capsule throw lines are the data for fitting the flight: never rate-limited or deduped.
-            case "safari-throw" -> new AreaPolicy(0, 60_000L, 0L, false, false);
+            case "safari-throw" -> new AreaPolicy(0, 0L, false, false);
             // The sack API probe compares API polls with [Sacks] messages by time: every line is evidence.
-            case "sack-api" -> new AreaPolicy(0, 60_000L, 0L, false, false);
+            case "sack-api" -> new AreaPolicy(0, 0L, false, false);
             // Beacon menu lines are timed by hand to work out the reference speed and pitch: keep every one.
-            case "beacon" -> new AreaPolicy(0, 60_000L, 0L, false, false);
-            case "map-change" -> new AreaPolicy(120, 60_000L, 3_000L, false, important);
-            case "map-check" -> new AreaPolicy(30, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
-            case "mimic-esp" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "beacon" -> new AreaPolicy(0, 0L, false, false);
+            case "map-change" -> new AreaPolicy(120, 3_000L, false, important);
+            case "map-check" -> new AreaPolicy(30, DEFAULT_DEDUPE_MILLIS, false, important);
+            case "mimic-esp" -> new AreaPolicy(40, DEFAULT_DEDUPE_MILLIS, true, important);
             case "map-discovery", "map-topology" ->
-                new AreaPolicy(80, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
-            case "player-markers" -> new AreaPolicy(30, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);
-            case "player-slots" -> new AreaPolicy(60, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
+                new AreaPolicy(80, DEFAULT_DEDUPE_MILLIS, false, important);
+            case "player-markers" -> new AreaPolicy(30, DEFAULT_DEDUPE_MILLIS, true, important);
+            case "player-slots" -> new AreaPolicy(60, DEFAULT_DEDUPE_MILLIS, false, important);
             case "context-state", "dungeon-state" ->
-                new AreaPolicy(60, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
-            case "door-title" -> new AreaPolicy(120, 60_000L, 2_000L, false, true);
-            default -> new AreaPolicy(0, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
+                new AreaPolicy(60, DEFAULT_DEDUPE_MILLIS, false, important);
+            case "door-title" -> new AreaPolicy(120, 2_000L, false, true);
+            default -> new AreaPolicy(0, DEFAULT_DEDUPE_MILLIS, false, important);
         };
     }
 
@@ -333,7 +315,6 @@ public final class KungDebugRecorder {
 
     private record AreaPolicy(
         int windowLimit,
-        long windowMillis,
         long dedupeMillis,
         boolean similarDedupe,
         boolean important

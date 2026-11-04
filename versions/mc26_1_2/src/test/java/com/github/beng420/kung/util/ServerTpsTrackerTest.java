@@ -173,14 +173,14 @@ public final class ServerTpsTrackerTest {
     @Test
     public void appliedTickSequenceAllowsNewIdsAndResetsWithoutInferringTicksFromIdDistance() {
         ServerTickSequence sequence = new ServerTickSequence();
-        assertTrue(sequence.accept(-1));
-        assertFalse(sequence.accept(-1));
-        assertTrue(sequence.accept(-50));
-        assertFalse(sequence.accept(0));
-        assertFalse(sequence.accept(-50));
+        assertTrue(sequence.accept(-1, false));
+        assertFalse(sequence.accept(-1, false));
+        assertTrue(sequence.accept(-50, false));
+        assertFalse(sequence.accept(0, false));
+        assertFalse(sequence.accept(-50, false));
         sequence.reset();
-        assertFalse(sequence.accept(0));
-        assertTrue(sequence.accept(-50));
+        assertFalse(sequence.accept(0, false));
+        assertTrue(sequence.accept(-50, false));
     }
 
     @Test

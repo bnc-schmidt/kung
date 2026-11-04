@@ -1,6 +1,7 @@
 package com.github.beng420.kung.util;
 
 import com.github.beng420.kung.feature.dungeon.KungServerSession;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
 import java.time.Instant;
 import java.util.EnumMap;
@@ -34,8 +35,8 @@ public final class CatacombsAverageCalculator {
      */
     public CompletableFuture<Result> calculateAsync(String username, Goal goal, int level, DungeonClass dungeonClass,
                                                     boolean useLastRunXp) {
-        String normalized = username == null ? "" : username.trim();
-        if (!validUsername(normalized)) {
+        String normalized = HypixelLocation.trimmedName(username);
+        if (!HypixelLocation.isPlayerName(normalized)) {
             return CompletableFuture.completedFuture(Result.error("invalid username"));
         }
 
@@ -50,10 +51,6 @@ public final class CatacombsAverageCalculator {
                     ? Result.ok(calculated.message() + " (local)", calculated.debugDetails())
                     : calculated;
             });
-    }
-
-    public Result calculate(PlayerData player) {
-        return calculate(player, "", "", Goal.CLASS_AVERAGE, 50, null, true);
     }
 
     Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, int level,
@@ -134,13 +131,6 @@ public final class CatacombsAverageCalculator {
     public static long runsToCatacombs(double currentXp, int targetLevel, long xpPerRun) {
         double remaining = xpForLevel(targetLevel) - currentXp;
         return remaining <= 0.0 ? 0L : xpPerRun <= 0 ? Long.MAX_VALUE : (long) Math.ceil(remaining / xpPerRun);
-    }
-
-    public static Breakdown calculateBreakdown(
-        Map<DungeonClass, Double> currentClassXp,
-        Map<DungeonClass, Double> classXpPerRun
-    ) {
-        return calculateBreakdown(currentClassXp, classXpPerRun, 50);
     }
 
     public static Breakdown calculateBreakdown(
@@ -262,10 +252,6 @@ public final class CatacombsAverageCalculator {
             }
         }
         return best;
-    }
-
-    public static String classAverageSummaryLine(String playerName, String floor, Breakdown breakdown) {
-        return classAverageSummaryLine(playerName, floor, 50, breakdown);
     }
 
     public static String classAverageSummaryLine(String playerName, String floor, int targetLevel, Breakdown breakdown) {
@@ -391,10 +377,6 @@ public final class CatacombsAverageCalculator {
         return value == Long.MAX_VALUE ? "infinite" : Long.toString(value);
     }
 
-    private static boolean validUsername(String value) {
-        return value != null && value.matches("[A-Za-z0-9_]{3,16}");
-    }
-
     static String externalProfileError(String rawError) {
         // A failed own key plus a failed server is one combined trace error; the chat message follows the server's part.
         String error = HypixelSkyBlockProfileClient.lastError(rawError);
@@ -474,10 +456,6 @@ public final class CatacombsAverageCalculator {
     }
 
     public record Result(boolean success, String message, String debugDetails) {
-        static Result ok(String message) {
-            return ok(message, "");
-        }
-
         static Result ok(String message, String debugDetails) {
             return new Result(true, message, debugDetails);
         }

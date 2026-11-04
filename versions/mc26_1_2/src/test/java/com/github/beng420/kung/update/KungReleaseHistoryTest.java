@@ -67,7 +67,7 @@ public final class KungReleaseHistoryTest {
         var file = temp.getRoot().toPath().resolve("updates/release-notes.properties");
         var notes = new KungReleaseNotes("0.3.2", () -> file, worker,
             version -> Optional.of(body("v" + version)), history);
-        notes.openMenu();
+        notes.openMenu(false);
         var popup = new KungReleaseNotesPopup(notes);
         popup.select(release("0.3.1"));
         popup.select(release("0.3.0"));
@@ -81,7 +81,7 @@ public final class KungReleaseHistoryTest {
         notes.acknowledge(popup.selectedNotes().notes());
         worker.drain();
         assertFalse(Files.exists(file));
-        assertTrue(notes.openMenu());
+        assertTrue(notes.openMenu(false));
         popup.select(null);
         assertEquals("0.3.2", popup.selectedVersion());
         assertEquals(KungReleaseNotes.Status.READY, popup.selectedNotes().status());

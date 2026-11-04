@@ -34,7 +34,6 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         Pattern.compile("^(?<sender>.+?)\\s*:\\s*(?<message>.+)$");
     private static final Pattern CHAT_TIMESTAMP_PATTERN =
         Pattern.compile("^\\[[0-9]{2}:[0-9]{2}:[0-9]{2}]\\s+");
-    private static final Pattern USERNAME_PATTERN = Pattern.compile("\\b[A-Za-z0-9_]{3,16}\\b");
     private static final long SEND_INTERVAL_MILLIS = 650L;
     /**
      * Hypixel refuses a message sent less than half a second after your last one ("You can only send a message once
@@ -155,7 +154,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 queue(channel, chatContext.replyTarget(), "Could not read the target player name.");
                 return;
             }
-            if (!validUsername(targetName)) {
+            if (!HypixelLocation.isPlayerName(targetName)) {
                 queue(channel, chatContext.replyTarget(), "Could not match " + targetName + " to a player.");
                 return;
             }
@@ -196,7 +195,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         // would post the reply to the whole lobby.
         if (publicMatcher.matches() && !publicMatcher.group("sender").contains(">")) {
             String senderName = senderName(publicMatcher.group("sender"));
-            if (validUsername(senderName)) {
+            if (HypixelLocation.isPlayerName(senderName)) {
                 return new ChatContext(ChatChannel.ALL, senderName, publicMatcher.group("message"), "");
             }
         }
@@ -224,7 +223,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         if (client != null && client.player != null) {
             candidates.add(client.player.getName().getString());
         }
-        if (validUsername(senderName)) {
+        if (HypixelLocation.isPlayerName(senderName)) {
             candidates.add(senderName);
         }
         Map<String, String> observed = OBSERVED_CHANNEL_NAMES.get(channel);
@@ -302,7 +301,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     }
 
     private static void rememberChannelName(ChatChannel channel, String name) {
-        if (!validUsername(name)) {
+        if (!HypixelLocation.isPlayerName(name)) {
             return;
         }
         OBSERVED_CHANNEL_NAMES.computeIfAbsent(channel, ignored -> new HashMap<>()).put(normalizeName(name), name);
@@ -344,7 +343,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 + " resolved=" + resolution.name()
                 + " reason=after-guild-refresh/" + resolution.reason()
                 + " candidates=" + resolution.candidates());
-            if (!validUsername(resolution.name())) {
+            if (!HypixelLocation.isPlayerName(resolution.name())) {
                 queue(pending.channel(), pending.replyTarget(), "Could not match " + pending.inputName() + " to a player.");
                 continue;
             }
@@ -392,16 +391,12 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
 
     private static String senderName(String rawSender) {
         String clean = HypixelLocation.withoutBrackets(HypixelLocation.clean(rawSender));
-        Matcher matcher = USERNAME_PATTERN.matcher(clean);
+        Matcher matcher = HypixelLocation.PLAYER_NAME.matcher(clean);
         return matcher.find() ? matcher.group() : "";
     }
 
     private static String stripChatTimestamp(String cleanLine) {
         return CHAT_TIMESTAMP_PATTERN.matcher(cleanLine).replaceFirst("");
-    }
-
-    private static boolean validUsername(String name) {
-        return name != null && USERNAME_PATTERN.matcher(name).matches();
     }
 
     private static String normalizeName(String name) {
@@ -421,7 +416,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 case GUILD -> "gc";
                 case ALL -> "ac";
                 case COOP -> "cc";
-                case PRIVATE -> validUsername(replyTarget) ? "msg " + replyTarget : "";
+                case PRIVATE -> HypixelLocation.isPlayerName(replyTarget) ? "msg " + replyTarget : "";
             };
         }
 

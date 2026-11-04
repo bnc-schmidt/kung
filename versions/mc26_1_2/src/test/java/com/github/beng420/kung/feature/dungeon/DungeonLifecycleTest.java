@@ -78,28 +78,28 @@ public final class DungeonLifecycleTest {
     @Test public void entersOnFirstLocationPacketAndRetainsEvidenceDuringSidebarRebuild() {
         HypixelInstanceState state = new HypixelInstanceState();
         state.beginWorld();
-        state.observe(location("⏣ The Catacombs (M7)"), "mini24bs");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, location("⏣ The Catacombs (M7)"), "mini24bs");
         assertTrue(state.catacombs());
-        for (int i = 0; i < 1000; i++) state.observe(HypixelLocation.UNKNOWN, "");
+        for (int i = 0; i < 1000; i++) state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.UNKNOWN, "");
         assertTrue(state.catacombs()); // Includes boss phases outside the map grid.
         assertEquals("mini24bs", state.serverId());
     }
 
     @Test public void worldBoundaryImmediatelyInvalidatesTheDungeon() {
         HypixelInstanceState state = new HypixelInstanceState();
-        state.observe(location("The Catacombs (F7)"), "mini1a");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, location("The Catacombs (F7)"), "mini1a");
         long epoch = state.epoch();
         state.beginWorld();
         assertFalse(state.catacombs());
         assertEquals(epoch + 1, state.epoch());
         assertEquals("", state.serverId());
-        state.observe(HypixelLocation.UNKNOWN, "");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.UNKNOWN, "");
         assertFalse(state.catacombs());
     }
 
     @Test public void differentServerStartsNewSessionEvenWithoutAWorldPacket() {
         HypixelInstanceState state = new HypixelInstanceState();
-        state.observe(location("The Catacombs (F7)"), "mini1a");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, location("The Catacombs (F7)"), "mini1a");
         // The tracker holds a different id for SERVER_CHANGE_CONFIRM_TICKS before observing it.
         assertTrue(state.holdServerChange("mini2bc"));
         List<String> sidebar = List.of("09/10/26 mini2bc");
@@ -108,7 +108,7 @@ public final class DungeonLifecycleTest {
             assertTrue(state.catacombs());
         }
         assertEquals("mini2bc", state.confirmedServerChange(sidebar));
-        state.observe(HypixelLocation.UNKNOWN, "mini2bc");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.UNKNOWN, "mini2bc");
         assertFalse(state.catacombs());
         assertEquals(1, state.epoch());
     }
@@ -116,8 +116,8 @@ public final class DungeonLifecycleTest {
     @Test public void explicitOtherLocationEndsDungeonWithoutWaiting() {
         for (String name : List.of("Area: Kuudra's Hollow (T5)", "⏣ Dungeon Hub", "Area: Private Island", "⏣ Village", "Area: The Rift")) {
             HypixelInstanceState state = new HypixelInstanceState();
-            state.observe(location("The Catacombs (F7)"), "mini1a");
-            state.observe(location(name), "");
+            state.observe(HypixelInstanceState.Source.SIDEBAR, location("The Catacombs (F7)"), "mini1a");
+            state.observe(HypixelInstanceState.Source.SIDEBAR, location(name), "");
             assertFalse(name, state.catacombs());
         }
     }

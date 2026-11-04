@@ -5,10 +5,6 @@ public final class ServerTickSequence {
     private boolean observed;
     private int lastId;
 
-    public boolean accept(int id) {
-        return accept(id, false);
-    }
-
     public boolean accept(int id, boolean bundled) {
         // Bundle pings are additional synchronization traffic on Hypixel, not
         // additional game ticks. Ignore them before touching deduplication state.

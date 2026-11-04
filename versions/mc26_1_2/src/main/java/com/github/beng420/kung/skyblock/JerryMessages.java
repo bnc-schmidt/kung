@@ -115,7 +115,7 @@ final class JerryMessages {
             text.append(next.get(position) == null ? "?" : next.get(position));
             if (position == 0) {
                 text.append(index == slots.size() - 1 ? " (Jerry leaves in " : " (switches in ")
-                    .append(JerryPerkpocalypse.duration(slots.get(index).endMillis() - nowMillis)).append(")");
+                    .append(relative(slots.get(index).endMillis() - nowMillis)).append(")");
             }
         }
         return text.toString();
@@ -168,7 +168,7 @@ final class JerryMessages {
             boolean last = index == slots.size() - 1;
             copying.append(mayor(current.mayor(), ACTIVE, slots, nowMillis, zone))
                 .append(text((last ? ", until Jerry leaves office in " : ", switches in ")
-                    + JerryPerkpocalypse.duration(current.endMillis() - nowMillis) + ".", PAST));
+                    + relative(current.endMillis() - nowMillis) + ".", PAST));
         }
         lines.add(copying);
         MutableComponent rotation = line().append(text("Rotation: ", PAST));

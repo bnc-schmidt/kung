@@ -4,6 +4,7 @@ import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.feature.dungeon.DungeonRoomDataSyncClient;
 import com.github.beng420.kung.feature.dungeon.KungServerSession;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.PlayerData;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.ProfileData;
@@ -16,7 +17,6 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Locale;
@@ -42,9 +42,7 @@ public final class HypixelSkyBlockProfileClient {
     /** Result of the last key test, so the settings row can show more than "a key is present". */
     private volatile String lastKeyCheck = "";
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
-        .build();
+    private final HttpClient httpClient = KungHttp.api();
 
     private HypixelSkyBlockProfileClient() {
     }
@@ -78,14 +76,14 @@ public final class HypixelSkyBlockProfileClient {
 
     public CompletableFuture<ProfileResult> loadPlayer(String username) {
         String key = KungConfig.get().misc.hypixelApiKey();
-        String normalized = username == null ? "" : username.trim();
+        String normalized = HypixelLocation.trimmedName(username);
         if (!KungConfig.get().misc.hypixelApiEnabled()) {
             return CompletableFuture.completedFuture(ProfileResult.error("Hypixel API is disabled"));
         }
         if (key.isBlank()) {
             return CompletableFuture.completedFuture(ProfileResult.error("Hypixel API key is not set"));
         }
-        if (!validUsername(normalized)) {
+        if (!HypixelLocation.isPlayerName(normalized)) {
             return CompletableFuture.completedFuture(ProfileResult.error("invalid username"));
         }
         return resolveUsername(normalized)
@@ -99,11 +97,11 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     public CompletableFuture<SecretResult> loadTotalSecrets(String username) {
-        String normalized = username == null ? "" : username.trim();
+        String normalized = HypixelLocation.trimmedName(username);
         if (!secretsSourceAvailable()) {
             return CompletableFuture.completedFuture(SecretResult.error(NO_SOURCE));
         }
-        if (!validUsername(normalized)) {
+        if (!HypixelLocation.isPlayerName(normalized)) {
             return CompletableFuture.completedFuture(SecretResult.error("invalid username"));
         }
         if (!KungConfig.get().misc.directHypixelApiEnabled()) {
@@ -111,7 +109,7 @@ public final class HypixelSkyBlockProfileClient {
             return resolveUsername(normalized)
                 .thenCompose(profile -> loadKungServerObject(DungeonRoomDataSyncClient.endpoint("hypixel/secrets"), "uuid",
                         profile.uuid(), KungServerSession.INSTANCE)
-                    .thenApply(root -> SecretResult.ok(profile.name(), (int) number(root, "secrets", -1)))
+                    .thenApply(root -> SecretResult.ok(profile.name(), (int) Json.number(root, "secrets", -1)))
                     .exceptionally(throwable -> SecretResult.error(shortError(throwable))));
         }
         String key = KungConfig.get().misc.hypixelApiKey();
@@ -159,13 +157,13 @@ public final class HypixelSkyBlockProfileClient {
             for (JsonElement element : profiles.getAsJsonArray()) {
                 if (!element.isJsonObject()) continue;
                 JsonObject profile = element.getAsJsonObject();
-                if (chosen == null || bool(profile, "selected")) chosen = profile;
+                if (chosen == null || Json.bool(profile, "selected", false)) chosen = profile;
             }
         }
         if (chosen == null) return new SackCounts("", Map.of(), "", "no profiles in the answer");
-        JsonObject member = objectMember(objectMember(chosen, "members"), uuid.replace("-", "").toLowerCase(Locale.ROOT));
-        JsonObject sacks = objectMember(objectMember(member, "inventory"), "sacks_counts");
-        if (sacks == null) sacks = objectMember(member, "sacks_counts");
+        JsonObject member = Json.object(Json.object(chosen, "members"), uuid.replace("-", "").toLowerCase(Locale.ROOT));
+        JsonObject sacks = Json.object(Json.object(member, "inventory"), "sacks_counts");
+        if (sacks == null) sacks = Json.object(member, "sacks_counts");
         Map<String, Long> counts = new TreeMap<>();
         if (sacks != null) {
             sacks.entrySet().forEach(entry -> {
@@ -174,20 +172,20 @@ public final class HypixelSkyBlockProfileClient {
                 }
             });
         }
-        return new SackCounts(string(chosen, "cute_name", ""), counts, "", sacks == null ? missingSacks(member) : "");
+        return new SackCounts(Json.string(chosen, "cute_name", ""), counts, "", sacks == null ? missingSacks(member) : "");
     }
 
     /** Why a member has no Sack counts: absent, or an answer without the {@code inventory} object (the Inventory API is off, or the route cut it). */
     private static String missingSacks(JsonObject member) {
         if (member == null) return "member not found";
-        JsonObject inventory = objectMember(member, "inventory");
+        JsonObject inventory = Json.object(member, "inventory");
         return "member keys=" + String.join(",", new java.util.TreeSet<>(member.keySet()))
             + (inventory == null ? "; no inventory object" : "; inventory keys=" + String.join(",", new java.util.TreeSet<>(inventory.keySet())));
     }
 
     private CompletableFuture<ProfileResult> loadPlayerFromKungServer(String username) {
-        String normalized = username == null ? "" : username.trim();
-        if (!validUsername(normalized)) {
+        String normalized = HypixelLocation.trimmedName(username);
+        if (!HypixelLocation.isPlayerName(normalized)) {
             return CompletableFuture.completedFuture(ProfileResult.error("invalid username"));
         }
         return resolveUsername(normalized)
@@ -197,20 +195,15 @@ public final class HypixelSkyBlockProfileClient {
 
     private CompletableFuture<MinecraftProfile> resolveUsername(String username) {
         URI uri = URI.create(MOJANG_PROFILE_API + URLEncoder.encode(username, StandardCharsets.UTF_8));
-        HttpRequest request = HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(8))
-            .header("Accept", "application/json")
-            .header("User-Agent", "Kung-HypixelProfile")
-            .GET()
-            .build();
+        HttpRequest request = KungHttp.json(uri, 8, "Kung-HypixelProfile").GET().build();
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .thenApply(response -> {
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                if (!KungHttp.isOk(response.statusCode())) {
                     throw new IllegalStateException("Mojang returned HTTP " + response.statusCode());
                 }
                 JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
-                String id = string(root, "id", "");
-                String name = string(root, "name", username);
+                String id = Json.string(root, "id", "");
+                String name = Json.string(root, "name", username);
                 if (id.isBlank()) {
                     throw new IllegalStateException("Mojang returned no UUID");
                 }
@@ -233,11 +226,7 @@ public final class HypixelSkyBlockProfileClient {
 
     private CompletableFuture<JsonObject> loadKungServerObject(URI baseUri, String parameter, String value, KungServerSession session) {
         URI uri = URI.create(baseUri + "?" + parameter + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8));
-        HttpRequest.Builder request = HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(15))
-            .header("Accept", "application/json")
-            .header("User-Agent", "Kung-HypixelProfile")
-            .GET();
+        HttpRequest.Builder request = KungHttp.json(uri, 15, "Kung-HypixelProfile").GET();
         // Sign in first: a refused sign-in fails once instead of being retried like a flaky connection.
         return session.token().thenCompose(ignored -> loadObject("Kung server", () -> session.send(request), 1));
     }
@@ -245,13 +234,10 @@ public final class HypixelSkyBlockProfileClient {
     private CompletableFuture<JsonObject> loadHypixelObject(URI baseUri, String parameter, String value, String apiKey) {
         String query = baseUri + "?" + parameter + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8);
         return loadObject("Hypixel", () -> httpClient.sendAsync(
-            HttpRequest.newBuilder(URI.create(query + "&_kungFresh=" + System.currentTimeMillis()))
-                .timeout(Duration.ofSeconds(12))
-                .header("Accept", "application/json")
+            KungHttp.json(URI.create(query + "&_kungFresh=" + System.currentTimeMillis()), 12, "Kung-HypixelProfile")
                 .header("API-Key", apiKey)
                 .header("Cache-Control", "no-cache, no-store, max-age=0")
                 .header("Pragma", "no-cache")
-                .header("User-Agent", "Kung-HypixelProfile")
                 .GET()
                 .build(), HttpResponse.BodyHandlers.ofString()), 1);
     }
@@ -268,7 +254,7 @@ public final class HypixelSkyBlockProfileClient {
                     }
                     return CompletableFuture.failedFuture(throwable);
                 }
-                if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                if (!KungHttp.isOk(response.statusCode())) {
                     IllegalStateException error =
                         new IllegalStateException(httpError(service, response.statusCode(), response.body()));
                     if (shouldRetry(response.statusCode()) && attempt < API_ATTEMPTS) {
@@ -278,7 +264,7 @@ public final class HypixelSkyBlockProfileClient {
                 }
                 try {
                     JsonObject root = JsonParser.parseString(response.body()).getAsJsonObject();
-                    if (!bool(root, "success")) {
+                    if (!Json.bool(root, "success", false)) {
                         throw new IllegalStateException(service + " returned success=false");
                     }
                     return CompletableFuture.completedFuture(root);
@@ -335,7 +321,7 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     static ProfileResult parseProfiles(String uuid, String name, JsonObject playerRoot, JsonObject profilesRoot) {
-        if (profilesRoot == null || !bool(profilesRoot, "success")) {
+        if (profilesRoot == null || !Json.bool(profilesRoot, "success", false)) {
             return ProfileResult.error("Profile API returned no successful data");
         }
         int secrets = totalSecrets(playerRoot);
@@ -354,7 +340,7 @@ public final class HypixelSkyBlockProfileClient {
                 continue;
             }
             JsonObject profileObject = element.getAsJsonObject();
-            JsonObject member = objectMember(objectMember(profileObject, "members"), memberKey);
+            JsonObject member = Json.object(Json.object(profileObject, "members"), memberKey);
             if (member == null) {
                 continue;
             }
@@ -378,27 +364,27 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     private static int totalSecrets(JsonObject playerRoot) {
-        return (int) number(objectMember(objectMember(playerRoot, "player"), "achievements"),
+        return (int) Json.number(Json.object(Json.object(playerRoot, "player"), "achievements"),
             "skyblock_treasure_hunter", -1.0);
     }
 
     private static ProfileData parseProfile(JsonObject profileObject, JsonObject member) {
-        JsonObject dungeons = objectMember(member, "dungeons");
-        JsonObject dungeonTypes = objectMember(dungeons, "dungeon_types");
-        JsonObject catacombs = objectMember(dungeonTypes, "catacombs");
-        JsonObject playerClasses = objectMember(dungeons, "player_classes");
+        JsonObject dungeons = Json.object(member, "dungeons");
+        JsonObject dungeonTypes = Json.object(dungeons, "dungeon_types");
+        JsonObject catacombs = Json.object(dungeonTypes, "catacombs");
+        JsonObject playerClasses = Json.object(dungeons, "player_classes");
         EnumMap<DungeonClass, Double> classXp = new EnumMap<>(DungeonClass.class);
         EnumMap<DungeonClass, Integer> classPerks = new EnumMap<>(DungeonClass.class);
         for (DungeonClass dungeonClass : DungeonClass.values()) {
-            JsonObject classObject = objectMember(playerClasses, classId(dungeonClass));
-            classXp.put(dungeonClass, number(classObject, "experience", 0.0));
+            JsonObject classObject = Json.object(playerClasses, classId(dungeonClass));
+            classXp.put(dungeonClass, Json.number(classObject, "experience", 0.0));
             classPerks.put(dungeonClass, classPerk(member, dungeonClass));
         }
         return new ProfileData(
-            string(profileObject, "profile_id", ""),
-            string(profileObject, "cute_name", "Profile"),
-            bool(profileObject, "selected"),
-            number(catacombs, "experience", 0.0),
+            Json.string(profileObject, "profile_id", ""),
+            Json.string(profileObject, "cute_name", "Profile"),
+            Json.bool(profileObject, "selected", false),
+            Json.number(catacombs, "experience", 0.0),
             classXp,
             classPerks,
             parseDungeonStats(dungeons, member)
@@ -406,29 +392,29 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     private static CatacombsAverageCalculator.DungeonStats parseDungeonStats(JsonObject dungeons, JsonObject member) {
-        JsonObject types = objectMember(dungeons, "dungeon_types");
-        JsonObject daily = objectMember(dungeons, "daily_runs");
+        JsonObject types = Json.object(dungeons, "dungeon_types");
+        JsonObject daily = Json.object(dungeons, "daily_runs");
         long today = Math.floorDiv(System.currentTimeMillis(), 86_400_000L);
-        int dailyRuns = (long) number(daily, "current_day_stamp", -1) == today
-            ? (int) number(daily, "completed_runs_count", 0) : 0;
-        JsonObject journal = objectMember(dungeons, "dungeon_journal");
+        int dailyRuns = (long) Json.number(daily, "current_day_stamp", -1) == today
+            ? (int) Json.number(daily, "completed_runs_count", 0) : 0;
+        JsonObject journal = Json.object(dungeons, "dungeon_journal");
         JsonElement unlocked = journal == null ? null : journal.get("unlocked_journals");
         DungeonClass selectedClass = null;
-        String selectedId = string(dungeons, "selected_dungeon_class", "");
+        String selectedId = Json.string(dungeons, "selected_dungeon_class", "");
         for (DungeonClass value : DungeonClass.values()) {
             if (value.id().equals(selectedId)) selectedClass = value;
         }
         return new CatacombsAverageCalculator.DungeonStats(dungeons != null, selectedClass,
-            (long) number(dungeons, "secrets", -1), dailyRuns,
+            (long) Json.number(dungeons, "secrets", -1), dailyRuns,
             unlocked != null && unlocked.isJsonArray() ? unlocked.getAsJsonArray().size() : 0,
-            parseFloorStats(objectMember(types, "catacombs")),
-            parseFloorStats(objectMember(types, "master_catacombs")), explorerAttributeLevel(member));
+            parseFloorStats(Json.object(types, "catacombs")),
+            parseFloorStats(Json.object(types, "master_catacombs")), explorerAttributeLevel(member));
     }
 
     static int explorerAttributeLevel(JsonObject member) {
-        JsonObject stacks = objectMember(objectMember(member, "attributes"), "stacks");
+        JsonObject stacks = Json.object(Json.object(member, "attributes"), "stacks");
         if (stacks == null) return -1;
-        double syphoned = number(stacks, "catacombs_explorer", 0);
+        double syphoned = Json.number(stacks, "catacombs_explorer", 0);
         int level = 0;
         while (level < EXPLORER_SHARD_THRESHOLDS.length && syphoned >= EXPLORER_SHARD_THRESHOLDS[level]) level++;
         return level;
@@ -436,10 +422,10 @@ public final class HypixelSkyBlockProfileClient {
 
     private static CatacombsAverageCalculator.FloorStats parseFloorStats(JsonObject object) {
         return new CatacombsAverageCalculator.FloorStats(
-            intMap(objectMember(object, "best_score")),
-            intMap(objectMember(object, "milestone_completions")),
-            intMap(objectMember(object, "fastest_time_s_plus")),
-            intMap(objectMember(object, "fastest_time_s")));
+            intMap(Json.object(object, "best_score")),
+            intMap(Json.object(object, "milestone_completions")),
+            intMap(Json.object(object, "fastest_time_s_plus")),
+            intMap(Json.object(object, "fastest_time_s")));
     }
 
     private static Map<String, Integer> intMap(JsonObject object) {
@@ -459,8 +445,8 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     private static int classPerk(JsonObject member, DungeonClass dungeonClass) {
-        JsonObject perks = objectMember(objectMember(member, "player_data"), "perks");
-        return (int) Math.round(number(perks, classPerkId(dungeonClass), 0.0));
+        JsonObject perks = Json.object(Json.object(member, "player_data"), "perks");
+        return (int) Math.round(Json.number(perks, classPerkId(dungeonClass), 0.0));
     }
 
     private static String classPerkId(DungeonClass dungeonClass) {
@@ -495,11 +481,8 @@ public final class HypixelSkyBlockProfileClient {
             return CompletableFuture.completedFuture(report("no player to test with"));
         }
 
-        HttpRequest request = HttpRequest.newBuilder(URI.create(HYPIXEL_PROFILES_API + "?uuid=" + uuid))
-            .timeout(Duration.ofSeconds(8))
-            .header("Accept", "application/json")
+        HttpRequest request = KungHttp.json(URI.create(HYPIXEL_PROFILES_API + "?uuid=" + uuid), 8, "Kung-HypixelProfile")
             .header("API-Key", key)
-            .header("User-Agent", "Kung-HypixelProfile")
             .GET()
             .build();
         return httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
@@ -517,45 +500,8 @@ public final class HypixelSkyBlockProfileClient {
         return message;
     }
 
-    private static JsonObject objectMember(JsonObject object, String name) {
-        if (object == null || !object.has(name) || !object.get(name).isJsonObject()) {
-            return null;
-        }
-        return object.getAsJsonObject(name);
-    }
-
-    private static String string(JsonObject object, String name, String fallback) {
-        if (object == null || !object.has(name) || object.get(name).isJsonNull()) {
-            return fallback;
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
-    }
-
-    private static double number(JsonObject object, String name, double fallback) {
-        if (object == null || !object.has(name) || object.get(name).isJsonNull()) {
-            return fallback;
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsDouble() : fallback;
-    }
-
-    private static boolean bool(JsonObject object, String name) {
-        if (object == null || !object.has(name) || object.get(name).isJsonNull()) {
-            return false;
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonPrimitive() && value.getAsBoolean();
-    }
-
-    private static boolean validUsername(String value) {
-        return value != null && value.matches("[A-Za-z0-9_]{3,16}");
-    }
-
     private static String shortError(Throwable throwable) {
-        Throwable cause = throwable.getCause() != null ? throwable.getCause() : throwable;
-        String message = cause.getMessage();
-        return message == null || message.isBlank() ? cause.getClass().getSimpleName() : message;
+        return KungErrors.brief(throwable.getCause() != null ? throwable.getCause() : throwable);
     }
 
     /** A profile's name and its Sack amounts by item id (sorted); {@code source}: where the lookup went; {@code note}: why there are none. */

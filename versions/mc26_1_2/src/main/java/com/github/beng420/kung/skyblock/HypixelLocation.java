@@ -23,6 +23,8 @@ public record HypixelLocation(Kind kind, String name) {
     private static final Pattern BRACKETED = Pattern.compile("\\[[^\\]]+]");
     private static final Pattern RANK_DOT = Pattern.compile("[\\u25cf\\u25cb]");
     private static final Pattern NOT_NAME_TEXT = Pattern.compile("[^A-Za-z0-9_ ]");
+    /** A Minecraft name inside a longer text. */
+    public static final Pattern PLAYER_NAME = Pattern.compile("\\b[A-Za-z0-9_]{3,16}\\b");
 
     public static HypixelLocation parse(List<String> lines) {
         HypixelLocation result = UNKNOWN;
@@ -60,6 +62,15 @@ public record HypixelLocation(Kind kind, String name) {
             if (matcher.find()) return matcher.group().toLowerCase(Locale.ROOT);
         }
         return "";
+    }
+
+    public static boolean isPlayerName(String name) {
+        return name != null && PLAYER_NAME.matcher(name).matches();
+    }
+
+    /** The name as typed, trimmed; "" for null. */
+    public static String trimmedName(String name) {
+        return name == null ? "" : name.trim();
     }
 
     public static String clean(String text) {

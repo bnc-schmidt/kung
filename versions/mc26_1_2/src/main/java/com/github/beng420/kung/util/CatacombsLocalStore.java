@@ -2,6 +2,7 @@ package com.github.beng420.kung.util;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.runtime.KungPaths;
+import com.github.beng420.kung.util.AtomicFiles;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.PlayerData;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.ProfileData;
@@ -9,10 +10,8 @@ import com.github.beng420.kung.util.HypixelSkyBlockProfileClient.ProfileResult;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -159,14 +158,7 @@ public final class CatacombsLocalStore {
             return;
         }
         try {
-            Files.createDirectories(file.getParent());
-            Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-            Files.writeString(temporary, JSON.toJson(new Document(players)), StandardCharsets.UTF_8);
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException ignored) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.write(file, JSON.toJson(new Document(players)));
         } catch (IOException | RuntimeException exception) {
             KungMod.LOGGER.warn("Could not save Kung's CA data cache.", exception);
         }

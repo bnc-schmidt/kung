@@ -2,16 +2,15 @@ package com.github.beng420.kung.feature.waypoints;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.runtime.KungPaths;
+import com.github.beng420.kung.util.AtomicFiles;
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -110,15 +109,8 @@ public final class WaypointStore {
         JsonObject root = new JsonObject();
         root.addProperty("version", FORMAT_VERSION);
         root.add("groups", WaypointCodec.writeGroups(groups));
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
         try {
-            Files.createDirectories(file.getParent());
-            Files.writeString(temporary, GSON.toJson(root), StandardCharsets.UTF_8);
-            try {
-                Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-            } catch (AtomicMoveNotSupportedException exception) {
-                Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-            }
+            AtomicFiles.write(file, GSON.toJson(root));
             saveError = "";
             return true;
         } catch (IOException | RuntimeException exception) {

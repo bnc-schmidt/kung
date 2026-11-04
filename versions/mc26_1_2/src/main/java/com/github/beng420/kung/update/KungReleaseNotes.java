@@ -1,6 +1,8 @@
 package com.github.beng420.kung.update;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.util.AtomicFiles;
+import com.github.beng420.kung.util.Json;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import java.io.IOException;
@@ -11,10 +13,8 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.time.Duration;
 import java.util.Optional;
 import java.util.Properties;
@@ -61,8 +61,6 @@ public final class KungReleaseNotes {
     public URI releasePage() { return URI.create(RELEASE_PAGE + encoded("v" + version)); }
 
     /** Called once per settings screen; manual opening bypasses a previous display or explicit dismissal. */
-    public boolean openMenu() { return openMenu(false); }
-
     public synchronized boolean openMenu(boolean force) {
         // A dev build (version 0.6.3-dev) has no release, hence no notes: never offer them on their own.
         if (!force && version.endsWith("-dev")) return false;
@@ -147,11 +145,7 @@ public final class KungReleaseNotes {
         try (var output = Files.newOutputStream(temporary)) {
             properties.store(output, "Kung displayed release notes");
         }
-        try {
-            Files.move(temporary, path, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException exception) {
-            Files.move(temporary, path, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.replace(temporary, path);
     }
 
     static Optional<Notes> fetch(HttpClient client, String version, URI tagEndpoint) throws IOException, InterruptedException {
@@ -168,7 +162,7 @@ public final class KungReleaseNotes {
         if (response.statusCode() == 404) return Optional.empty();
         // Historical entries use the exact selected tag, including its prefix and prerelease suffix.
         JsonObject object = JsonParser.parseString(response.body()).getAsJsonObject();
-        return tag.equals(string(object, "tag_name")) ? parse(response.body(), normalizedVersion(tag)) : Optional.empty();
+        return tag.equals(Json.string(object, "tag_name", "")) ? parse(response.body(), normalizedVersion(tag)) : Optional.empty();
     }
 
     static HttpResponse<String> requestJson(HttpClient client, URI endpoint) throws IOException, InterruptedException {
@@ -190,17 +184,13 @@ public final class KungReleaseNotes {
 
     static Optional<Notes> parse(String json, String installedVersion) {
         JsonObject object = JsonParser.parseString(json).getAsJsonObject();
-        String tag = string(object, "tag_name");
-        String body = string(object, "body");
+        String tag = Json.string(object, "tag_name", "");
+        String body = Json.string(object, "body", "");
         if (!normalizedVersion(tag).equals(normalizedVersion(installedVersion)) || body.isBlank()
-            || (object.has("draft") && object.get("draft").getAsBoolean())) return Optional.empty();
+            || Json.bool(object, "draft", false)) return Optional.empty();
         // Build the source URL ourselves; arbitrary links or instructions in release prose are just text.
         return Optional.of(new Notes(normalizedVersion(installedVersion), body,
             URI.create(RELEASE_PAGE + encoded(tag))));
-    }
-
-    private static String string(JsonObject object, String key) {
-        return object.has(key) && object.get(key).isJsonPrimitive() ? object.get(key).getAsString() : "";
     }
 
     static String normalizedVersion(String version) {

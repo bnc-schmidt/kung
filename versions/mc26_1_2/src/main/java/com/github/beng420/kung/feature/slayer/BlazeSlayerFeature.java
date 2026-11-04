@@ -4,6 +4,7 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -14,7 +15,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.RenderStateDataKey;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -104,9 +104,7 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
     @Override
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> observeMessage(message.getString()));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message.getString()));
+        KungMessages.onText((message, overlay) -> observeMessage(message.getString()));
         LevelRenderEvents.END_EXTRACTION.register(this::extract);
         LevelRenderEvents.COLLECT_SUBMITS.register(this::capture);
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST,

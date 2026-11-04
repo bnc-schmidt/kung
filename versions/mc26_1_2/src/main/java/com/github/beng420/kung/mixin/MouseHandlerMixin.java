@@ -32,10 +32,7 @@ public abstract class MouseHandlerMixin {
             return;
         }
         // The Greenhouse hologram's toggle key may be a mouse button; it only observes, the click still goes on.
-        Minecraft client = Minecraft.getInstance();
-        if (action == InputConstants.PRESS && client.player != null && McCompat.screen(client) == null) {
-            GreenhouseHologramSettings.onMousePress(McInput.button(info));
-        }
+        if (GreenhouseHologramSettings.inWorldPress(action)) GreenhouseHologramSettings.onMousePress(McInput.button(info));
     }
 
     /** With the Peek Chat key held the wheel scrolls the chat, so it must not also move the hotbar. */

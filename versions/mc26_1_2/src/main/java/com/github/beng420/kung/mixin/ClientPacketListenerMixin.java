@@ -38,6 +38,7 @@ import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EntityEvent;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
@@ -64,11 +65,9 @@ public abstract class ClientPacketListenerMixin {
 
     @Inject(method = "handleAddEntity", at = @At("TAIL"))
     private void kung$onEntityAdded(ClientboundAddEntityPacket packet, CallbackInfo callbackInfo) {
-        var level = Minecraft.getInstance().level;
-        if (level != null) {
-            DungeonDebuffFeature.INSTANCE.observeSpawn(level.getEntity(packet.getId()));
-            M7DragonFeature.INSTANCE.observeSpawn(level.getEntity(packet.getId()));
-        }
+        Entity entity = kung$entity(packet.getId());
+        DungeonDebuffFeature.INSTANCE.observeSpawn(entity);
+        M7DragonFeature.INSTANCE.observeSpawn(entity);
     }
 
     @Inject(method = "handleSetEquipment", at = @At("TAIL"))
@@ -78,11 +77,9 @@ public abstract class ClientPacketListenerMixin {
 
     @Inject(method = "handleSetEntityData", at = @At("TAIL"))
     private void kung$onEntityData(ClientboundSetEntityDataPacket packet, CallbackInfo callbackInfo) {
-        var level = Minecraft.getInstance().level;
-        if (level != null) {
-            DungeonDebuffFeature.INSTANCE.observeData(level.getEntity(packet.id()));
-            M7DragonFeature.INSTANCE.observeData(level.getEntity(packet.id()));
-        }
+        Entity entity = kung$entity(packet.id());
+        DungeonDebuffFeature.INSTANCE.observeData(entity);
+        M7DragonFeature.INSTANCE.observeData(entity);
     }
 
     @Inject(method = "handleParticleEvent", at = @At("TAIL"))
@@ -95,19 +92,29 @@ public abstract class ClientPacketListenerMixin {
     @Inject(method = "handleContainerSetSlot", at = @At("TAIL"))
     private void kung$onContainerSlot(ClientboundContainerSetSlotPacket packet, CallbackInfo callbackInfo) {
         SuperpairsHelperFeature.observeSlotUpdate(packet.getContainerId(), packet.getSlot(), packet.getItem());
-        ExperimentSolverFeature.observeMenuPacket(packet.getContainerId());
-        BeaconSolverFeature.observeMenuPacket(packet.getContainerId());
-        if (!KungBuild.MODRINTH) AutoHarpFeature.observeMenuPacket(packet.getContainerId());
+        kung$observeMenu(packet.getContainerId());
         FeastOverlayFeature.observeSlotUpdate(packet.getContainerId(), packet.getSlot(), packet.getItem());
     }
 
     @Inject(method = "handleContainerContent", at = @At("TAIL"))
     private void kung$onContainerContent(ClientboundContainerSetContentPacket packet, CallbackInfo callbackInfo) {
         SuperpairsHelperFeature.observeContentUpdate(packet.containerId(), packet.items());
-        ExperimentSolverFeature.observeMenuPacket(packet.containerId());
-        BeaconSolverFeature.observeMenuPacket(packet.containerId());
-        if (!KungBuild.MODRINTH) AutoHarpFeature.observeMenuPacket(packet.containerId());
+        kung$observeMenu(packet.containerId());
         FeastOverlayFeature.observeContentUpdate(packet.containerId(), packet.items());
+    }
+
+    @Unique
+    private static void kung$observeMenu(int containerId) {
+        ExperimentSolverFeature.observeMenuPacket(containerId);
+        BeaconSolverFeature.observeMenuPacket(containerId);
+        if (!KungBuild.MODRINTH) AutoHarpFeature.observeMenuPacket(containerId);
+    }
+
+    /** The entity of this id in the current level, or null; the observers all treat null as "not a tracked entity". */
+    @Unique
+    private static Entity kung$entity(int id) {
+        var level = Minecraft.getInstance().level;
+        return level == null ? null : level.getEntity(id);
     }
 
     // TAIL runs after vanilla applies the packet on the client thread, never on Netty's read thread.

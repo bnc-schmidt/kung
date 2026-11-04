@@ -1,13 +1,12 @@
 package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.util.AtomicFiles;
 import com.google.gson.Gson;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -92,14 +91,7 @@ final class FeastStateStore {
                 }
             }
             try {
-                Files.createDirectories(file.getParent());
-                Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-                Files.writeString(temporary, data, StandardCharsets.UTF_8);
-                try {
-                    Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-                } catch (AtomicMoveNotSupportedException ignored) {
-                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-                }
+                AtomicFiles.write(file, data);
             } catch (IOException exception) {
                 KungMod.LOGGER.warn("Could not save Kung's Feast progress cache.", exception);
             }

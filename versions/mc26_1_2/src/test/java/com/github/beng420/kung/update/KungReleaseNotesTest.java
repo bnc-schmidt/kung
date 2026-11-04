@@ -31,26 +31,26 @@ public final class KungReleaseNotesTest {
             calls.incrementAndGet();
             return Optional.of(release(version));
         });
-        assertTrue(notes.openMenu());
-        assertTrue(notes.openMenu());
+        assertTrue(notes.openMenu(false));
+        assertTrue(notes.openMenu(false));
         assertEquals(1, worker.tasks.size());
         assertEquals(KungReleaseNotes.Status.LOADING, notes.snapshot().status());
         assertFalse(Files.exists(file));
         worker.drain();
         assertEquals(1, calls.get());
-        assertTrue(notes.openMenu()); // Fetching alone does not acknowledge or dismiss the offer.
+        assertTrue(notes.openMenu(false)); // Fetching alone does not acknowledge or dismiss the offer.
         assertEquals(0, worker.tasks.size());
         notes.acknowledge(release("0.3.2")); // A different or stale object was not the displayed result.
-        assertTrue(notes.openMenu());
+        assertTrue(notes.openMenu(false));
         notes.acknowledge(notes.snapshot().notes());
-        assertFalse(notes.openMenu());
+        assertFalse(notes.openMenu(false));
         worker.drain();
         assertTrue(Files.readString(file).contains("lastSeenVersion=0.3.2"));
 
         var same = controller("0.3.2", file, worker, version -> { fail("Seen version must not fetch"); return Optional.empty(); });
-        assertFalse(same.openMenu());
+        assertFalse(same.openMenu(false));
         var updated = controller("0.3.3", file, worker, version -> Optional.of(release(version)));
-        assertTrue(updated.openMenu());
+        assertTrue(updated.openMenu(false));
         worker.drain();
         assertEquals("0.3.3", updated.snapshot().notes().version());
     }
@@ -64,11 +64,11 @@ public final class KungReleaseNotesTest {
             case 2 -> Optional.empty();
             default -> Optional.of(release(version));
         });
-        notes.openMenu();
+        notes.openMenu(false);
         worker.drain();
         assertEquals(KungReleaseNotes.Status.FAILED, notes.snapshot().status());
         notes.acknowledge(null);
-        assertTrue(notes.openMenu());
+        assertTrue(notes.openMenu(false));
         worker.drain();
         assertEquals(KungReleaseNotes.Status.UNAVAILABLE, notes.snapshot().status());
         notes.retry();
@@ -80,7 +80,7 @@ public final class KungReleaseNotesTest {
     @Test public void aDevBuildNeverOpensTheNotesOnItsOwnButStillOnRequest() throws Exception {
         var worker = new Worker();
         var notes = controller("0.6.3-dev", receipt(), worker, version -> Optional.empty());
-        assertFalse(notes.openMenu());
+        assertFalse(notes.openMenu(false));
         assertEquals(0, worker.tasks.size());
         assertTrue(notes.openMenu(true)); // the Changelogs button
         assertEquals(1, worker.tasks.size());
@@ -90,7 +90,7 @@ public final class KungReleaseNotesTest {
         Path file = receipt();
         var worker = new Worker();
         var notes = controller("0.3.2", file, worker, version -> Optional.of(release(version)));
-        notes.openMenu();
+        notes.openMenu(false);
         worker.drain();
         notes.acknowledge(notes.snapshot().notes());
         assertFalse(Files.exists(file));
@@ -98,7 +98,7 @@ public final class KungReleaseNotesTest {
         assertTrue(Files.exists(file));
         worker.drain();
         assertFalse(Files.exists(file.resolveSibling("release-notes.properties.tmp")));
-        assertFalse(controller("0.3.2", file, worker, version -> Optional.empty()).openMenu());
+        assertFalse(controller("0.3.2", file, worker, version -> Optional.empty()).openMenu(false));
     }
 
     @Test public void malformedReceiptDoesNotHideNewNotesOrBreakTheMenu() throws Exception {
@@ -106,9 +106,9 @@ public final class KungReleaseNotesTest {
         Files.createDirectories(file.getParent());
         Files.writeString(file, "lastSeenVersion=\\uZZZZ");
         var notes = controller("0.3.2", file, Runnable::run, version -> Optional.of(release(version)));
-        assertTrue(notes.openMenu());
+        assertTrue(notes.openMenu(false));
         notes.acknowledge(notes.snapshot().notes());
-        assertFalse(notes.openMenu());
+        assertFalse(notes.openMenu(false));
     }
 
     @Test public void selectionIsExactIncludingPrereleasesAndNeverTrustsAReleaseProvidedUrl() {
@@ -169,7 +169,7 @@ public final class KungReleaseNotesTest {
         Path file = receipt();
         var worker = new Worker();
         var first = controller("0.3.2", file, worker, version -> Optional.of(release(version)));
-        first.openMenu();
+        first.openMenu(false);
         worker.drain();
         first.acknowledge(first.snapshot().notes());
         worker.drain();
@@ -179,7 +179,7 @@ public final class KungReleaseNotesTest {
             if (calls.incrementAndGet() == 1) throw new IOException("offline");
             return Optional.of(release(version));
         });
-        assertFalse(restarted.openMenu());
+        assertFalse(restarted.openMenu(false));
         assertEquals(0, worker.tasks.size());
         assertTrue(restarted.openMenu(true));
         worker.drain();
@@ -189,7 +189,7 @@ public final class KungReleaseNotesTest {
         assertEquals(KungReleaseNotes.Status.READY, restarted.snapshot().status());
         assertTrue(restarted.openMenu(true));
         assertEquals(0, worker.tasks.size());
-        assertFalse(restarted.openMenu());
+        assertFalse(restarted.openMenu(false));
         assertEquals(saved, Files.readString(file));
     }
 
@@ -197,24 +197,24 @@ public final class KungReleaseNotesTest {
         Path file = receipt();
         var worker = new Worker();
         var notes = controller("0.3.2", file, worker, version -> Optional.of(release(version)));
-        notes.openMenu();
+        notes.openMenu(false);
         assertTrue(new KungReleaseNotesPopup(notes).key(256));
-        assertFalse(notes.openMenu());
+        assertFalse(notes.openMenu(false));
         notes.flushAcknowledgement(); // Persist even if the network request still occupies the worker.
         String saved = Files.readString(file);
         assertTrue(saved.contains("lastDismissedVersion=0.3.2"));
         assertFalse(saved.contains("lastSeenVersion"));
         worker.drain();
-        assertFalse(notes.openMenu());
+        assertFalse(notes.openMenu(false));
         var restarted = controller("0.3.2", file, worker, version -> Optional.of(release(version)));
-        assertFalse(restarted.openMenu());
+        assertFalse(restarted.openMenu(false));
         assertTrue(restarted.openMenu(true));
         worker.drain();
         restarted.acknowledge(restarted.snapshot().notes());
         worker.drain();
         assertTrue(Files.readString(file).contains("lastSeenVersion=0.3.2"));
-        assertFalse(restarted.openMenu());
-        assertTrue(controller("0.3.3", file, worker, version -> Optional.empty()).openMenu());
+        assertFalse(restarted.openMenu(false));
+        assertTrue(controller("0.3.3", file, worker, version -> Optional.empty()).openMenu(false));
     }
 
     @Test public void dismissingMissingOrFailedNotesStopsAutomaticReopeningButAllowsManualRetry() throws Exception {
@@ -224,11 +224,11 @@ public final class KungReleaseNotesTest {
                 if (fail) throw new IOException("offline");
                 return Optional.empty();
             });
-            assertTrue(notes.openMenu());
+            assertTrue(notes.openMenu(false));
             assertTrue(new KungReleaseNotesPopup(notes).key(257));
-            assertFalse(notes.openMenu());
+            assertFalse(notes.openMenu(false));
             var restarted = controller("0.3.2", file, Runnable::run, version -> Optional.of(release(version)));
-            assertFalse(restarted.openMenu());
+            assertFalse(restarted.openMenu(false));
             assertTrue(restarted.openMenu(true));
             assertEquals(KungReleaseNotes.Status.READY, restarted.snapshot().status());
         }

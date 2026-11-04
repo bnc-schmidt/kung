@@ -1,6 +1,7 @@
 package com.github.beng420.kung.update;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.util.Json;
 import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.net.URI;
@@ -113,12 +114,10 @@ public final class KungReleaseHistory {
             if (entries.size() == PAGE_SIZE) break;
             if (!element.isJsonObject()) continue;
             var object = element.getAsJsonObject();
-            if (object.has("draft") && object.get("draft").getAsBoolean()) continue;
-            String tag = object.has("tag_name") && object.get("tag_name").isJsonPrimitive()
-                ? object.get("tag_name").getAsString() : "";
+            if (Json.bool(object, "draft", false)) continue;
+            String tag = Json.string(object, "tag_name", "");
             if (tag.isBlank() || !tags.add(tag)) continue;
-            String date = object.has("published_at") && object.get("published_at").isJsonPrimitive()
-                ? object.get("published_at").getAsString() : "";
+            String date = Json.string(object, "published_at", "");
             date = date.matches("\\d{4}-\\d{2}-\\d{2}T.*") ? date.substring(0, 10) : "";
             // GitHub includes bodies in its list response; retain only the small selection metadata.
             entries.add(new Release(tag, date));

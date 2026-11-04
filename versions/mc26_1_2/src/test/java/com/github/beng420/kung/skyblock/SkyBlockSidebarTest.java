@@ -94,7 +94,7 @@ public final class SkyBlockSidebarTest {
         pending.team("location", Set.of("location-owner"), true);
         HypixelInstanceState state = new HypixelInstanceState();
         List<String> initial = pending.poll(fixture.scoreboard);
-        state.observe(HypixelLocation.parse(initial), HypixelLocation.serverId(initial));
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(initial), HypixelLocation.serverId(initial));
         long epoch = state.epoch();
 
         // Exact trace regression: m61e temporarily reads as m61 during the boss HUD rewrite.
@@ -104,7 +104,7 @@ public final class SkyBlockSidebarTest {
         date.setPlayerSuffix(Component.literal("e"));
         pending.team("date", Set.of("date-owner"), true);
         List<String> completedBatch = pending.poll(fixture.scoreboard);
-        state.observe(HypixelLocation.parse(completedBatch), HypixelLocation.serverId(completedBatch));
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(completedBatch), HypixelLocation.serverId(completedBatch));
         assertTrue(state.catacombs());
         assertEquals(epoch, state.epoch());
         assertEquals("m61e", state.serverId());
@@ -121,7 +121,7 @@ public final class SkyBlockSidebarTest {
         }
         String confirmed = state.confirmedServerChange(transfer);
         assertEquals("m183q", confirmed);
-        state.observe(HypixelLocation.parse(transfer), confirmed);
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(transfer), confirmed);
         assertFalse(state.catacombs());
         assertEquals(epoch + 1, state.epoch());
         pending.reset();
@@ -138,7 +138,7 @@ public final class SkyBlockSidebarTest {
         pending.team("location", Set.of("location-owner"), true);
         HypixelInstanceState state = new HypixelInstanceState();
         List<String> initial = pending.poll(fixture.scoreboard);
-        state.observe(HypixelLocation.parse(initial), HypixelLocation.serverId(initial));
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(initial), HypixelLocation.serverId(initial));
         long epoch = state.epoch();
 
         // Trace regression: m96cq -> m96h -> m96cq within two client ticks after the Wither King's line.
@@ -154,7 +154,7 @@ public final class SkyBlockSidebarTest {
         pending.team("date", Set.of("date-owner"), true);
         List<String> restored = pending.poll(fixture.scoreboard);
         assertFalse(state.holdServerChange(HypixelLocation.serverId(restored)));
-        state.observe(HypixelLocation.parse(restored), HypixelLocation.serverId(restored));
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(restored), HypixelLocation.serverId(restored));
         for (int tick = 0; tick < 2 * HypixelInstanceState.SERVER_CHANGE_CONFIRM_TICKS; tick++) {
             assertEquals("", state.confirmedServerChange(restored));
         }
@@ -167,7 +167,7 @@ public final class SkyBlockSidebarTest {
     public void startingToHoldADifferentServerIdIsTracedOnce() {
         KungDebugRecorder.clear();
         HypixelInstanceState state = new HypixelInstanceState();
-        state.observe(HypixelLocation.parse(List.of("The Catacombs (M7)")), "m96cq");
+        state.observe(HypixelInstanceState.Source.SIDEBAR, HypixelLocation.parse(List.of("The Catacombs (M7)")), "m96cq");
         assertTrue(state.holdServerChange("m96h"));
         assertTrue(state.holdServerChange("m96h"));
 

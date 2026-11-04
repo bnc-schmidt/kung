@@ -5,7 +5,10 @@ import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.util.Json;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungErrors;
+import com.github.beng420.kung.util.KungHttp;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -17,7 +20,6 @@ import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
@@ -81,10 +83,7 @@ public final class DungeonRoomDataSyncClient {
         statusMessage = "Pulling...";
         CompletableFuture.runAsync(() -> {
             try {
-                HttpResponse<String> response = exchange(requestBuilder(endpoint("rooms"))
-                    .header("Accept", "application/json")
-                    .GET());
-                ensureSuccess(response, "Pull");
+                HttpResponse<String> response = get("rooms", "Pull");
                 DungeonKnownRoomCatalog.RemoteCacheResult result =
                     DungeonKnownRoomCatalog.updateRemoteCache(response.body());
                 statusMessage = "Pulled " + result.roomCount() + " rooms";
@@ -129,9 +128,9 @@ public final class DungeonRoomDataSyncClient {
         statusMessage = "Pushing...";
         CompletableFuture.runAsync(() -> {
             try {
-                PushResult result = pushRoomReport(roomReportJson);
+                String result = pushRoomReport(roomReportJson);
                 statusMessage = "Pushed";
-                send(client, KungMessages.Type.SUCCESS, "Push ok: " + result.message());
+                send(client, KungMessages.Type.SUCCESS, "Push ok: " + result);
             } catch (IOException | InterruptedException | RuntimeException exception) {
                 if (exception instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
@@ -143,13 +142,9 @@ public final class DungeonRoomDataSyncClient {
         });
     }
 
-    private PushResult pushRoomReport(String roomReportJson) throws IOException, InterruptedException {
-        HttpResponse<String> response = exchange(requestBuilder(endpoint("rooms/report"))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(roomReportJson)));
-        ensureSuccess(response, "Push");
-        return new PushResult(response.body().isBlank() ? "gesendet" : response.body());
+    private String pushRoomReport(String roomReportJson) throws IOException, InterruptedException {
+        HttpResponse<String> response = post("rooms/report", roomReportJson, "Push");
+        return response.body().isBlank() ? "gesendet" : response.body();
     }
 
     public void pingAsync(Minecraft client) {
@@ -167,11 +162,8 @@ public final class DungeonRoomDataSyncClient {
                     : "ping";
                 String query = "runs/live?runKey=ping&player="
                     + URLEncoder.encode(playerName, StandardCharsets.UTF_8);
-                HttpResponse<String> response = exchange(requestBuilder(endpoint(query))
-                    .header("Accept", "application/json")
-                    .GET());
+                HttpResponse<String> response = get(query, "Ping");
                 long durationMillis = Math.max(1L, (System.nanoTime() - startedAt) / 1_000_000L);
-                ensureSuccess(response, "Ping");
                 int liveClientCount = liveClientCount(response.body());
                 statusMessage = "Ping ok";
                 send(client, KungMessages.Type.SUCCESS, "Ping ok: HTTP "
@@ -189,7 +181,7 @@ public final class DungeonRoomDataSyncClient {
                 }
                 statusMessage = "Ping failed";
                 KungMod.LOGGER.warn("Failed to ping dungeon room sync server.", exception);
-                send(client, KungMessages.Type.ERROR, "Ping failed: " + shortError(exception) + ".");
+                send(client, KungMessages.Type.ERROR, "Ping failed: " + KungErrors.brief(exception) + ".");
             }
         });
     }
@@ -277,7 +269,7 @@ public final class DungeonRoomDataSyncClient {
                 KungDebugRecorder.event("room-sync", "live failed runKey="
                     + runKey
                     + " error="
-                    + shortError(exception));
+                    + KungErrors.brief(exception));
                 KungMod.LOGGER.warn("Failed to sync live dungeon rooms.", exception);
             } finally {
                 liveSyncInFlight = false;
@@ -349,11 +341,7 @@ public final class DungeonRoomDataSyncClient {
         }
         body.add("players", playerArray);
 
-        HttpResponse<String> response = exchange(requestBuilder(endpoint("runs/live/report"))
-            .header("Accept", "application/json")
-            .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(body.toString())));
-        ensureSuccess(response, "Live push");
+        post("runs/live/report", body.toString(), "Live push");
     }
 
     private LiveSyncSnapshot pullLiveSnapshot(
@@ -364,34 +352,36 @@ public final class DungeonRoomDataSyncClient {
             + URLEncoder.encode(runKey, StandardCharsets.UTF_8)
             + "&player="
             + URLEncoder.encode(playerName, StandardCharsets.UTF_8);
-        HttpResponse<String> response = exchange(requestBuilder(endpoint(query))
-            .header("Accept", "application/json")
-            .GET());
-        ensureSuccess(response, "Live pull");
+        HttpResponse<String> response = get(query, "Live pull");
         return parseLiveSnapshot(response.body());
     }
 
-    private static HttpRequest.Builder requestBuilder(URI uri) {
-        return HttpRequest.newBuilder(uri)
-            .timeout(Duration.ofSeconds(20))
-            .header("User-Agent", "Kung-RoomSync");
-    }
-
     /** Callers already run off the render thread, so waiting for sign-in and the reply is fine here. */
-    private static HttpResponse<String> exchange(HttpRequest.Builder request) throws IOException, InterruptedException {
+    private static HttpResponse<String> exchange(HttpRequest.Builder request, String operation)
+        throws IOException, InterruptedException {
+        HttpResponse<String> response;
         try {
-            return KungServerSession.INSTANCE.send(request).get();
+            response = KungServerSession.INSTANCE.send(request).get();
         } catch (ExecutionException exception) {
             // Sign-in failures carry their status as the message, e.g. "Not allowed on this server".
             Throwable cause = exception.getCause();
             throw cause instanceof IOException io ? io : new IOException(cause.getMessage(), cause);
         }
-    }
-
-    private static void ensureSuccess(HttpResponse<?> response, String operation) throws IOException {
-        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+        if (!KungHttp.isOk(response.statusCode())) {
             throw new IOException(operation + " returned HTTP " + response.statusCode());
         }
+        return response;
+    }
+
+    private static HttpResponse<String> get(String path, String operation) throws IOException, InterruptedException {
+        return exchange(KungHttp.json(endpoint(path), 20, "Kung-RoomSync").GET(), operation);
+    }
+
+    private static HttpResponse<String> post(String path, String body, String operation)
+        throws IOException, InterruptedException {
+        return exchange(KungHttp.json(endpoint(path), 20, "Kung-RoomSync")
+            .header("Content-Type", "application/json")
+            .POST(HttpRequest.BodyPublishers.ofString(body)), operation);
     }
 
     public static URI endpoint(String path) {
@@ -418,118 +408,68 @@ public final class DungeonRoomDataSyncClient {
 
     private static LiveSyncSnapshot parseLiveSnapshot(String body) {
         JsonObject root = JsonParser.parseString(body).getAsJsonObject();
-        JsonElement clientsElement = root.get("clients");
-        if (clientsElement == null || !clientsElement.isJsonArray()) {
-            return new LiveSyncSnapshot(List.of(), List.of(), List.of());
-        }
-
         List<LiveRoomReport> rooms = new ArrayList<>();
         List<LiveDoorReport> doors = new ArrayList<>();
         List<LivePlayerReport> players = new ArrayList<>();
-        for (JsonElement clientElement : clientsElement.getAsJsonArray()) {
-            if (clientElement == null || !clientElement.isJsonObject()) {
-                continue;
-            }
-            JsonObject clientObject = clientElement.getAsJsonObject();
-            String source = string(clientObject, "player", "remote");
-            long updatedAt = longValue(clientObject, "updatedAt", 0L);
-            JsonElement roomsElement = clientObject.get("rooms");
-            if (roomsElement == null || !roomsElement.isJsonArray()) {
-                continue;
-            }
-            for (JsonElement roomElement : roomsElement.getAsJsonArray()) {
-                if (roomElement == null || !roomElement.isJsonObject()) {
-                    continue;
-                }
-                JsonObject roomObject = roomElement.getAsJsonObject();
+        for (JsonObject client : objects(root, "clients")) {
+            String source = Json.string(client, "player", "remote");
+            long updatedAt = Json.longValue(client, "updatedAt", 0L);
+            for (JsonObject room : objects(client, "rooms")) {
                 rooms.add(new LiveRoomReport(
-                    intValue(roomObject, "roomGridX", -1),
-                    intValue(roomObject, "roomGridZ", -1),
-                    string(roomObject, "name", ""),
-                    roomType(string(roomObject, "type", RoomType.UNKNOWN.name())),
-                    intValue(roomObject, "secrets", 0),
-                    intValue(roomObject, "crypts", 0),
-                    intValue(roomObject, "roomSecretsFound", 0),
-                    intValue(roomObject, "roomSecretsMax", 0),
-                    booleanValue(roomObject, "visited"),
-                    booleanValue(roomObject, "cleared"),
-                    booleanValue(roomObject, "completed"),
+                    Json.intValue(room, "roomGridX", -1),
+                    Json.intValue(room, "roomGridZ", -1),
+                    Json.string(room, "name", ""),
+                    roomType(Json.string(room, "type", RoomType.UNKNOWN.name())),
+                    Json.intValue(room, "secrets", 0),
+                    Json.intValue(room, "crypts", 0),
+                    Json.intValue(room, "roomSecretsFound", 0),
+                    Json.intValue(room, "roomSecretsMax", 0),
+                    Json.bool(room, "visited", false),
+                    Json.bool(room, "cleared", false),
+                    Json.bool(room, "completed", false),
                     source,
                     updatedAt
                 ));
             }
-
-            JsonElement doorsElement = clientObject.get("doors");
-            if (doorsElement != null && doorsElement.isJsonArray()) {
-                for (JsonElement doorElement : doorsElement.getAsJsonArray()) {
-                    if (doorElement == null || !doorElement.isJsonObject()) {
-                        continue;
-                    }
-                    JsonObject doorObject = doorElement.getAsJsonObject();
-                    doors.add(new LiveDoorReport(
-                        intValue(doorObject, "scanGridX", -1),
-                        intValue(doorObject, "scanGridZ", -1),
-                        doorKind(string(doorObject, "kind", DungeonDoorKind.NONE.name())),
-                        roomType(string(doorObject, "targetType", RoomType.UNKNOWN.name())),
-                        booleanValue(doorObject, "targetVisited"),
-                        source,
-                        updatedAt
-                    ));
-                }
+            for (JsonObject door : objects(client, "doors")) {
+                doors.add(new LiveDoorReport(
+                    Json.intValue(door, "scanGridX", -1),
+                    Json.intValue(door, "scanGridZ", -1),
+                    doorKind(Json.string(door, "kind", DungeonDoorKind.NONE.name())),
+                    roomType(Json.string(door, "targetType", RoomType.UNKNOWN.name())),
+                    Json.bool(door, "targetVisited", false),
+                    source,
+                    updatedAt
+                ));
             }
-
-            JsonElement playersElement = clientObject.get("players");
-            if (playersElement == null || !playersElement.isJsonArray()) {
-                continue;
-            }
-            for (JsonElement playerElement : playersElement.getAsJsonArray()) {
-                if (playerElement == null || !playerElement.isJsonObject()) {
-                    continue;
-                }
-                JsonObject playerObject = playerElement.getAsJsonObject();
+            for (JsonObject player : objects(client, "players")) {
                 players.add(new LivePlayerReport(
-                    string(playerObject, "name", ""),
-                    intValue(playerObject, "secretsFound", -1),
-                    intValue(playerObject, "deaths", -1),
+                    Json.string(player, "name", ""),
+                    Json.intValue(player, "secretsFound", -1),
+                    Json.intValue(player, "deaths", -1),
                     source,
                     updatedAt,
-                    string(playerObject, "secretsSource", "")
+                    Json.string(player, "secretsSource", "")
                 ));
             }
         }
         return new LiveSyncSnapshot(List.copyOf(rooms), List.copyOf(doors), List.copyOf(players));
     }
 
+    /** The object elements of an array member; no array, or an element that is no object, gives nothing. */
+    private static List<JsonObject> objects(JsonObject parent, String name) {
+        JsonElement array = parent.get(name);
+        List<JsonObject> objects = new ArrayList<>();
+        if (array != null && array.isJsonArray()) {
+            for (JsonElement element : array.getAsJsonArray()) {
+                if (element != null && element.isJsonObject()) objects.add(element.getAsJsonObject());
+            }
+        }
+        return objects;
+    }
+
     private static void send(Minecraft client, KungMessages.Type type, String message) {
         KungMessages.send(client, type, "Server Sync", message);
-    }
-
-    private static String string(JsonObject object, String name, String fallback) {
-        JsonElement value = object == null ? null : object.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : fallback;
-    }
-
-    private static int intValue(JsonObject object, String name, int fallback) {
-        JsonElement value = object == null ? null : object.get(name);
-        try {
-            return value != null && value.isJsonPrimitive() ? value.getAsInt() : fallback;
-        } catch (NumberFormatException | IllegalStateException exception) {
-            return fallback;
-        }
-    }
-
-    private static long longValue(JsonObject object, String name, long fallback) {
-        JsonElement value = object == null ? null : object.get(name);
-        try {
-            return value != null && value.isJsonPrimitive() ? value.getAsLong() : fallback;
-        } catch (NumberFormatException | IllegalStateException exception) {
-            return fallback;
-        }
-    }
-
-    private static boolean booleanValue(JsonObject object, String name) {
-        JsonElement value = object == null ? null : object.get(name);
-        return value != null && value.isJsonPrimitive() && value.getAsBoolean();
     }
 
     private static RoomType roomType(String value) {
@@ -546,14 +486,6 @@ public final class DungeonRoomDataSyncClient {
         } catch (IllegalArgumentException | NullPointerException exception) {
             return DungeonDoorKind.NONE;
         }
-    }
-
-    private static String shortError(Throwable throwable) {
-        String message = throwable.getMessage();
-        if (message == null || message.isBlank()) {
-            return throwable.getClass().getSimpleName();
-        }
-        return message.replace('\n', ' ').replace('\r', ' ');
     }
 
     public record LiveRoomReport(
@@ -607,8 +539,5 @@ public final class DungeonRoomDataSyncClient {
         List<LiveDoorReport> doors,
         List<LivePlayerReport> players
     ) {
-    }
-
-    private record PushResult(String message) {
     }
 }

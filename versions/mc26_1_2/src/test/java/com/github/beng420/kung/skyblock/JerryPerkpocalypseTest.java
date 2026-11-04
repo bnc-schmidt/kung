@@ -107,14 +107,6 @@ public class JerryPerkpocalypseTest {
     }
 
     @Test
-    public void durationsReadLikeTheMenusCountdown() {
-        assertEquals("4h 23m", JerryPerkpocalypse.duration(4 * HOUR + 23 * 60_000L + 59_000L));
-        assertEquals("59m", JerryPerkpocalypse.duration(59 * 60_000L));
-        assertEquals("<1m", JerryPerkpocalypse.duration(30_000L));
-        assertEquals("<1m", JerryPerkpocalypse.duration(-5L));
-    }
-
-    @Test
     public void theServerAnswerRoundTrips() {
         Schedule schedule = Schedule.fromJson(JsonParser.parseString("""
             {"year":520,"anchor":%d,"positions":["Diana",null,"Paul",null,null,"Cole"]}

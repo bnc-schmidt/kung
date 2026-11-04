@@ -25,10 +25,6 @@ public final class HypixelInstanceState {
         tabLocation = HypixelLocation.UNKNOWN;
     }
 
-    public void observe(HypixelLocation next, String server) {
-        observe(Source.SIDEBAR, next, server);
-    }
-
     /** Returns true when a changed server row invalidated the other cached rows. */
     public boolean observe(Source source, HypixelLocation next, String server) {
         if (!server.isBlank() && !serverId.isBlank() && !serverId.equals(server)) {

@@ -31,7 +31,7 @@ public final class BowDrawProgressTest {
         assertFalse(draw.active());
         draw.start();
         for (int id : new int[] {-1, -1, 0, -2, -2, -3}) {
-            if (sequence.accept(id)) draw.serverTick();
+            if (sequence.accept(id, false)) draw.serverTick();
         }
         if (sequence.accept(-4, true)) draw.serverTick();
         assertEquals(3, draw.ticks());

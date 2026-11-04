@@ -27,7 +27,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -151,12 +150,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     @Override
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
-            observeMessage(Minecraft.getInstance(), message.getString())
-        );
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(Minecraft.getInstance(), message.getString())
-        );
+        KungMessages.onText((message, overlay) -> observeMessage(Minecraft.getInstance(), message.getString()));
         // Before water, like vanilla's block outline: water writes depth, so boxes and grid drawn after it vanish
         // behind its surface. The grid is nearly opaque, so its own depth barely shows against water behind it.
         LevelRenderEvents.BEFORE_TRANSLUCENT_TERRAIN.register(this::render);

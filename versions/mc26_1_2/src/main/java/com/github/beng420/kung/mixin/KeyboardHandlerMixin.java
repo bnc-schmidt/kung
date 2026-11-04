@@ -1,10 +1,7 @@
 package com.github.beng420.kung.mixin;
 
-import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.feature.garden.GreenhouseHologramSettings;
-import com.mojang.blaze3d.platform.InputConstants;
 import net.minecraft.client.KeyboardHandler;
-import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.KeyEvent;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
@@ -20,9 +17,6 @@ public abstract class KeyboardHandlerMixin {
      */
     @Inject(method = "keyPress", at = @At("HEAD"))
     private void kung$observeKeyPress(long window, int action, KeyEvent event, CallbackInfo callbackInfo) {
-        Minecraft client = Minecraft.getInstance();
-        if (action == InputConstants.PRESS && client.player != null && McCompat.screen(client) == null) {
-            GreenhouseHologramSettings.onKeyPress(event);
-        }
+        if (GreenhouseHologramSettings.inWorldPress(action)) GreenhouseHologramSettings.onKeyPress(event);
     }
 }

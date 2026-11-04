@@ -1,13 +1,13 @@
 package com.github.beng420.kung.util;
 
 import com.github.beng420.kung.feature.garden.FeastContext;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 
 /** Books the XP lines of every run into the local store and remembers the last run's class XP. */
 public final class CatacombsRecentXpTracker {
@@ -53,9 +53,7 @@ public final class CatacombsRecentXpTracker {
             return;
         }
         initialized = true;
-        ClientReceiveMessageEvents.GAME.register((message, overlay) -> observeMessage(message.getString()));
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(message.getString()));
+        KungMessages.onText((message, overlay) -> observeMessage(message.getString()));
     }
 
     synchronized void observeMessage(String rawMessage) {

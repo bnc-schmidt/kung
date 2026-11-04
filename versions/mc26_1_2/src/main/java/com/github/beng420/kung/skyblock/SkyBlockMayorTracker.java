@@ -2,7 +2,9 @@ package com.github.beng420.kung.skyblock;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.config.KungConfig;
+import com.github.beng420.kung.util.Json;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.KungHttp;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
@@ -10,8 +12,9 @@ import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
-import java.time.Duration;
+import java.util.List;
 import java.util.Locale;
+import java.util.function.Predicate;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 
@@ -23,10 +26,12 @@ public final class SkyBlockMayorTracker {
     private static final long SUCCESS_REFRESH_INTERVAL_MILLIS = 30L * 60L * 1000L;
     private static final long FAILED_REFRESH_INTERVAL_MILLIS = 2L * 60L * 1000L;
     private static final long FEAST_REFRESH_INTERVAL_MILLIS = 60_000L;
+    // Aura wins over Derpy when mayor and minister carry one each.
+    private static final List<MayorXpBoost> XP_BOOSTS = List.of(
+        new MayorXpBoost("aura", 1.59, "Aura (+59%)"), new MayorXpBoost("derpy", 1.5, "Derpy (+50%)"));
+    private static final MayorXpBoost NO_XP_BOOST = new MayorXpBoost("", 1.0, "None");
 
-    private final HttpClient httpClient = HttpClient.newBuilder()
-        .connectTimeout(Duration.ofSeconds(5))
-        .build();
+    private final HttpClient httpClient = KungHttp.api();
     private volatile boolean requestInFlight;
     private volatile boolean paulScoreBonusActive;
     private volatile boolean jerryInOffice;
@@ -122,12 +127,7 @@ public final class SkyBlockMayorTracker {
         requestInFlight = true;
         lastAttemptMillis = nowMillis;
         nextRefreshAfterMillis = nowMillis + FAILED_REFRESH_INTERVAL_MILLIS;
-        HttpRequest request = HttpRequest.newBuilder(ELECTION_URI)
-            .timeout(Duration.ofSeconds(10))
-            .header("Accept", "application/json")
-            .header("User-Agent", "Kung-MayorTracker")
-            .GET()
-            .build();
+        HttpRequest request = KungHttp.json(ELECTION_URI, 10, "Kung-MayorTracker").GET().build();
         httpClient.sendAsync(request, HttpResponse.BodyHandlers.ofString())
             .whenComplete((response, throwable) -> {
                 try {
@@ -135,7 +135,7 @@ public final class SkyBlockMayorTracker {
                         markError(throwable);
                         return;
                     }
-                    if (response.statusCode() < 200 || response.statusCode() >= 300) {
+                    if (!KungHttp.isOk(response.statusCode())) {
                         markError(new IllegalStateException("HTTP " + response.statusCode()));
                         return;
                     }
@@ -152,14 +152,14 @@ public final class SkyBlockMayorTracker {
     private void applyResponse(String body) {
         JsonElement rootElement = JsonParser.parseString(body);
         JsonObject root = rootElement != null && rootElement.isJsonObject() ? rootElement.getAsJsonObject() : null;
-        if (root == null || !booleanMember(root, "success")) {
+        if (root == null || !Json.bool(root, "success", false)) {
             throw new IllegalStateException("invalid response");
         }
 
-        JsonObject mayor = objectMember(root, "mayor");
-        String parsedMayorName = stringMember(mayor, "name");
-        JsonObject minister = objectMember(mayor, "minister");
-        String parsedMinisterName = stringMember(minister, "name");
+        JsonObject mayor = Json.object(root, "mayor");
+        String parsedMayorName = Json.string(mayor, "name", "");
+        JsonObject minister = Json.object(mayor, "minister");
+        String parsedMinisterName = Json.string(minister, "name", "");
         boolean active = parsePaulScoreActive(mayor);
         MayorXpBoost xpBoost = mayorXpBoost(parsedMayorName, parsedMinisterName);
         feastStatus = parseFeastStatus(mayor, System.currentTimeMillis());
@@ -196,85 +196,38 @@ public final class SkyBlockMayorTracker {
     }
 
     private static MayorXpBoost mayorXpBoost(String mayor, String minister) {
-        if (isAura(mayor) || isAura(minister)) {
-            return new MayorXpBoost(1.59, "Aura (+59%)");
-        }
-        if (isDerpy(mayor) || isDerpy(minister)) {
-            return new MayorXpBoost(1.5, "Derpy (+50%)");
-        }
-        return new MayorXpBoost(1.0, "None");
+        String first = mayor.trim().toLowerCase(Locale.ROOT);
+        String second = minister.trim().toLowerCase(Locale.ROOT);
+        return XP_BOOSTS.stream().filter(boost -> boost.mayor().equals(first) || boost.mayor().equals(second))
+            .findFirst().orElse(NO_XP_BOOST);
     }
 
     static FeastStatus parseFeastStatus(JsonObject mayor, long nowMillis) {
         // Candidate history also contains Grand Feast: only the elected perks are active.
-        boolean active = false;
-        JsonElement perks = mayor == null ? null : mayor.get("perks");
-        if (perks != null && perks.isJsonArray()) {
-            for (JsonElement perk : perks.getAsJsonArray()) {
-                if (perk.isJsonObject() && isGrandFeastPerk(perk.getAsJsonObject())) active = true;
-            }
-        }
-        JsonObject minister = objectMember(mayor, "minister");
-        active |= isGrandFeastPerk(objectMember(minister, "perk"));
-        JsonObject election = objectMember(mayor, "election");
-        long year = -1;
-        try {
-            if (election != null && election.has("year")) year = election.get("year").getAsLong();
-        } catch (RuntimeException ignored) {
-            // Without a term identity, stale progress cannot safely cross an election.
-        }
+        boolean active = hasElectedPerk(mayor, "Grand Feast"::equals);
+        // Without a term identity, stale progress cannot safely cross an election.
+        long year = Json.longValue(Json.object(mayor, "election"), "year", -1);
         return new FeastStatus(active, year, nowMillis + 2 * FEAST_REFRESH_INTERVAL_MILLIS);
-    }
-
-    private static boolean isGrandFeastPerk(JsonObject perk) {
-        return "Grand Feast".equals(HypixelLocation.clean(stringMember(perk, "name")));
     }
 
     static boolean parsePaulScoreActive(JsonObject mayor) {
         // The +10 score is the elected EZPZ perk, not the name Paul or his candidate perks.
+        return hasElectedPerk(mayor, "EZPZ"::equalsIgnoreCase);
+    }
+
+    /** The mayor's elected perks and the minister's one: true when one name passes {@code test}. */
+    private static boolean hasElectedPerk(JsonObject mayor, Predicate<String> test) {
         JsonElement perks = mayor == null ? null : mayor.get("perks");
         if (perks != null && perks.isJsonArray()) {
             for (JsonElement perk : perks.getAsJsonArray()) {
-                if (perk.isJsonObject() && isEzpzPerk(perk.getAsJsonObject())) return true;
+                if (perk.isJsonObject() && test.test(perkName(perk.getAsJsonObject()))) return true;
             }
         }
-        return isEzpzPerk(objectMember(objectMember(mayor, "minister"), "perk"));
+        return test.test(perkName(Json.object(Json.object(mayor, "minister"), "perk")));
     }
 
-    private static boolean isEzpzPerk(JsonObject perk) {
-        return "EZPZ".equalsIgnoreCase(HypixelLocation.clean(stringMember(perk, "name")));
-    }
-
-    private static JsonObject objectMember(JsonObject object, String name) {
-        if (object == null || !object.has(name)) {
-            return null;
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonObject() ? value.getAsJsonObject() : null;
-    }
-
-    private static String stringMember(JsonObject object, String name) {
-        if (object == null || !object.has(name)) {
-            return "";
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonPrimitive() ? value.getAsString() : "";
-    }
-
-    private static boolean booleanMember(JsonObject object, String name) {
-        if (object == null || !object.has(name)) {
-            return false;
-        }
-        JsonElement value = object.get(name);
-        return value != null && value.isJsonPrimitive() && value.getAsBoolean();
-    }
-
-    private static boolean isDerpy(String name) {
-        return "derpy".equals(name.trim().toLowerCase(Locale.ROOT));
-    }
-
-    private static boolean isAura(String name) {
-        return "aura".equals(name.trim().toLowerCase(Locale.ROOT));
+    private static String perkName(JsonObject perk) {
+        return HypixelLocation.clean(Json.string(perk, "name", ""));
     }
 
     private static String shortError(Throwable throwable) {
@@ -291,6 +244,6 @@ public final class SkyBlockMayorTracker {
         return value == null || value.isBlank() ? "none" : value;
     }
 
-    private record MayorXpBoost(double multiplier, String label) {
+    private record MayorXpBoost(String mayor, double multiplier, String label) {
     }
 }

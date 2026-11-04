@@ -2,15 +2,14 @@ package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
 import com.github.beng420.kung.ui.UiNumberField;
+import com.github.beng420.kung.util.AtomicFiles;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -446,13 +445,6 @@ final class GreenhouseState {
 
     /** Writes a sibling file and moves it over the target, so a crash never leaves half a document. */
     void save(Path file) throws IOException {
-        Files.createDirectories(file.getParent());
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        Files.writeString(temporary, toJson(), StandardCharsets.UTF_8);
-        try {
-            Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.write(file, toJson());
     }
 }

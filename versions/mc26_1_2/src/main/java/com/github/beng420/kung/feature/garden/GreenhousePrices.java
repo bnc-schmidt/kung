@@ -2,6 +2,8 @@ package com.github.beng420.kung.feature.garden;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.runtime.KungPaths;
+import com.github.beng420.kung.util.AtomicFiles;
+import com.github.beng420.kung.util.KungHttp;
 import com.google.gson.Gson;
 import com.google.gson.stream.JsonReader;
 import com.google.gson.stream.JsonToken;
@@ -10,15 +12,11 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.StringReader;
 import java.net.URI;
-import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.AtomicMoveNotSupportedException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
-import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -323,15 +321,7 @@ final class GreenhousePrices {
 
     /** Writes a sibling file and moves it over the cache, so a crash never leaves half a document. */
     private static void write(Path file, Snapshot snapshot) throws IOException {
-        Files.createDirectories(file.getParent());
-        Path temporary = file.resolveSibling(file.getFileName() + ".tmp");
-        Files.writeString(temporary, JSON.toJson(new Saved(1, snapshot.fetchedAtMillis(), snapshot.prices())),
-            StandardCharsets.UTF_8);
-        try {
-            Files.move(temporary, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
-        } catch (AtomicMoveNotSupportedException unsupported) {
-            Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
-        }
+        AtomicFiles.write(file, JSON.toJson(new Saved(1, snapshot.fetchedAtMillis(), snapshot.prices())));
     }
 
     /** The answer text, gunzipped when the server compressed it (500 KB instead of 3.6 MB), capped in size. */
@@ -346,31 +336,20 @@ final class GreenhousePrices {
 
     /** Production fetcher: one GET with the repo's usual 5 s connect and 10 s request timeouts. */
     static final class HttpFetcher implements Fetcher {
-        /** Built on first use, which is on the worker thread: its TLS setup is a visible hitch on the client thread. */
-        private HttpClient client;
-
-        private synchronized HttpClient client() {
-            if (client == null) client = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(5)).build();
-            return client;
-        }
-
         @Override
         public String fetch() throws IOException {
-            HttpRequest request = HttpRequest.newBuilder(URI.create(ENDPOINT))
-                .timeout(Duration.ofSeconds(10))
-                .header("Accept", "application/json")
+            HttpRequest request = KungHttp.json(URI.create(ENDPOINT), 10, "Kung-GreenhousePrices")
                 .header("Accept-Encoding", "gzip")
-                .header("User-Agent", "Kung-GreenhousePrices")
                 .GET()
                 .build();
             HttpResponse<byte[]> response;
             try {
-                response = client().send(request, HttpResponse.BodyHandlers.ofByteArray());
+                response = KungHttp.api().send(request, HttpResponse.BodyHandlers.ofByteArray());
             } catch (InterruptedException interrupted) {
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted", interrupted);
             }
-            if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            if (!KungHttp.isOk(response.statusCode())) {
                 throw new IOException("Hypixel returned HTTP " + response.statusCode());
             }
             return decode(response.body(), response.headers().firstValue("Content-Encoding").orElse(""));

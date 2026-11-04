@@ -5,6 +5,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
@@ -20,7 +21,6 @@ import java.util.function.Predicate;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Camera;
@@ -95,12 +95,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     @Override
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
-        ClientReceiveMessageEvents.GAME.register((message, overlay) ->
-            observeMessage(Minecraft.getInstance(), message.getString())
-        );
-        ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
-            observeMessage(Minecraft.getInstance(), message.getString())
-        );
+        KungMessages.onText((message, overlay) -> observeMessage(Minecraft.getInstance(), message.getString()));
         HudElementRegistry.attachElementBefore(
             VanillaHudElements.PLAYER_LIST,
             WAYPOINT_HUD_ID,
