@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.io.ByteArrayInputStream;
 import java.util.ArrayList;
@@ -262,9 +263,6 @@ public final class StorageHudFeature extends ConfigurableFeature<MiscConfig> {
         decodedItems.clear();
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private void render(GuiGraphicsExtractor graphics) {
         var client = Minecraft.getInstance();
         var snapshot = held == null ? null : snapshots.get(held);
@@ -279,11 +277,8 @@ public final class StorageHudFeature extends ConfigurableFeature<MiscConfig> {
 
     private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, List<ItemStack> cells) {
         var font = Minecraft.getInstance().font;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.storageHudX(), config.storageHudY(), config.storageHudScale() / 100F);
         try {
-            graphics.pose().translate(config.storageHudX(), config.storageHudY());
-            float scale = config.storageHudScale() / 100F;
-            graphics.pose().scale(scale, scale);
             if (config.storageHudBackground()) graphics.fill(0, 0, width(), height(cells.size() / COLUMNS), 0x99111318);
             for (int index = 0; index < cells.size(); index++) {
                 ItemStack stack = cells.get(index);
@@ -294,7 +289,7 @@ public final class StorageHudFeature extends ConfigurableFeature<MiscConfig> {
                 graphics.itemDecorations(font, stack, x, y);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

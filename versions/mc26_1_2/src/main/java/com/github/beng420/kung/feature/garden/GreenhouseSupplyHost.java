@@ -11,7 +11,6 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.multiplayer.ServerData;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.NonNullList;
 import net.minecraft.network.chat.ClickEvent;
@@ -38,10 +37,7 @@ final class GreenhouseSupplyHost implements GreenhouseSupplyRunner.Host {
 
     @Override public long now() { return System.nanoTime() / 1_000_000L; }
 
-    @Override public boolean onHypixel() {
-        ServerData server = Minecraft.getInstance().getCurrentServer();
-        return server != null && HypixelLocation.isHypixelAddress(server.ip);
-    }
+    @Override public boolean onHypixel() { return HypixelLocation.onHypixel(Minecraft.getInstance()); }
 
     @Override public int required(String crop) {
         return GreenhouseHologram.grid().map(grid -> GreenhouseSupply.required(grid, crop)).orElse(0);

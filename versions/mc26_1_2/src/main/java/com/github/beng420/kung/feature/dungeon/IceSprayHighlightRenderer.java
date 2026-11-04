@@ -17,8 +17,6 @@ import net.minecraft.world.phys.Vec3;
 
 final class IceSprayHighlightRenderer {
     private static final RenderStateDataKey<List<AABB>> BOXES = RenderStateDataKey.create(() -> "kung:ice-spray");
-    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {0, 1, 5, 4},
-        {6, 7, 3, 2}, {1, 0, 2, 3}, {4, 5, 7, 6}};
     private static final int OUTLINE = 0xFF99DDFF;
     private static final int FILL = 0x3399DDFF; // 51 / 255 = 20% alpha per face.
     private static Set<Integer> lastExtractedTargets = Set.of();
@@ -74,17 +72,7 @@ final class IceSprayHighlightRenderer {
             if (boxes.isEmpty()) return;
             Vec3 camera = context.levelState().cameraRenderState.pos;
             McCompat.draw(context, RenderTypes.debugQuads(), (pose, fill) -> {
-                for (AABB box : boxes) {
-                    AABB relative = box.move(-camera.x, -camera.y, -camera.z);
-                    for (int[] face : FACES) {
-                        for (int vertex : face) {
-                            fill.addVertex(pose,
-                                (float) ((vertex & 1) == 0 ? relative.minX : relative.maxX),
-                                (float) ((vertex & 2) == 0 ? relative.minY : relative.maxY),
-                                (float) ((vertex & 4) == 0 ? relative.minZ : relative.maxZ)).setColor(FILL);
-                        }
-                    }
-                }
+                for (AABB box : boxes) LineBoxes.fill(fill, pose, box, camera.x, camera.y, camera.z, FILL);
             });
         });
     }

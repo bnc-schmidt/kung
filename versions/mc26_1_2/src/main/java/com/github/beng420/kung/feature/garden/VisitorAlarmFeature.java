@@ -7,6 +7,7 @@ import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
@@ -70,8 +71,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
             if (state.queue() != null || sound != null) onReset();
             return;
         }
-        var server = client.getCurrentServer();
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip) || client.getConnection() == null) {
+        if (!HypixelLocation.onHypixel(client) || client.getConnection() == null) {
             onReset();
             return;
         }
@@ -151,15 +151,15 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         var client = Minecraft.getInstance();
         if (client.player == null || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen)) return;
         var menu = screen.getMenu();
-        int topSlots = menu.slots.size() - 36;
+        int topSlots = MenuItems.topSlots(menu);
         if (menu != client.player.containerMenu || menu.containerId != containerId
             || topSlots <= 13 || topSlots > 54 || slotId < 0 || slotId >= topSlots) return;
-        var infoLore = menu.slots.get(13).getItem().get(DataComponents.LORE);
-        if (infoLore == null) return;
+        var info = menu.slots.get(13).getItem();
+        if (!info.has(DataComponents.LORE)) return;
         String title = screen.getTitle().getString();
         String action = menu.slots.get(slotId).getItem().getHoverName().getString();
         if (!VisitorOffer.isDecision(title, action,
-            infoLore.lines().stream().limit(40).map(line -> line.getString()).toList(), INSTANCE.state.queue().visitors())) return;
+            MenuItems.lore(info, 40), INSTANCE.state.queue().visitors())) return;
         INSTANCE.acknowledge(client, "offer-click title=" + title + " action=" + action);
     }
 
@@ -211,9 +211,6 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         polls = 0;
         profile.reset();
     }
-
-    @Override
-    protected void onShutdown() { onReset(); }
 
     private static long now() { return System.nanoTime() / 1_000_000; }
 }

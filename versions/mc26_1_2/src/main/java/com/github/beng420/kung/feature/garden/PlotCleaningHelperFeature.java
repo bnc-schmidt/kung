@@ -70,9 +70,6 @@ public final class PlotCleaningHelperFeature extends ConfigurableFeature<PlotCle
         update(Minecraft.getInstance(), null);
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private void tick(Minecraft client) {
         here = null;
         if (client.player != null && client.level != null && isEnabled() && GreenhouseLocator.inGarden()) {

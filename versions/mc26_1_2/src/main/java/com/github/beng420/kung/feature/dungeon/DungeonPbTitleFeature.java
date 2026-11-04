@@ -34,8 +34,7 @@ public final class DungeonPbTitleFeature extends ConfigurableFeature<SplitsConfi
 
     private void tick(Minecraft client) {
         if (client.player == null || seeding || attempts >= MAX_ATTEMPTS || !isEnabled() || config().floorRecordsSeeded()) return;
-        var server = client.getCurrentServer();
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip)) return;
+        if (!HypixelLocation.onHypixel(client)) return;
         long now = System.currentTimeMillis();
         if (nextAttemptMillis == 0L) nextAttemptMillis = now + FIRST_ATTEMPT_DELAY_MILLIS;
         if (now < nextAttemptMillis) return;

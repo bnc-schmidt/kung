@@ -11,6 +11,7 @@ import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.runtime.KungFileLayout;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.github.beng420.kung.util.ServerTpsTracker;
 import com.github.beng420.kung.util.LineBoxes;
@@ -86,9 +87,6 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
      * The spawn runs on server ticks, so it is counted in them; 2.3s to 2.6s of measurements at 20 TPS.
      */
     private static final long EGG_SAC_SPAWN_DELAY_TICKS = 49;
-    private static final int PREDICTION_RED = 0;
-    private static final int PREDICTION_GREEN = 255;
-    private static final int PREDICTION_BLUE = 210;
     private static final double PREDICTION_GRID_SPACING = 0.75;
     private static final double EGG_SAC_BOX_HALF_WIDTH = 0.35;
     private static final int EGG_SAC_BOX_COLOR = 0xFF00FFD2;
@@ -103,7 +101,7 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
     private static final double PREDICTION_GRID_HALF_SIZE = 0.17;
     private static final double PREDICTION_GRID_BLOCK_SCAN_ABOVE = 1.0;
     private static final int PREDICTION_GRID_MAX_LOWERED_STEPS = 6;
-    private static final int PREDICTION_GRID_ALPHA = 185;
+    private static final int PREDICTION_GRID_COLOR = 0xB900FFD2;
 
     private Entity activeBoss;
     private int activeBossId = -1;
@@ -359,14 +357,12 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
             ? String.format(Locale.ROOT, "Egg Sacs in %.1fs", remaining / 20.0)
             : String.format(Locale.ROOT, "Egg Sacs +%.1fs", -remaining / 20.0);
         int color = remaining > 20 ? 0xFF55FF55 : remaining > 0 ? 0xFFFFFF55 : 0xFFFF5555;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.eggSacCountdownX(), config.eggSacCountdownY(),
+            config.eggSacCountdownScale() / 100F);
         try {
-            graphics.pose().translate(config.eggSacCountdownX(), config.eggSacCountdownY());
-            float scale = config.eggSacCountdownScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.text(Minecraft.getInstance().font, text, 4, 4, color, true);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -1223,20 +1219,9 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
                 double x = center.x + gridX * PREDICTION_GRID_SPACING;
                 double z = center.z + gridZ * PREDICTION_GRID_SPACING;
                 double y = gridYFor(client, x, center.y, z);
-                drawBox(
-                    pose,
-                    vertices,
-                    x - PREDICTION_GRID_HALF_SIZE,
-                    y - halfY,
-                    z - PREDICTION_GRID_HALF_SIZE,
-                    x + PREDICTION_GRID_HALF_SIZE,
-                    y + halfY,
-                    z + PREDICTION_GRID_HALF_SIZE,
-                    PREDICTION_RED,
-                    PREDICTION_GREEN,
-                    PREDICTION_BLUE,
-                    PREDICTION_GRID_ALPHA
-                );
+                LineBoxes.fill(vertices, pose,
+                    x - PREDICTION_GRID_HALF_SIZE, y - halfY, z - PREDICTION_GRID_HALF_SIZE,
+                    x + PREDICTION_GRID_HALF_SIZE, y + halfY, z + PREDICTION_GRID_HALF_SIZE, PREDICTION_GRID_COLOR);
             }
         }
     }
@@ -1268,69 +1253,6 @@ public final class TarantulaHelperFeature extends ConfigurableFeature<SlayerConf
         }
 
         return false;
-    }
-
-    private void drawBox(
-        PoseStack.Pose pose,
-        VertexConsumer vertices,
-        double minX,
-        double minY,
-        double minZ,
-        double maxX,
-        double maxY,
-        double maxZ,
-        int red,
-        int green,
-        int blue,
-        int alpha
-    ) {
-        addQuad(pose, vertices, minX, minY, minZ, maxX, minY, minZ, maxX, maxY, minZ, minX, maxY, minZ, red, green, blue, alpha);
-        addQuad(pose, vertices, maxX, minY, maxZ, minX, minY, maxZ, minX, maxY, maxZ, maxX, maxY, maxZ, red, green, blue, alpha);
-        addQuad(pose, vertices, minX, minY, maxZ, minX, minY, minZ, minX, maxY, minZ, minX, maxY, maxZ, red, green, blue, alpha);
-        addQuad(pose, vertices, maxX, minY, minZ, maxX, minY, maxZ, maxX, maxY, maxZ, maxX, maxY, minZ, red, green, blue, alpha);
-        addQuad(pose, vertices, minX, maxY, minZ, maxX, maxY, minZ, maxX, maxY, maxZ, minX, maxY, maxZ, red, green, blue, alpha);
-        addQuad(pose, vertices, minX, minY, maxZ, maxX, minY, maxZ, maxX, minY, minZ, minX, minY, minZ, red, green, blue, alpha);
-    }
-
-    private void addQuad(
-        PoseStack.Pose pose,
-        VertexConsumer vertices,
-        double x1,
-        double y1,
-        double z1,
-        double x2,
-        double y2,
-        double z2,
-        double x3,
-        double y3,
-        double z3,
-        double x4,
-        double y4,
-        double z4,
-        int red,
-        int green,
-        int blue,
-        int alpha
-    ) {
-        addVertex(pose, vertices, x1, y1, z1, red, green, blue, alpha);
-        addVertex(pose, vertices, x2, y2, z2, red, green, blue, alpha);
-        addVertex(pose, vertices, x3, y3, z3, red, green, blue, alpha);
-        addVertex(pose, vertices, x4, y4, z4, red, green, blue, alpha);
-    }
-
-    private void addVertex(
-        PoseStack.Pose pose,
-        VertexConsumer vertices,
-        double x,
-        double y,
-        double z,
-        int red,
-        int green,
-        int blue,
-        int alpha
-    ) {
-        vertices.addVertex(pose, (float) x, (float) y, (float) z)
-            .setColor(red, green, blue, alpha);
     }
 
     private enum DebugMessage {

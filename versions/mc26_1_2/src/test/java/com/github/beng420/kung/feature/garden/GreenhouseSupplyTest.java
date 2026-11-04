@@ -383,8 +383,9 @@ public final class GreenhouseSupplyTest {
 
     @Test
     public void chatColourCodesAreStrippedBeforeMatching() {
-        assertEquals("Moved 5 Carrot", GreenhouseSupply.stripColors("§aMoved §e5 §aCarrot"));
-        assertEquals("", GreenhouseSupply.stripColors(null));
+        assertEquals("Carrot",
+            GreenhouseSupply.parseMoved("§aMoved §e5 §aCarrot from your Sacks to your inventory").orElseThrow().item());
+        assertTrue(GreenhouseSupply.parseMoved(null).isEmpty());
     }
 
     @Test

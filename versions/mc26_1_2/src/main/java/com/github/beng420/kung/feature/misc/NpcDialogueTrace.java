@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.misc;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.net.URI;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -171,7 +172,7 @@ public final class NpcDialogueTrace {
         }
         // Contents arrive after the open packet, so log whenever the non-filler set changes.
         StringJoiner slots = new StringJoiner(" | ", "[", "]");
-        for (int slot = 0; slot < LoadoutsAutoCloseFeature.topSlotCount(menu); slot++) {
+        for (int slot = 0; slot < MenuItems.topSlots(menu); slot++) {
             ItemStack stack = menu.slots.get(slot).getItem();
             if (!filler(stack)) slots.add(slot + "=" + LoadoutsAutoCloseFeature.itemDebug(stack));
         }

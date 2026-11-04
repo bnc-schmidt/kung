@@ -26,9 +26,6 @@ final class GreenhouseWorldRenderer {
     private static final RenderStateDataKey<List<Box>> BOXES = RenderStateDataKey.create(() -> "kung:greenhouse-hologram");
     private static final RenderStateDataKey<GreenhouseModels.Models> MODELS =
         RenderStateDataKey.create(() -> "kung:greenhouse-hologram-models");
-    /** Corner indices per face; bit 0 picks x, bit 1 picks y, bit 2 picks z. */
-    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {0, 1, 5, 4},
-        {6, 7, 3, 2}, {1, 0, 2, 3}, {4, 5, 7, 6}};
     /** Blocks from the camera to the centre of the grid beyond which nothing is drawn. */
     private static final double RANGE = 64.0;
 
@@ -83,15 +80,7 @@ final class GreenhouseWorldRenderer {
             McCompat.draw(context, RenderTypes.debugQuads(), (pose, fill) -> {
                 for (Box box : boxes) {
                     if (box.fill() >>> 24 == 0) continue;
-                    AABB relative = box.bounds().move(-camera.x, -camera.y, -camera.z);
-                    for (int[] face : FACES) {
-                        for (int corner : face) {
-                            fill.addVertex(pose,
-                                (float) ((corner & 1) == 0 ? relative.minX : relative.maxX),
-                                (float) ((corner & 2) == 0 ? relative.minY : relative.maxY),
-                                (float) ((corner & 4) == 0 ? relative.minZ : relative.maxZ)).setColor(box.fill());
-                        }
-                    }
+                    LineBoxes.fill(fill, pose, box.bounds(), camera.x, camera.y, camera.z, box.fill());
                 }
             });
         });

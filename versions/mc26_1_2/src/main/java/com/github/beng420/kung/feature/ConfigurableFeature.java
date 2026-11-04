@@ -26,7 +26,9 @@ public abstract class ConfigurableFeature<C> implements Feature {
     protected void onReset() {
     }
 
+    /** Runs once when the client stops; by default the same as {@link #onReset}. */
     protected void onShutdown() {
+        onReset();
     }
 
     @Override

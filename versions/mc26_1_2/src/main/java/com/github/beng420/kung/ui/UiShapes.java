@@ -6,6 +6,12 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 public final class UiShapes {
     private UiShapes() { }
 
+    /** A 2 px frame drawn inside a 16 px item slot. */
+    public static void slotFrame(GuiGraphicsExtractor graphics, int x, int y, int color) {
+        graphics.outline(x, y, 16, 16, color);
+        graphics.outline(x + 1, y + 1, 14, 14, color);
+    }
+
     public static void rounded(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int radius, int color) {
         rounded(graphics, x, y, width, height, radius, radius, color);
     }

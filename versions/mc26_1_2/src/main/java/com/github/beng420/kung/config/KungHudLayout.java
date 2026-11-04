@@ -32,32 +32,23 @@ public final class KungHudLayout {
         Objects.requireNonNull(config, "config");
         Objects.requireNonNull(tracker, "tracker");
         return List.of(
-            new Entry("dungeon_map", "Dungeon Map", () -> {
-                var bounds = DungeonMapFeature.overlayBounds(config.dungeon);
-                return new Bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height());
-            }, config.dungeon::x, config.dungeon::y, config.dungeon::setX, config.dungeon::setY,
+            new Entry("dungeon_map", "Dungeon Map", () -> DungeonMapFeature.overlayBounds(config.dungeon),
+                config.dungeon::x, config.dungeon::y, config.dungeon::setX, config.dungeon::setY,
                 config.dungeon::scale, config.dungeon::setScale, config.dungeon::enabled, config.dungeon::setEnabled),
-            new Entry("dungeon_splits", "Splits Overlay", () -> {
-                var bounds = DungeonSplitsOverlayFeature.overlayBounds(config.splits, tracker.splitTracker());
-                return new Bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height());
-            }, config.splits::x, config.splits::y, config.splits::setX, config.splits::setY,
+            new Entry("dungeon_splits", "Splits Overlay",
+                () -> DungeonSplitsOverlayFeature.overlayBounds(config.splits, tracker.splitTracker()),
+                config.splits::x, config.splits::y, config.splits::setX, config.splits::setY,
                 config.splits::scale, config.splits::setScale, config.splits::enabled, config.splits::setEnabled),
-            new Entry("superpairs", "Superpairs Helper", () -> {
-                var bounds = SuperpairsHelperFeature.overlayBounds(config.misc);
-                return new Bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height());
-            }, config.misc::superpairsHelperX, config.misc::superpairsHelperY,
+            new Entry("superpairs", "Superpairs Helper", () -> SuperpairsHelperFeature.overlayBounds(config.misc),
+                config.misc::superpairsHelperX, config.misc::superpairsHelperY,
                 config.misc::setSuperpairsHelperX, config.misc::setSuperpairsHelperY,
                 config.misc::superpairsHelperScale, config.misc::setSuperpairsHelperScale,
                 config.misc::superpairsHelperEnabled, config.misc::setSuperpairsHelperEnabled),
-            new Entry("feast_progress", "Feast Progress", () -> {
-                var bounds = FeastOverlayFeature.overlayBounds(config.feast);
-                return new Bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height());
-            }, config.feast::x, config.feast::y, config.feast::setX, config.feast::setY,
+            new Entry("feast_progress", "Feast Progress", () -> FeastOverlayFeature.overlayBounds(config.feast),
+                config.feast::x, config.feast::y, config.feast::setX, config.feast::setY,
                 config.feast::scale, config.feast::setScale, config.feast::enabled, config.feast::setEnabled),
-            new Entry("safari_uniques", "Safari Uniques", () -> {
-                var bounds = SafariOverlayFeature.overlayBounds(config.safari);
-                return new Bounds(bounds.x(), bounds.y(), bounds.width(), bounds.height());
-            }, config.safari::x, config.safari::y, config.safari::setX, config.safari::setY,
+            new Entry("safari_uniques", "Safari Uniques", () -> SafariOverlayFeature.overlayBounds(config.safari),
+                config.safari::x, config.safari::y, config.safari::setX, config.safari::setY,
                 config.safari::scale, config.safari::setScale, config.safari::enabled, config.safari::setEnabled),
             new Entry("dragon_debuff", "Dragon Debuff", () -> DragonDebuffHud.overlayBounds(config.dungeon),
                 config.dungeon::dragonDebuffX, config.dungeon::dragonDebuffY,

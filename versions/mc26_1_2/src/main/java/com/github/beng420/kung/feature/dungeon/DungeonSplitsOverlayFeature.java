@@ -4,8 +4,10 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungHudEditorScreen;
 import com.github.beng420.kung.config.KungHudEditorState;
+import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.SplitsConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.ui.HudPose;
 import java.util.List;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -62,10 +64,8 @@ public final class DungeonSplitsOverlayFeature extends ConfigurableFeature<Split
         List<DungeonSplitTracker.CompletedSplit> completed = tracker.completedSplits();
         var timings = tracker.currentTimings();
         float scale = config.scale() / 100.0F;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.x(), config.y(), scale);
         try {
-            graphics.pose().translate(config.x(), config.y());
-            graphics.pose().scale(scale, scale);
             int y = PADDING;
             for (int index = 0; index < names.length; index++) {
                 String name = names[index];
@@ -118,16 +118,16 @@ public final class DungeonSplitsOverlayFeature extends ConfigurableFeature<Split
                     y, loss < 0L ? MUTED : LOST_TIME, true);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
-    public static OverlayBounds overlayBounds(SplitsConfig config, DungeonSplitTracker tracker) {
+    public static KungHudLayout.Bounds overlayBounds(SplitsConfig config, DungeonSplitTracker tracker) {
         float scale = config.scale() / 100.0F;
         int summaryRows = 2 + (config.timeLost() ? 1 : 0) + (config.timePrediction() ? 1 : 0);
         int height = PADDING * 2 + (displayedNames(tracker).length + summaryRows) * ROW_HEIGHT + 2;
         int width = config.timeLost() ? WIDTH : WIDTH - LOSS_COLUMN_WIDTH;
-        return new OverlayBounds(config.x(), config.y(), Math.round(width * scale), Math.round(height * scale));
+        return new KungHudLayout.Bounds(config.x(), config.y(), Math.round(width * scale), Math.round(height * scale));
     }
 
     static boolean isVisible(boolean editing, boolean inDungeon, DungeonSplitTracker tracker) {
@@ -235,6 +235,4 @@ public final class DungeonSplitsOverlayFeature extends ConfigurableFeature<Split
             default -> 0xFFFF7777;
         };
     }
-
-    public record OverlayBounds(int x, int y, int width, int height) { }
 }

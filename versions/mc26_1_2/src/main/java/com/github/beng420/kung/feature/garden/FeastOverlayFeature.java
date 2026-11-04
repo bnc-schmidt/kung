@@ -4,6 +4,7 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungHudEditorScreen;
 import com.github.beng420.kung.config.KungHudEditorState;
+import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.FeastConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.runtime.KungPaths;
@@ -11,7 +12,9 @@ import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.SkyBlockMayorTracker;
 import com.github.beng420.kung.skyblock.SkyBlockSidebar;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -163,8 +166,7 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
             kernelRate.pause(now());
             return;
         }
-        var server = client.getCurrentServer();
-        hypixel = server != null && HypixelLocation.isHypixelAddress(server.ip);
+        hypixel = HypixelLocation.onHypixel(client);
         if (!hypixel) {
             onReset();
             return;
@@ -225,15 +227,13 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
             return;
         }
         AbstractContainerMenu menu = screen.getMenu();
-        int topSlots = menu.slots.size() - 36;
+        int topSlots = MenuItems.topSlots(menu);
         if (topSlots <= 0 || topSlots > 54) return;
         List<FeastProgress.MenuItem> items = new ArrayList<>();
         for (int index = 0; index < topSlots; index++) {
             var stack = menu.slots.get(index).getItem();
             if (stack.isEmpty()) continue;
-            var lore = stack.get(DataComponents.LORE);
-            items.add(new FeastProgress.MenuItem(stack.getHoverName().getString(),
-                lore == null ? List.of() : lore.lines().stream().limit(40).map(line -> line.getString()).toList()));
+            items.add(new FeastProgress.MenuItem(stack.getHoverName().getString(), MenuItems.lore(stack, 40)));
         }
         String title = screen.getTitle().getString();
         Long balance = FeastKernels.readMenu(title, items);
@@ -254,7 +254,7 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
             || button < 0 || button > 1) return;
         var client = Minecraft.getInstance();
         var menu = currentGrandMenu(client, containerId);
-        if (menu == null || slotId < 0 || slotId >= menu.slots.size() - 36) return;
+        if (menu == null || slotId < 0 || slotId >= MenuItems.topSlots(menu)) return;
         var milestone = readMilestone(menu.slots.get(slotId).getItem());
         if (milestone == null || !milestone.claimable()) return;
         INSTANCE.updateContext();
@@ -281,7 +281,7 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
     public static void observeSlotUpdate(int containerId, int slotId, ItemStack stack) {
         if (!INSTANCE.kernels.pendingMilestoneClaims()) return;
         var menu = currentGrandMenu(Minecraft.getInstance(), containerId);
-        if (menu == null || slotId < 0 || slotId >= menu.slots.size() - 36) return;
+        if (menu == null || slotId < 0 || slotId >= MenuItems.topSlots(menu)) return;
         INSTANCE.updateContext();
         INSTANCE.observeClaimStack(stack);
     }
@@ -291,7 +291,7 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
         var menu = currentGrandMenu(Minecraft.getInstance(), containerId);
         if (menu == null || stacks.size() > menu.slots.size()) return;
         INSTANCE.updateContext();
-        for (int slot = 0; slot < Math.min(stacks.size(), menu.slots.size() - 36); slot++) {
+        for (int slot = 0; slot < Math.min(stacks.size(), MenuItems.topSlots(menu)); slot++) {
             INSTANCE.observeClaimStack(stacks.get(slot));
         }
     }
@@ -303,19 +303,17 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
 
     private static FeastMilestoneClaims.Milestone readMilestone(ItemStack stack) {
         if (stack.isEmpty()) return null;
-        var lore = stack.get(DataComponents.LORE);
-        if (lore == null) return null;
+        if (!stack.has(DataComponents.LORE)) return null;
         return FeastMilestoneClaims.read("Grand Feast", new FeastProgress.MenuItem(stack.getHoverName().getString(),
-            lore.lines().stream().limit(40).map(line -> line.getString()).toList()), stack.hasFoil());
+            MenuItems.lore(stack, 40)), stack.hasFoil());
     }
 
     private static AbstractContainerMenu currentGrandMenu(Minecraft client, int containerId) {
         if (!INSTANCE.isEnabled() || client.player == null) return null;
-        var server = client.getCurrentServer();
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip) || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen)
+        if (!HypixelLocation.onHypixel(client) || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen)
             || FeastProgress.Kind.fromTitle(screen.getTitle().getString()) != FeastProgress.Kind.GRAND) return null;
         var menu = screen.getMenu();
-        int topSlots = menu.slots.size() - 36;
+        int topSlots = MenuItems.topSlots(menu);
         return menu == client.player.containerMenu && menu.containerId == containerId && topSlots > 0 && topSlots <= 54
             ? menu : null;
     }
@@ -408,30 +406,26 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
         String next = footer(kind, value, kernels);
         int segments = value == null ? (kind == FeastProgress.Kind.GRAND ? 9 : 5) : value.goals().size();
         float scale = config.scale() / 100.0F;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.x(), config.y(), scale);
         try {
-            graphics.pose().translate(config.x(), config.y());
-            graphics.pose().scale(scale, scale);
             graphics.text(font, total, (WIDTH - font.width(total)) / 2, 2, TEXT, true);
             drawBar(graphics, segments, value);
             drawLine(graphics, next, 29, value != null && value.complete() ? GREEN : TEXT);
             String average = rateLine(kind, rate);
             if (!average.isEmpty()) drawLine(graphics, average, 41, TEXT);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
     private static void drawLine(GuiGraphicsExtractor graphics, String text, int y, int color) {
         var font = Minecraft.getInstance().font;
         float scale = Math.min(1.0F, BAR_WIDTH / (float) Math.max(1, font.width(text)));
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, WIDTH / 2.0F, y, scale);
         try {
-            graphics.pose().translate(WIDTH / 2.0F, y);
-            graphics.pose().scale(scale, scale);
             graphics.text(font, text, -font.width(text) / 2, 0, color, true);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -479,10 +473,8 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
         }
     }
 
-    public static OverlayBounds overlayBounds(FeastConfig config) {
+    public static KungHudLayout.Bounds overlayBounds(FeastConfig config) {
         float scale = config.scale() / 100.0F;
-        return new OverlayBounds(config.x(), config.y(), Math.round(WIDTH * scale), Math.round(HEIGHT * scale));
+        return new KungHudLayout.Bounds(config.x(), config.y(), Math.round(WIDTH * scale), Math.round(HEIGHT * scale));
     }
-
-    public record OverlayBounds(int x, int y, int width, int height) {}
 }

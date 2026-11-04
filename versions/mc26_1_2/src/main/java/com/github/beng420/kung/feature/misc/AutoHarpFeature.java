@@ -6,6 +6,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.experiment.AutoPacer;
 import com.github.beng420.kung.feature.experiment.ExperimentAutoClicker;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.SplittableRandom;
@@ -27,7 +28,6 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
     public static final AutoHarpFeature INSTANCE = new AutoHarpFeature();
     private static final String AREA = "harp";
     private static final String TITLE_PREFIX = "Harp - ";
-    private static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
     private static final int TOP_SLOT_COUNT = 54;
 
     /** One pacer per column, so two notes lit together each wait their own delay. */
@@ -117,7 +117,7 @@ public final class AutoHarpFeature extends ConfigurableFeature<MiscConfig> {
         AbstractContainerMenu menu = container.getMenu();
         String title = screen.getTitle().getString().trim();
         if (menu != client.player.containerMenu || !title.startsWith(TITLE_PREFIX)
-            || menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT != TOP_SLOT_COUNT) {
+            || MenuItems.topSlots(menu) != TOP_SLOT_COUNT) {
             return false;
         }
         // Another song never continues what was learned, even with the same title.

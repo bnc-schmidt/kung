@@ -5,7 +5,9 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -21,7 +23,6 @@ import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -35,7 +36,6 @@ import net.minecraft.world.item.ItemStack;
 public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfig> {
     public static final ExperimentSolverFeature INSTANCE = new ExperimentSolverFeature();
     private static final String AREA = "experiments";
-    private static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
     private static final int TOP_SLOT_COUNT = 54;
     private static final Pattern TITLE = Pattern.compile("^(Chronomatron|Ultrasequencer) \\(([\\w ]+)\\)$");
     private static final Pattern STAKES = Pattern.compile("^(Chronomatron|Ultrasequencer) \\u279C Stakes$");
@@ -141,10 +141,7 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
                 }
                 // The same color twice in a row: the yellow frame says to click this block again.
                 if (now && after) {
-                    graphics.fill(x, y, x + 16, y + 2, AFTER);
-                    graphics.fill(x, y + 14, x + 16, y + 16, AFTER);
-                    graphics.fill(x, y + 2, x + 2, y + 14, AFTER);
-                    graphics.fill(x + 14, y + 2, x + 16, y + 14, AFTER);
+                    UiShapes.slotFrame(graphics, x, y, AFTER);
                 }
             }
         } else if (ultrasequencer != null && ultrasequencer.pending(slot.index)) {
@@ -175,15 +172,14 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
         if (!title.matches() || menu != client.player.containerMenu) {
             return;
         }
-        for (int index = 0; index < menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT; index++) {
+        for (int index = 0; index < MenuItems.topSlots(menu); index++) {
             ItemStack stack = menu.slots.get(index).getItem();
             String name = stack.isEmpty() ? "" : stack.getHoverName().getString().trim();
-            var lore = stack.get(DataComponents.LORE);
-            if (!name.endsWith(TIER_ITEM_SUFFIX) || lore == null) {
+            if (!name.endsWith(TIER_ITEM_SUFFIX) || !stack.has(DataComponents.LORE)) {
                 continue;
             }
             String key = title.group(1) + "|" + name.substring(0, name.length() - TIER_ITEM_SUFFIX.length());
-            int needed = StakesLore.roundsNeeded(lore.lines().stream().map(Component::getString).toList());
+            int needed = StakesLore.roundsNeeded(MenuItems.lore(stack));
             Integer before = stakes.put(key, needed);
             if (before == null || before != needed) {
                 KungDebugRecorder.event(AREA, "stakes " + key + " rounds=" + needed);
@@ -203,7 +199,7 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
         Matcher title = TITLE.matcher(screen.getTitle().getString().trim());
         AbstractContainerMenu menu = container.getMenu();
         if (!title.matches() || menu != client.player.containerMenu
-            || menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT != TOP_SLOT_COUNT) {
+            || MenuItems.topSlots(menu) != TOP_SLOT_COUNT) {
             return false;
         }
         // A resize keeps what was learned. Another menu never does, even with the same title.

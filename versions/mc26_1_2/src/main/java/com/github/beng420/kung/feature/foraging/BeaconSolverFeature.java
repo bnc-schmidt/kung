@@ -4,6 +4,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.ForagingConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import com.github.beng420.kung.util.ServerTickPacketContext;
 import java.util.HashMap;
 import java.util.List;
@@ -13,9 +14,7 @@ import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.network.chat.Component;
 import net.minecraft.network.protocol.game.ClientboundSoundPacket;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ContainerInput;
@@ -183,7 +182,7 @@ public final class BeaconSolverFeature extends ConfigurableFeature<ForagingConfi
 
     private static int colorClicks(Controls set) {
         int reference = referenceColor(set.enchanted);
-        String ours = BeaconTuning.current(lore(activeMenu.slots.get(set.color).getItem()), "color");
+        String ours = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.color).getItem()), "color");
         int own = ours == null ? -1 : BeaconTuning.colorOfName(ours);
         return reference < 0 || own < 0 ? NONE : BeaconTuning.clicks(reference, own, BeaconTuning.COLORS.size());
     }
@@ -199,12 +198,12 @@ public final class BeaconSolverFeature extends ConfigurableFeature<ForagingConfi
     }
 
     private static int ownSpeed(Controls set) {
-        String value = BeaconTuning.current(lore(activeMenu.slots.get(set.speed).getItem()), "speed");
+        String value = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.speed).getItem()), "speed");
         return value == null ? -1 : BeaconTuning.speedOfName(value);
     }
 
     private static int ownPitch(Controls set) {
-        String value = BeaconTuning.current(lore(activeMenu.slots.get(set.pitch).getItem()), "pitch");
+        String value = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.pitch).getItem()), "pitch");
         return value == null ? -1 : BeaconTuning.pitchOfName(value);
     }
 
@@ -273,15 +272,10 @@ public final class BeaconSolverFeature extends ConfigurableFeature<ForagingConfi
         }
     }
 
-    private static List<String> lore(ItemStack stack) {
-        var lore = stack.get(DataComponents.LORE);
-        return lore == null ? List.of() : lore.lines().stream().map(Component::getString).toList();
-    }
-
     /** The item, glint, name and lore of a slot on one line; "empty" for none. */
     private static String describe(ItemStack stack) {
         if (stack.isEmpty()) return "empty";
-        String lore = String.join(" | ", lore(stack));
+        String lore = String.join(" | ", MenuItems.lore(stack));
         if (lore.length() > LORE_LIMIT) lore = lore.substring(0, LORE_LIMIT) + "...";
         return paneId(stack) + " foil=" + stack.hasFoil() + " name=\"" + stack.getHoverName().getString() + "\" lore=\""
             + lore + "\"";

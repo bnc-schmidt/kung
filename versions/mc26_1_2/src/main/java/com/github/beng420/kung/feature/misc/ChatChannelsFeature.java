@@ -87,6 +87,10 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     @Override
     protected void onReset() { forgetChannel(); }
 
+    /** No chat rebuild while the client stops. */
+    @Override
+    protected void onShutdown() { }
+
     @Override
     public boolean isEnabled() { return initialized() && config().chatChannelsEnabled(); }
 

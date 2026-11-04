@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -56,7 +57,6 @@ final class GreenhouseSupply {
     private static final List<String> MUSHROOMS = List.of("Red Mushroom", "Brown Mushroom");
     private static final PlantedSource NONE = crop -> 0;
     private static volatile PlantedSource plantedSource = NONE;
-    private static final Pattern COLOR_CODES = Pattern.compile("§.");
     private static final Pattern MOVED = Pattern.compile("Moved ([\\d,]+) (.+?) from your Sacks to your inventory");
     private static final Pattern NO_ITEM = Pattern.compile("You have no (.+?) in your Sacks!");
 
@@ -245,12 +245,9 @@ final class GreenhouseSupply {
         return new Plan(action, crop, item, 0, 0, 0, 0, 0, false, message);
     }
 
-    /** The text without Minecraft colour codes ("§a"), which chat lines can still carry. */
-    static String stripColors(String text) { return text == null ? "" : COLOR_CODES.matcher(text).replaceAll(""); }
-
     /** "Moved 5 Carrot from your Sacks to your inventory." (the amount can be below what was asked). */
     static Optional<Moved> parseMoved(String chat) {
-        Matcher matcher = MOVED.matcher(stripColors(chat));
+        Matcher matcher = MOVED.matcher(HypixelLocation.stripFormatting(chat));
         if (!matcher.find()) return Optional.empty();
         try {
             return Optional.of(new Moved(Integer.parseInt(matcher.group(1).replace(",", "")), matcher.group(2)));
@@ -261,7 +258,7 @@ final class GreenhouseSupply {
 
     /** "You have no Carrot in your Sacks!": the item name, empty for any other line. */
     static Optional<String> parseNoItem(String chat) {
-        Matcher matcher = NO_ITEM.matcher(stripColors(chat));
+        Matcher matcher = NO_ITEM.matcher(HypixelLocation.stripFormatting(chat));
         return matcher.find() ? Optional.of(matcher.group(1)) : Optional.empty();
     }
 }

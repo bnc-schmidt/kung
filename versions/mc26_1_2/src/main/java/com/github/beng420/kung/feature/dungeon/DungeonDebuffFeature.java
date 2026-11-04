@@ -79,9 +79,6 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
         epoch = Long.MIN_VALUE;
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private boolean ready() {
         var instance = HypixelInstanceTracker.INSTANCE;
         if (!isEnabled() || Minecraft.getInstance().level == null || !instance.catacombs()) {

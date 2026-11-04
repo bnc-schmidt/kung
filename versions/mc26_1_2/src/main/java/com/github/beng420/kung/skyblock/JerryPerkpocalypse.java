@@ -9,6 +9,7 @@ import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.github.beng420.kung.util.KungHttp;
 import com.github.beng420.kung.util.KungTime;
+import com.github.beng420.kung.util.MenuItems;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -252,8 +253,7 @@ public final class JerryPerkpocalypse {
     }
 
     private void readMenu(Minecraft client, long year, long now) {
-        var server = client.getCurrentServer();
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip)
+        if (!HypixelLocation.onHypixel(client)
             || !(McCompat.screen(client) instanceof AbstractContainerScreen<?> screen)
             || !MENU_TITLE.equals(screen.getTitle().getString().strip())
             || screen.getMenu() != client.player.containerMenu) {
@@ -261,11 +261,11 @@ public final class JerryPerkpocalypse {
             return;
         }
         var menu = screen.getMenu();
-        int topSlots = Math.min(menu.slots.size() - 36, 54);
+        int topSlots = Math.min(MenuItems.topSlots(menu), 54);
         for (int index = 0; readMenuId != menu.containerId && index < topSlots; index++) {
-            var lore = menu.slots.get(index).getItem().get(DataComponents.LORE);
-            if (lore == null) continue;
-            List<String> lines = lore.lines().stream().limit(80).map(Component::getString).toList();
+            var stack = menu.slots.get(index).getItem();
+            if (!stack.has(DataComponents.LORE)) continue;
+            List<String> lines = MenuItems.lore(stack, 80);
             if (!hasHeader(lines)) continue;
             readMenuId = menu.containerId;
             Reading reading = parse(lines, now);

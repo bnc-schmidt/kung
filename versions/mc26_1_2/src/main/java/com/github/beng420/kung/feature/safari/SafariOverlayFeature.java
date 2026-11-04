@@ -4,10 +4,12 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungHudEditorScreen;
 import com.github.beng420.kung.config.KungHudEditorState;
+import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.SafariConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.EnumMap;
 import java.util.List;
@@ -76,8 +78,7 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
             onReset();
             return false;
         }
-        var server = client.getCurrentServer();
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip)) {
+        if (!HypixelLocation.onHypixel(client)) {
             onReset();
             return false;
         }
@@ -120,10 +121,8 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
         List<SafariLayout.Section> sections = SafariLayout.sections(current, caught, columns);
         int width = SafariLayout.width(sections, columns);
         float scale = config.scale() / 100.0F;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.x(), config.y(), scale);
         try {
-            graphics.pose().translate(config.x(), config.y());
-            graphics.pose().scale(scale, scale);
             if (config.background()) {
                 graphics.fill(-1, -1, width + 1, SafariLayout.height(sections, columns) + 1, BORDER);
                 graphics.fill(0, 0, width, SafariLayout.height(sections, columns), PANEL);
@@ -136,7 +135,7 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
                 y += section.height() + SafariLayout.SECTION_GAP;
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -144,13 +143,11 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
     private static void drawSection(GuiGraphicsExtractor graphics, Font font, SafariLayout.Section section, int x, int y) {
         int zone = zoneColor(section.region());
         int inner = SafariLayout.COLUMN_WIDTH - SafariLayout.PADDING * 2;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, x, y, 0.5F);
         try {
-            graphics.pose().translate(x, y);
-            graphics.pose().scale(0.5F, 0.5F);
             graphics.item(ICONS.computeIfAbsent(section.region(), SafariOverlayFeature::icon), 0, 0);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
         String title = section.region().title();
         graphics.text(font, title, x + 11, y, zone, true);
@@ -185,13 +182,11 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
     }
 
     /** The preview's size, so the HUD editor's frame fits what {@link #drawPreview} draws. */
-    public static OverlayBounds overlayBounds(SafariConfig config) {
+    public static KungHudLayout.Bounds overlayBounds(SafariConfig config) {
         float scale = config.scale() / 100.0F;
         boolean columns = config.allZones();
         List<SafariLayout.Section> sections = SafariLayout.sections(PREVIEW_REGION, EXAMPLE, columns);
-        return new OverlayBounds(config.x(), config.y(), Math.round(SafariLayout.width(sections, columns) * scale),
+        return new KungHudLayout.Bounds(config.x(), config.y(), Math.round(SafariLayout.width(sections, columns) * scale),
             Math.round(SafariLayout.height(sections, columns) * scale));
     }
-
-    public record OverlayBounds(int x, int y, int width, int height) {}
 }

@@ -192,8 +192,5 @@ public final class GourmandAlertFeature extends ConfigurableFeature<MiningConfig
         tracedSidebar.clear();
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private static long now() { return System.nanoTime() / 1_000_000; }
 }

@@ -3,15 +3,18 @@ package com.github.beng420.kung.feature.misc;
 import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungHudEditorState;
+import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.feature.garden.GreenhouseDumpFormat;
 import com.github.beng420.kung.feature.misc.SuperpairsBoard.CardCount;
 import com.github.beng420.kung.feature.misc.SuperpairsBoard.PairStats;
 import com.github.beng420.kung.feature.misc.SuperpairsPlanner.Pick;
+import com.github.beng420.kung.ui.HudPose;
+import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.util.KungDebugRecorder;
-import java.nio.charset.StandardCharsets;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
-import java.util.Base64;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -36,7 +39,6 @@ import net.minecraft.world.item.component.ResolvableProfile;
 
 public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfig> {
     public static final SuperpairsHelperFeature INSTANCE = new SuperpairsHelperFeature();
-    private static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
     private static final int MAX_CARD_LINES = 14;
     private static final int SAMPLE_WIDTH = 170;
     private static final int PADDING_X = 5;
@@ -63,7 +65,6 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     private static long lastLoggedRevision = -1;
     private static long lastBoardPacketMillis;
     /** The stack of every card seen face up, by slot. */
-    private static final Pattern SKIN_URL = Pattern.compile("\"?url\"?\\s*:\\s*\"([^\"]*)\"");
     private static final Map<Integer, ItemStack> faces = new HashMap<>();
     private static final Set<Integer> dead = new HashSet<>();
     /** Slots whose pair the game already took, as far as can be told. */
@@ -155,7 +156,7 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
             return false;
         }
         AbstractContainerMenu menu = ((AbstractContainerScreen<?>) McCompat.screen(client)).getMenu();
-        if (menu != client.player.containerMenu || menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT != 54) {
+        if (menu != client.player.containerMenu || MenuItems.topSlots(menu) != 54) {
             return false;
         }
         // A resize retains memory. Another menu never does, even with an identical
@@ -163,7 +164,7 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         if (activeMenu != menu) {
             resetState("new-menu");
             activeMenu = menu;
-            topSlotCount = menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT;
+            topSlotCount = MenuItems.topSlots(menu);
             KungDebugRecorder.event("superpairs", "start container=" + menu.containerId
                 + " title=\"" + McCompat.screen(client).getTitle().getString() + "\" top=" + topSlotCount);
             // One seed covers enabling during an open game. All subsequent reveals
@@ -215,10 +216,9 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
             ResolvableProfile profile = stack.get(DataComponents.PROFILE);
             if (profile != null) {
                 for (var property : profile.partialProfile().properties().get("textures")) {
-                    Matcher url = SKIN_URL.matcher(new String(Base64.getMimeDecoder().decode(property.value().strip()),
-                        StandardCharsets.UTF_8));
-                    if (url.find()) {
-                        return url.group(1).substring(url.group(1).lastIndexOf('/') + 1);
+                    var texture = GreenhouseDumpFormat.texture(property.value());
+                    if (texture.isPresent()) {
+                        return texture.get().hash();
                     }
                 }
             }
@@ -324,31 +324,17 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
                     graphics.text(Minecraft.getInstance().font, PairStyle.letter(kind), x + 1, y + 1, 0xFFFFFFFF, false);
                 }
                 if (config.superpairsMarkPairs() && pairSlots.contains(slot.index)) {
-                    thinFrame(graphics, x, y, PAIR_FRAME);
+                    graphics.outline(x, y, 16, 16, PAIR_FRAME);
                 }
                 String label = board.labelAt(slot.index);
                 if (label != null && SuperpairsValue.isPriority(label)) {
-                    frame(graphics, x, y, PRIORITY_FRAME);
+                    UiShapes.slotFrame(graphics, x, y, PRIORITY_FRAME);
                 }
             }
         }
         if (config.superpairsMarkBestClick() && pick.slots().contains(slot.index)) {
-            frame(graphics, x, y, BEST_FRAME);
+            UiShapes.slotFrame(graphics, x, y, BEST_FRAME);
         }
-    }
-
-    private static void thinFrame(GuiGraphicsExtractor graphics, int x, int y, int color) {
-        graphics.fill(x, y, x + 16, y + 1, color);
-        graphics.fill(x, y + 15, x + 16, y + 16, color);
-        graphics.fill(x, y + 1, x + 1, y + 15, color);
-        graphics.fill(x + 15, y + 1, x + 16, y + 15, color);
-    }
-
-    private static void frame(GuiGraphicsExtractor graphics, int x, int y, int color) {
-        graphics.fill(x, y, x + 16, y + 2, color);
-        graphics.fill(x, y + 14, x + 16, y + 16, color);
-        graphics.fill(x, y + 2, x + 2, y + 14, color);
-        graphics.fill(x + 14, y + 2, x + 16, y + 14, color);
     }
 
     /** True when the slot shows a card (reward or bonus) rather than a button, a pane or nothing. */
@@ -362,10 +348,8 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     }
 
     private static String cleanName(ItemStack stack) {
-        var lore = stack.get(DataComponents.LORE);
         return SuperpairsBoard.rewardLabel(BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath(),
-            stack.getHoverName().getString(), lore == null ? List.of()
-                : lore.lines().stream().map(line -> line.getString()).toList());
+            stack.getHoverName().getString(), MenuItems.lore(stack));
     }
 
     private static String cleanText(String value) {
@@ -388,11 +372,11 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
                 ? " packets=" + slotUpdatePackets + " observedSlots=" + observedSlotUpdates : ""));
     }
 
-    public static OverlayBounds overlayBounds(MiscConfig config) {
+    public static KungHudLayout.Bounds overlayBounds(MiscConfig config) {
         float scale = config.superpairsHelperScale() / 100.0F;
         int sampleLines = 1 + MAX_CARD_LINES;
         int sampleHeight = PADDING_Y * 2 + sampleLines * ROW_HEIGHT;
-        return new OverlayBounds(
+        return new KungHudLayout.Bounds(
             Math.round(config.superpairsHelperX() - scale),
             Math.round(config.superpairsHelperY() - scale),
             Math.round((SAMPLE_WIDTH + PADDING_X * 2 + 2) * scale),
@@ -429,11 +413,9 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         textWidth = Math.min(textWidth, maxTextWidth(screenWidth, scale));
         int panelHeight = PADDING_Y * 2 + lines.size() * ROW_HEIGHT;
 
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, panelX(config.superpairsHelperX(), screenWidth, textWidth, scale),
+            config.superpairsHelperY(), scale);
         try {
-            graphics.pose().translate(panelX(config.superpairsHelperX(), screenWidth, textWidth, scale),
-                config.superpairsHelperY());
-            graphics.pose().scale(scale, scale);
             graphics.fill(-PADDING_X - 1, -PADDING_Y - 1, textWidth + PADDING_X + 1, panelHeight + 1, BORDER);
             graphics.fill(-PADDING_X, -PADDING_Y, textWidth + PADDING_X, panelHeight, PANEL);
             for (int index = 0; index < lines.size(); index++) {
@@ -441,7 +423,7 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
                     index == 0 ? 0xFFFFD76A : TEXT, true);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -492,8 +474,5 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         lastRevealSlot = -1;
         remainingClicks = -1;
         if (!KungBuild.MODRINTH) SuperpairsAutoReveal.reset();
-    }
-
-    public record OverlayBounds(int x, int y, int width, int height) {
     }
 }

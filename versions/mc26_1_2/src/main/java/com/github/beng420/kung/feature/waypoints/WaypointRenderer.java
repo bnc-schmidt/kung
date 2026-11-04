@@ -28,9 +28,6 @@ import org.joml.Vector3fc;
 final class WaypointRenderer {
     private static final RenderStateDataKey<List<Item>> ITEMS = RenderStateDataKey.create(() -> "kung:waypoints");
     private static final Identifier HUD_ID = Identifier.fromNamespaceAndPath(KungMod.MOD_ID, "waypoints");
-    /** Corner indices per face; bit 0 picks x, bit 1 picks y, bit 2 picks z. */
-    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {0, 1, 5, 4},
-        {6, 7, 3, 2}, {1, 0, 2, 3}, {4, 5, 7, 6}};
     // Route colors: the waypoint just passed, the one you are at, the one to walk to.
     static final int PREVIOUS_RGB = 0xFF0000;
     static final int CURRENT_RGB = 0xFFFFFF;
@@ -79,8 +76,8 @@ final class WaypointRenderer {
                     for (Item item : items) {
                         if (!item.type().fill()) continue;
                         int color = argb(item.alpha(), item.rgb());
-                        fillBox(quads, pose, item.box(), camera, color);
-                        if (item.type().beam()) fillBox(quads, pose, beam(item.box()), camera, color);
+                        LineBoxes.fill(quads, pose, item.box(), camera.x, camera.y, camera.z, color);
+                        if (item.type().beam()) LineBoxes.fill(quads, pose, beam(item.box()), camera.x, camera.y, camera.z, color);
                     }
                 } catch (RuntimeException exception) {
                     fillBroken = true;
@@ -119,19 +116,6 @@ final class WaypointRenderer {
         double x = box.getCenter().x;
         double z = box.getCenter().z;
         return new AABB(x - BEAM_HALF_WIDTH, box.maxY, z - BEAM_HALF_WIDTH, x + BEAM_HALF_WIDTH, BEAM_TOP, z + BEAM_HALF_WIDTH);
-    }
-
-    private static void fillBox(com.mojang.blaze3d.vertex.VertexConsumer quads, com.mojang.blaze3d.vertex.PoseStack.Pose pose,
-                                AABB world, Vec3 camera, int color) {
-        AABB box = world.move(-camera.x, -camera.y, -camera.z);
-        for (int[] face : FACES) {
-            for (int corner : face) {
-                quads.addVertex(pose,
-                    (float) ((corner & 1) == 0 ? box.minX : box.maxX),
-                    (float) ((corner & 2) == 0 ? box.minY : box.maxY),
-                    (float) ((corner & 4) == 0 ? box.minZ : box.maxZ)).setColor(color);
-            }
-        }
     }
 
     private static void drawHud(GuiGraphicsExtractor graphics) {

@@ -10,7 +10,9 @@ import com.github.beng420.kung.config.category.MiscConfig.SackItem;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiTooltip;
 import com.github.beng420.kung.util.HypixelSkyBlockProfileClient;
@@ -66,7 +68,6 @@ import net.minecraft.world.item.component.ItemLore;
  */
 public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     public static final SackTrackerFeature INSTANCE = new SackTrackerFeature();
-    private static final Pattern FORMATTING = Pattern.compile("§.");
     private static final Pattern STORED = Pattern.compile("^Stored: ([\\d.,]+[kKmMbB]?)/");
     private static final Pattern LAST = Pattern.compile("\\(Last (?:(\\d+)m\\s*)?(\\d+)s\\.\\)");
     private static final Pattern CHANGE = Pattern.compile("^([+-][\\d,]+) (.+) \\((.+)\\)$");
@@ -619,7 +620,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return stack.getOrDefault(DataComponents.LORE, ItemLore.EMPTY).lines().stream().map(SackTrackerFeature::plain).toList();
     }
 
-    static String plain(Component component) { return FORMATTING.matcher(component.getString()).replaceAll(""); }
+    static String plain(Component component) { return HypixelLocation.stripFormatting(component.getString()); }
 
     /** The rarity color of the item's name. */
     private static int color(Component name) {
@@ -784,16 +785,13 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
 
     private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, List<Component> lines) {
         var font = Minecraft.getInstance().font;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.sackTrackerX(), config.sackTrackerY(), config.sackTrackerScale() / 100F);
         try {
-            graphics.pose().translate(config.sackTrackerX(), config.sackTrackerY());
-            float scale = config.sackTrackerScale() / 100F;
-            graphics.pose().scale(scale, scale);
             for (int index = 0; index < lines.size(); index++) {
                 graphics.text(font, lines.get(index), index == 0 ? 4 : 8, 4 + index * LINE_HEIGHT, 0xFFFFFFFF, true);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

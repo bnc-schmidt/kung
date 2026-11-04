@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.ui.HudPose;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
@@ -49,14 +50,12 @@ public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscCon
         var font = Minecraft.getInstance().font;
         var line = Component.literal("Chat: ").withColor(LABEL_COLOR)
             .append(Component.literal(send.label()).withColor(send.color()));
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.currentChatDisplayX(), config.currentChatDisplayY(),
+            config.currentChatDisplayScale() / 100F);
         try {
-            graphics.pose().translate(config.currentChatDisplayX(), config.currentChatDisplayY());
-            float scale = config.currentChatDisplayScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.text(font, line, PAD, PAD, 0xFFFFFFFF, true);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

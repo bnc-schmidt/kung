@@ -8,6 +8,7 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonServerTickEvents;
 import com.github.beng420.kung.skyblock.HypixelLocation;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
@@ -64,7 +65,7 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
     public void observeUse(Player player, InteractionHand usedHand) {
         var client = Minecraft.getInstance();
         if (!isEnabled() || player != client.player || client.level == null
-            || client.getCurrentServer() == null || !HypixelLocation.isHypixelAddress(client.getCurrentServer().ip)
+            || !HypixelLocation.onHypixel(client)
             || !player.isUsingItem() || player.getUsedItemHand() != usedHand
             || !chargeableBow(player.getUseItem())) return;
         owner = player;
@@ -144,9 +145,6 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
         level = null;
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private void render(GuiGraphicsExtractor graphics) {
         var client = Minecraft.getInstance();
         validateDraw(client);
@@ -157,11 +155,9 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
     private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, int ticks, boolean drawing) {
         var font = Minecraft.getInstance().font;
         int color = ticks < MIN_SHOT_TICKS ? 0xFFEF6868 : ticks < FULL_DRAW_TICKS ? 0xFFFFDA55 : 0xFF55DD88;
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.bowDrawIndicatorX(), config.bowDrawIndicatorY(),
+            config.bowDrawIndicatorScale() / 100F);
         try {
-            graphics.pose().translate(config.bowDrawIndicatorX(), config.bowDrawIndicatorY());
-            float scale = config.bowDrawIndicatorScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.fill(0, 0, WIDTH, HEIGHT, 0x99111318);
             graphics.text(font, drawing ? "Bow Draw" : "Last Draw", BAR_X, 4, 0xFFFFFFFF, true);
             String power = "~" + Math.round(BowDrawProgress.power(ticks) * 100) + "% power";
@@ -197,7 +193,7 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
                 }
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

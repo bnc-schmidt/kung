@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import static com.github.beng420.kung.ui.UiBounds.inside;
 import static com.github.beng420.kung.util.CatacombsAverageCalculator.levelFromXp;
 
 import com.github.beng420.kung.KungMod;
@@ -909,10 +910,6 @@ public final class CatacombsCalculatorScreen extends Screen {
             }
         }
         return null;
-    }
-
-    private static boolean inside(int mouseX, int mouseY, int x, int y, int regionWidth, int regionHeight) {
-        return mouseX >= x && mouseX < x + regionWidth && mouseY >= y && mouseY < y + regionHeight;
     }
 
     private enum LoadState {

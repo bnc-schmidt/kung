@@ -4,6 +4,7 @@ import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonDebuffScope;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.ui.HudPose;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.Minecraft;
@@ -30,17 +31,14 @@ public final class DragonDebuffHud {
     static void draw(GuiGraphicsExtractor graphics, DungeonConfig config, List<DungeonDebuffTracker.Dragon> dragons, long tick) {
         var font = Minecraft.getInstance().font;
         var lines = lines(dragons, tick);
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.dragonDebuffX(), config.dragonDebuffY(), config.dragonDebuffScale() / 100F);
         try {
-            graphics.pose().translate(config.dragonDebuffX(), config.dragonDebuffY());
-            float scale = config.dragonDebuffScale() / 100F;
-            graphics.pose().scale(scale, scale);
             for (int row = 0; row < lines.size(); row++) {
                 graphics.text(font, Language.getInstance().getVisualOrder(font.substrByWidth(lines.get(row), WIDTH - 8)),
                     4, 4 + row * 11, 0xFFFFFFFF, true);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

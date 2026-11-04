@@ -8,6 +8,7 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonServerTickEvents;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -128,9 +129,6 @@ public final class RagTickTimerFeature extends ConfigurableFeature<MiscConfig> {
         tracedPhase = RagTimer.Phase.IDLE;
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private void render(GuiGraphicsExtractor graphics) {
         var client = Minecraft.getInstance();
         validateCast(client);
@@ -153,11 +151,8 @@ public final class RagTickTimerFeature extends ConfigurableFeature<MiscConfig> {
             case EFFECT -> 0xFFFF5555;
             default -> 0xFF55AAFF;
         };
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.ragTimerX(), config.ragTimerY(), config.ragTimerScale() / 100F);
         try {
-            graphics.pose().translate(config.ragTimerX(), config.ragTimerY());
-            float scale = config.ragTimerScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.fill(0, 0, WIDTH, HEIGHT, 0x99111318);
             graphics.text(font, label, 6, 4, color, true);
             String ticks = left + "t";
@@ -166,7 +161,7 @@ public final class RagTickTimerFeature extends ConfigurableFeature<MiscConfig> {
             graphics.fill(6, 17, WIDTH - 6, 23, 0xFF343A44);
             graphics.fill(6, 17, 6 + Math.round((WIDTH - 12) * (float) left / Math.max(1, total)), 23, color);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

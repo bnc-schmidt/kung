@@ -18,9 +18,6 @@ final class M7DragonRenderer {
     /** Blocks ahead of the camera where a Dragon Prio line starts; the farther, the less view bobbing moves it off the crosshair. */
     private static final float PRIO_START = 2.0F;
 
-    /** Corner indices per face; bit 0 picks x, bit 1 picks y, bit 2 picks z. */
-    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {0, 1, 5, 4},
-        {6, 7, 3, 2}, {1, 0, 2, 3}, {4, 5, 7, 6}};
     private static boolean fillBroken;
 
     private M7DragonRenderer() { }
@@ -84,16 +81,7 @@ final class M7DragonRenderer {
             try {
                 for (Marker marker : markers) {
                     if (!marker.filled()) continue;
-                    AABB box = marker.bounds().move(-camera.x, -camera.y, -camera.z);
-                    for (int[] face : FACES) {
-                        for (int corner : face) {
-                            quads.addVertex(pose,
-                                (float) ((corner & 1) == 0 ? box.minX : box.maxX),
-                                (float) ((corner & 2) == 0 ? box.minY : box.maxY),
-                                (float) ((corner & 4) == 0 ? box.minZ : box.maxZ))
-                                .setColor(marker.color());
-                        }
-                    }
+                    LineBoxes.fill(quads, pose, marker.bounds(), camera.x, camera.y, camera.z, marker.color());
                 }
             } catch (RuntimeException exception) {
                 fillBroken = true;

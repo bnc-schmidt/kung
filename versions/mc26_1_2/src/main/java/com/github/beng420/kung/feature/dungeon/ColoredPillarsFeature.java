@@ -46,9 +46,6 @@ public final class ColoredPillarsFeature extends ConfigurableFeature<DungeonConf
         update(Minecraft.getInstance(), null);
     }
 
-    @Override
-    protected void onShutdown() { onReset(); }
-
     private void tick(Minecraft client) {
         var instance = HypixelInstanceTracker.INSTANCE;
         PillarMaterial material = initialized()

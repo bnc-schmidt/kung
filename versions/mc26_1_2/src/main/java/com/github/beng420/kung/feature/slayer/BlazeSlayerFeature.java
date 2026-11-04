@@ -5,6 +5,7 @@ import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -570,13 +571,11 @@ public final class BlazeSlayerFeature extends ConfigurableFeature<SlayerConfig> 
             float x = snap((ndcX * 0.5F + 0.5F) * graphics.guiWidth(), guiScale);
             float y = snap((0.5F - ndcY * 0.5F) * graphics.guiHeight(), guiScale);
             int width = font.width(label.text());
-            graphics.pose().pushMatrix();
+            HudPose.begin(graphics, x, y, label.scale());
             try {
-                graphics.pose().translate(x, y);
-                graphics.pose().scale(label.scale(), label.scale());
                 graphics.text(font, label.text(), -width / 2, -4, 0xFFFFFFFF, true);
             } finally {
-                graphics.pose().popMatrix();
+                HudPose.end(graphics);
             }
         }
     }

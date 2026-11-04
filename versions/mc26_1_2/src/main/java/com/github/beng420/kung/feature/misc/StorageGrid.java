@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.misc;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -35,7 +36,7 @@ final class StorageGrid {
 
     /** The block count of a "You built 54 blocks!" chat line, or -1 for any other line. Section-sign codes are ignored. */
     static int builtBlocks(String text) {
-        Matcher matcher = BUILT.matcher(text.replaceAll("§.", "").replace((char) 0xA0, ' ').strip());
+        Matcher matcher = BUILT.matcher(HypixelLocation.stripFormatting(text).replace((char) 0xA0, ' ').strip());
         if (!matcher.find()) return -1;
         try {
             return Integer.parseInt(matcher.group(1).replace(",", ""));

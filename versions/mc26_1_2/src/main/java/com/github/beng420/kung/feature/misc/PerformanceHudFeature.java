@@ -6,6 +6,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.ServerTpsTracker;
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -116,11 +117,9 @@ public final class PerformanceHudFeature extends ConfigurableFeature<MiscConfig>
         var line = Component.literal(String.format(Locale.ROOT, "TPS: %.1f ", tps)).withColor(TPS_COLOR)
             .append(Component.literal("FPS: " + fps + " ").withColor(FPS_COLOR))
             .append(Component.literal("Ping: " + ping + "ms").withColor(PING_COLOR));
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.performanceHudX(), config.performanceHudY(),
+            config.performanceHudScale() / 100F);
         try {
-            graphics.pose().translate(config.performanceHudX(), config.performanceHudY());
-            float scale = config.performanceHudScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.text(font, line, 4, 4, 0xFFFFFFFF, true);
             int top = 16;
             int capacity = samples(config.performanceRefreshTenths());
@@ -128,7 +127,7 @@ public final class PerformanceHudFeature extends ConfigurableFeature<MiscConfig>
             if (config.performanceGraphFps()) top = graph(graphics, font, samples, capacity, 1, 0F, FPS_COLOR, top);
             if (config.performanceGraphPing()) graph(graphics, font, samples, capacity, 2, 0F, PING_COLOR, top);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

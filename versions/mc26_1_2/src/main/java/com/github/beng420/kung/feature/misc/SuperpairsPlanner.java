@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.misc;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
@@ -24,7 +25,7 @@ public final class SuperpairsPlanner {
         UNKNOWN, ANY, SECOND, INSTANT;
 
         public static Prompt of(String label) {
-            String name = label == null ? "" : label.replaceAll("§.", "").trim().toLowerCase(java.util.Locale.ROOT);
+            String name = HypixelLocation.stripFormatting(label).trim().toLowerCase(java.util.Locale.ROOT);
             name = name.endsWith("!") ? name.substring(0, name.length() - 1) : name;
             return switch (name) {
                 case "click any button" -> ANY;

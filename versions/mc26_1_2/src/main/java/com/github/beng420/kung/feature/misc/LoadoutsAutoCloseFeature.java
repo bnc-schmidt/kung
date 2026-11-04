@@ -7,6 +7,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.Locale;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.input.KeyEvent;
@@ -21,7 +22,6 @@ import net.minecraft.world.item.ItemStack;
 
 public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConfig> {
     public static final LoadoutsAutoCloseFeature INSTANCE = new LoadoutsAutoCloseFeature();
-    private static final int PLAYER_INVENTORY_SLOT_COUNT = 36;
     private static final int SLOT_UPDATE_LOG_LIMIT = 24;
     private static final int SUPPRESS_HOTKEY_OPEN_PACKET_COUNT = 4;
     private static final int[] LOADOUT_HOTKEY_SLOTS = {14, 15, 16, 23, 24, 25, 32, 33, 34, 41, 42, 43};
@@ -81,7 +81,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             + " slots="
             + menu.slots.size()
             + " topSlots="
-            + topSlotCount(menu)
+            + MenuItems.topSlots(menu)
             + " context="
             + isLoadoutsContext(screen, menu, ItemStack.EMPTY)
             + " sample="
@@ -354,7 +354,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
                 + " input=" + input
                 + " item=" + itemDebug(stack)
                 + " context=" + context
-                + " topSlots=" + topSlotCount(menu)
+                + " topSlots=" + MenuItems.topSlots(menu)
                 + " reason=" + reason
         );
         if (reason != null) {
@@ -772,19 +772,11 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return false;
         }
 
-        return slotId >= 0 && slotId < topSlotCount(menu);
+        return slotId >= 0 && slotId < MenuItems.topSlots(menu);
     }
 
     private static boolean isLoadoutSelectionSlot(int slotId) {
         return slotIdToLoadoutIndex(slotId) >= 0;
-    }
-
-    static int topSlotCount(AbstractContainerMenu menu) {
-        if (menu == null) {
-            return 0;
-        }
-
-        return Math.max(0, menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT);
     }
 
     static ItemStack slotStack(AbstractContainerMenu menu, int slotId) {
@@ -838,7 +830,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return 0;
         }
 
-        int topSlotCount = Math.max(0, menu.slots.size() - PLAYER_INVENTORY_SLOT_COUNT);
+        int topSlotCount = MenuItems.topSlots(menu);
         int count = 0;
         for (int slotId = 0; slotId < topSlotCount; slotId++) {
             if (isNamedLoadoutItem(slotStack(menu, slotId))) {
@@ -874,7 +866,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
 
         StringBuilder builder = new StringBuilder("[");
         int appended = 0;
-        int topSlotCount = topSlotCount(menu);
+        int topSlotCount = MenuItems.topSlots(menu);
         for (int slotId = 0; slotId < topSlotCount && appended < limit; slotId++) {
             ItemStack stack = slotStack(menu, slotId);
             if (stack.isEmpty()) {

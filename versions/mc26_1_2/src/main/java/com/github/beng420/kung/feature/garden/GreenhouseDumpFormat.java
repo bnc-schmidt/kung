@@ -12,7 +12,7 @@ import java.util.regex.Pattern;
  * The pure parts of {@code /kung greenhouse dump}: where a world position falls on the grid, what a head's
  * texture property says, and a size-capped text body. No game classes, so they are unit-tested.
  */
-final class GreenhouseDumpFormat {
+public final class GreenhouseDumpFormat {
     /** Everything the file may hold; the checklist is written even when the rest was cut. */
     static final int MAX_CHARS = 300_000;
     private static final int CHECKLIST_RESERVE = 4_000;
@@ -27,7 +27,7 @@ final class GreenhouseDumpFormat {
     record CellRef(int dx, int dz, boolean inGrid, int row, int column) { }
 
     /** The skin of a player head: the url, the hash at its end, and the decoded JSON. */
-    record Texture(String url, String hash, String json) { }
+    public record Texture(String url, String hash, String json) { }
 
     private GreenhouseDumpFormat() { }
 
@@ -49,7 +49,7 @@ final class GreenhouseDumpFormat {
      * The skin url and its hash from a profile's base64 {@code textures} value. Empty when the value does not
      * decode to something with a url; never throws.
      */
-    static Optional<Texture> texture(String base64) {
+    public static Optional<Texture> texture(String base64) {
         if (base64 == null || base64.isBlank()) return Optional.empty();
         try {
             String json = new String(Base64.getMimeDecoder().decode(base64.strip()), StandardCharsets.UTF_8);

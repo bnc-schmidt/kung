@@ -5,12 +5,14 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.KungHudEditorState;
+import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog.RoomBounds;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -178,10 +180,8 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         DungeonLiveMapWriter.MatchRenderPlan renderPlan = KungBuild.MODRINTH ? DungeonEnteredRooms.view(fullPlan) : fullPlan;
         boolean totalsShown = !KungBuild.MODRINTH || DungeonEnteredRooms.allEntered(snapshot, fullPlan);
         float scale = effectiveScale(config);
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.x(), config.y(), scale);
         try {
-            graphics.pose().translate(config.x(), config.y());
-            graphics.pose().scale(scale, scale);
             int left = 0;
             int top = 0;
             int gridTop = top;
@@ -197,16 +197,14 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 dungeonStateTracker.isRecording(),
                 renderPartialTick()
             );
-            graphics.pose().pushMatrix();
+            HudPose.begin(graphics, left, gridTop + footerTop(config), textScale(config));
             try {
-                graphics.pose().translate(left, gridTop + footerTop(config));
-                graphics.pose().scale(textScale(config), textScale(config));
                 drawFooter(graphics, 0, 0, dungeonStateTracker.runStats(), snapshot, renderPlan, totalsShown);
             } finally {
-                graphics.pose().popMatrix();
+                HudPose.end(graphics);
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -216,12 +214,9 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         if (client.level == null || client.player == null) return;
         Vec3 cameraPosition = client.player.getPosition(partialTick);
         var view = arena.view(cameraPosition.x, cameraPosition.z);
-        drawBorder(graphics, left - 3, top - 3, GRID_PIXEL_SIZE + 6, GRID_PIXEL_SIZE + 6, MAP_BORDER);
-        graphics.pose().pushMatrix();
+        graphics.outline(left - 3, top - 3, GRID_PIXEL_SIZE + 6, GRID_PIXEL_SIZE + 6, MAP_BORDER);
+        HudPose.begin(graphics, left, top, GRID_PIXEL_SIZE / (float) DungeonBossMapCatalog.VIEW_SIZE);
         try {
-            graphics.pose().translate(left, top);
-            float mapScale = GRID_PIXEL_SIZE / (float) DungeonBossMapCatalog.VIEW_SIZE;
-            graphics.pose().scale(mapScale, mapScale);
             graphics.enableScissor(0, 0, DungeonBossMapCatalog.VIEW_SIZE, DungeonBossMapCatalog.VIEW_SIZE);
             try {
                 graphics.blit(RenderPipelines.GUI_TEXTURED, bossMapTextures.get(arena.image()),
@@ -247,7 +242,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 graphics.disableScissor();
             }
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -271,13 +266,11 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         boolean recording,
         float partialTick
     ) {
-        drawBorder(graphics, left - 3, top - 3, GRID_PIXEL_SIZE + 6, GRID_PIXEL_SIZE + 6, MAP_BORDER);
+        graphics.outline(left - 3, top - 3, GRID_PIXEL_SIZE + 6, GRID_PIXEL_SIZE + 6, MAP_BORDER);
 
         GridViewport viewport = GridViewport.from(snapshot, renderPlan, stats);
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, left + viewport.offsetX(), top + viewport.offsetY(), viewport.scale());
         try {
-            graphics.pose().translate(left + viewport.offsetX(), top + viewport.offsetY());
-            graphics.pose().scale(viewport.scale(), viewport.scale());
             graphics.pose().translate(-viewport.minPixelX(), -viewport.minPixelY());
             drawGridContent(graphics, snapshot, renderPlan, stats, viewport);
             if (!KungBuild.MODRINTH) drawMimicRoomHighlights(graphics, snapshot, renderPlan, stats, viewport);
@@ -287,15 +280,8 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             drawRoomLabels(graphics, snapshot, renderPlan, stats, viewport);
             drawPlayerMarkers(graphics, 0, 0, snapshot, stats, partialTick);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
-    }
-
-    private static void drawBorder(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int color) {
-        graphics.fill(x, y, x + width, y + 1, color);
-        graphics.fill(x, y + height - 1, x + width, y + height, color);
-        graphics.fill(x, y, x + 1, y + height, color);
-        graphics.fill(x + width - 1, y, x + width, y + height, color);
     }
 
     static DungeonRoomRenderLayout roomLayoutFor(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -1234,12 +1220,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         boolean shadow
     ) {
         Minecraft client = Minecraft.getInstance();
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(centerX, y);
-        graphics.pose().scale(scale, scale);
+        HudPose.begin(graphics, centerX, y, scale);
         int x = -client.font.width(text) / 2;
         graphics.text(client.font, text, x, 0, color, shadow);
-        graphics.pose().popMatrix();
+        HudPose.end(graphics);
     }
 
     private static void drawScaledText(
@@ -1252,11 +1236,9 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         boolean shadow
     ) {
         Minecraft client = Minecraft.getInstance();
-        graphics.pose().pushMatrix();
-        graphics.pose().translate(x, y);
-        graphics.pose().scale(scale, scale);
+        HudPose.begin(graphics, x, y, scale);
         graphics.text(client.font, text, 0, 0, color, shadow);
-        graphics.pose().popMatrix();
+        HudPose.end(graphics);
     }
 
     private static int alphaBlack(int alphaPercent) {
@@ -1875,10 +1857,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
 
     private static void drawPlayerFrame(GuiGraphicsExtractor graphics, int classColor, int headSize) {
         int half = headSize / 2;
-        graphics.fill(-half - 1, -half - 1, half + 1, -half, classColor);
-        graphics.fill(-half - 1, half, half + 1, half + 1, classColor);
-        graphics.fill(-half - 1, -half - 1, -half, half + 1, classColor);
-        graphics.fill(half, -half - 1, half + 1, half + 1, classColor);
+        graphics.outline(-half - 1, -half - 1, 2 * half + 2, 2 * half + 2, classColor);
         graphics.fill(-1, -half - 3, 1, -half - 1, classColor);
     }
 
@@ -2103,10 +2082,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         return x + Math.round(client.font.width(text) * FOOTER_TEXT_SCALE);
     }
 
-    public static OverlayBounds overlayBounds(DungeonConfig config) {
+    public static KungHudLayout.Bounds overlayBounds(DungeonConfig config) {
         float scale = effectiveScale(config);
         int height = overlayContentHeight(config);
-        return new OverlayBounds(
+        return new KungHudLayout.Bounds(
             Math.round(config.x() - overlayLeftMargin(config) * scale),
             Math.round(config.y() - 5 * scale),
             Math.round(overlayContentWidth(config) * scale),
@@ -2514,8 +2493,5 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             this.lastUpdateNanos = lastUpdateNanos;
             this.lastSeenFrame = lastSeenFrame;
         }
-    }
-
-    public record OverlayBounds(int x, int y, int width, int height) {
     }
 }

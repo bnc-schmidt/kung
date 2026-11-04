@@ -1,5 +1,7 @@
 package com.github.beng420.kung.feature.garden;
 
+import static com.github.beng420.kung.ui.UiBounds.inside;
+
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.feature.garden.GreenhouseCosts.CostMode;
@@ -411,10 +413,6 @@ public final class GreenhouseScreen extends Screen {
         int gui = guiScale();
         int[] at = gridLayout().at((int) Math.floor(guiX * gui), (int) Math.floor(guiY * gui));
         return at == null ? -1 : at[0] * GreenhouseGrid.SIZE + at[1];
-    }
-
-    private static boolean inside(int px, int py, int left, int top, int w, int h) {
-        return px >= left && px < left + w && py >= top && py < top + h;
     }
 
     // --- drawing ---------------------------------------------------------------------------------------------

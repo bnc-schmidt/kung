@@ -68,9 +68,8 @@ public final class EffectAlarmsFeature extends ConfigurableFeature<GardenAlarmsC
     }
 
     private void poll(Minecraft client, long now) {
-        var server = client.getCurrentServer();
         var context = HypixelInstanceTracker.INSTANCE;
-        if (server == null || !HypixelLocation.isHypixelAddress(server.ip) || client.player == null) {
+        if (!HypixelLocation.onHypixel(client) || client.player == null) {
             onReset();
             return;
         }
@@ -128,9 +127,6 @@ public final class EffectAlarmsFeature extends ConfigurableFeature<GardenAlarmsC
         ffAlarm.rearm();
         sprayAlarm.rearm();
     }
-
-    @Override
-    protected void onShutdown() { onReset(); }
 
     private static long now() { return System.nanoTime() / 1_000_000; }
 }

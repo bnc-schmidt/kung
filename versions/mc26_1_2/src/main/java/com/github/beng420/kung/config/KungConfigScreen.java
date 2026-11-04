@@ -1,11 +1,14 @@
 package com.github.beng420.kung.config;
 
+import static com.github.beng420.kung.ui.UiBounds.inside;
+
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungSettings.CategoryEntry;
 import com.github.beng420.kung.config.KungSettings.FeatureEntry;
 import com.github.beng420.kung.feature.garden.GreenhouseMarquee;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.ui.UiBounds;
 import com.github.beng420.kung.ui.UiHoverDelay;
 import com.github.beng420.kung.ui.UiTextField;
@@ -467,13 +470,11 @@ public final class KungConfigScreen extends Screen {
 
     /** A tiny yellow star over the top-right corner of developer-only rows: drawn on top, takes no room. */
     private void drawDeveloperStar(GuiGraphicsExtractor graphics, int rowRight, int rowY) {
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, rowRight - 6, rowY + 1, 0.5F);
         try {
-            graphics.pose().translate(rowRight - 6, rowY + 1);
-            graphics.pose().scale(0.5F, 0.5F);
             graphics.text(menuFont, "\u2605", 0, 0, 0xFFFFD84A, false);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
@@ -993,10 +994,6 @@ public final class KungConfigScreen extends Screen {
 
     private void drawCentered(GuiGraphicsExtractor graphics, String text, int centerX, int y, int color, boolean shadow) {
         graphics.text(menuFont, text, centerX - menuFont.width(text) / 2, y, color, shadow);
-    }
-
-    private static boolean inside(int mouseX, int mouseY, int x, int y, int width, int height) {
-        return mouseX >= x && mouseX < x + width && mouseY >= y && mouseY < y + height;
     }
 
     private final class TextEditorOverlay {

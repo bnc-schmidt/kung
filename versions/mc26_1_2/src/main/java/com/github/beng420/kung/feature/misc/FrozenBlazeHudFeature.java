@@ -7,7 +7,9 @@ import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.skyblock.SkyblockItemId;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -23,7 +25,6 @@ import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -39,7 +40,6 @@ import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.ItemLore;
 import net.minecraft.world.phys.Vec3;
 
 public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig> {
@@ -135,8 +135,8 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
             + " stands=" + stands + " tags=" + tags + " slowed=" + slowed);
         seen.clear();
         // The static set-bonus line; an on/off state in the lore would show up as a changed line.
-        String lore = player.getItemBySlot(EquipmentSlot.CHEST).getOrDefault(DataComponents.LORE, ItemLore.EMPTY).lines().stream()
-            .map(Component::getString).filter(line -> line.contains("Bonus") || line.contains("Aura")).collect(Collectors.joining(" | "));
+        String lore = MenuItems.lore(player.getItemBySlot(EquipmentSlot.CHEST)).stream()
+            .filter(line -> line.contains("Bonus") || line.contains("Aura")).collect(Collectors.joining(" | "));
         if (!lore.equals(lastLore)) KungDebugRecorder.event("frozen-blaze", "lore " + (lastLore = lore));
     }
 
@@ -279,15 +279,13 @@ public final class FrozenBlazeHudFeature extends ConfigurableFeature<MiscConfig>
         var status = Component.literal(set + " ").withColor(set.equals("Blaze") ? 0xFFAA00 : 0x55FFFF)
             .append(on ? Component.literal("on").withColor(0x55FF55) : Component.literal("off").withColor(0xFF5555));
         if (on && idleTicks < AFK_TICKS) status.append(Component.literal(" " + (AFK_TICKS - idleTicks + 19) / 20 + "s").withColor(0xAAAAAA));
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.frozenBlazeHudX(), config.frozenBlazeHudY(),
+            config.frozenBlazeHudScale() / 100F);
         try {
-            graphics.pose().translate(config.frozenBlazeHudX(), config.frozenBlazeHudY());
-            float scale = config.frozenBlazeHudScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.text(font, status, 4, 4, 0xFFFFFFFF, true);
             if (!on) graphics.text(font, HINT, 4, 15, 0xFFAAAAAA, true);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 

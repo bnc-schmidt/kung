@@ -14,6 +14,7 @@ import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.runtime.KungFileLayout;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -130,8 +131,6 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         epoch = Long.MIN_VALUE;
         witherKingEpoch = Long.MIN_VALUE;
     }
-
-    @Override protected void onShutdown() { onReset(); }
 
     private void clearObservations() {
         spawnHints.clear();
@@ -1108,28 +1107,23 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             float scale = M7DragonHp.textScale(core.distanceTo(eye), config().dragonHpScale());
             int x = -client.font.width(text) / 2;
             int y = -client.font.lineHeight / 2;
-            graphics.pose().pushMatrix();
+            HudPose.begin(graphics, (float) ((screen.x + 1.0) * 0.5 * graphics.guiWidth()),
+                (float) ((1.0 - screen.y) * 0.5 * graphics.guiHeight()), scale);
             try {
-                graphics.pose().translate((float) ((screen.x + 1.0) * 0.5 * graphics.guiWidth()),
-                    (float) ((1.0 - screen.y) * 0.5 * graphics.guiHeight()));
-                graphics.pose().scale(scale, scale);
                 graphics.fill(x - 2, y - 1, x + client.font.width(text) + 2, y + client.font.lineHeight + 1, 0x90000000);
                 graphics.text(client.font, text, x, y, 0xFF000000 | M7DragonHp.color(seen.last(), seen.peak()), true);
             } finally {
-                graphics.pose().popMatrix();
+                HudPose.end(graphics);
             }
         }
     }
 
     private static void drawPrio(GuiGraphicsExtractor graphics, DungeonConfig config, Component text) {
-        graphics.pose().pushMatrix();
+        HudPose.begin(graphics, config.dragonPrioX(), config.dragonPrioY(), config.dragonPrioScale() / 100F);
         try {
-            graphics.pose().translate(config.dragonPrioX(), config.dragonPrioY());
-            float scale = config.dragonPrioScale() / 100F;
-            graphics.pose().scale(scale, scale);
             graphics.text(Minecraft.getInstance().font, text, 4, 4, 0xFFFFFFFF, true);
         } finally {
-            graphics.pose().popMatrix();
+            HudPose.end(graphics);
         }
     }
 
