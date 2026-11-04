@@ -252,6 +252,13 @@ public final class KungSettings {
                     )
                 )
             )),
+            new CategoryEntry("Foraging", List.of(
+                new FeatureEntry("Beacon Solver", config.foraging::beaconSolverEnabled,
+                    config.foraging::setBeaconSolverEnabled, List.of())
+                    .withTooltip("Moonglade Beacon menus: a number on the color button shows the clicks that match the reference.",
+                        "Positive numbers are left clicks, negative numbers are right clicks. Nothing is ever blocked.",
+                        "Speed and sound are not solved yet: the trace area \"beacon\" records them while the menu is open.")
+            )),
             new CategoryEntry("Garden", List.of(
                 new FeatureEntry("Garden Alarms", config.gardenAlarms::enabled,
                     config.gardenAlarms::setEnabled,

@@ -8,6 +8,7 @@ import com.github.beng420.kung.feature.misc.PerformanceHudFeature;
 import net.minecraft.network.protocol.ping.ClientboundPongResponsePacket;
 import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.feature.experiment.ExperimentSolverFeature;
+import com.github.beng420.kung.feature.foraging.BeaconSolverFeature;
 import com.github.beng420.kung.feature.misc.AutoHarpFeature;
 import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
 import com.github.beng420.kung.feature.hunting.InvisibugLineFeature;
@@ -53,6 +54,7 @@ public abstract class ClientPacketListenerMixin {
         CustomSoundsFeature.observeSoundEvent(packet.getSound().value());
         DungeonDebuffFeature.INSTANCE.observeSound(packet);
         FrozenBlazeHudFeature.INSTANCE.observeSound(packet);
+        BeaconSolverFeature.observeSound(packet);
     }
 
     @Inject(method = "handleSoundEntityEvent", at = @At("TAIL"))
@@ -94,6 +96,7 @@ public abstract class ClientPacketListenerMixin {
     private void kung$onContainerSlot(ClientboundContainerSetSlotPacket packet, CallbackInfo callbackInfo) {
         SuperpairsHelperFeature.observeSlotUpdate(packet.getContainerId(), packet.getSlot(), packet.getItem());
         ExperimentSolverFeature.observeMenuPacket(packet.getContainerId());
+        BeaconSolverFeature.observeMenuPacket(packet.getContainerId());
         if (!KungBuild.MODRINTH) AutoHarpFeature.observeMenuPacket(packet.getContainerId());
         FeastOverlayFeature.observeSlotUpdate(packet.getContainerId(), packet.getSlot(), packet.getItem());
     }
@@ -102,6 +105,7 @@ public abstract class ClientPacketListenerMixin {
     private void kung$onContainerContent(ClientboundContainerSetContentPacket packet, CallbackInfo callbackInfo) {
         SuperpairsHelperFeature.observeContentUpdate(packet.containerId(), packet.items());
         ExperimentSolverFeature.observeMenuPacket(packet.containerId());
+        BeaconSolverFeature.observeMenuPacket(packet.containerId());
         if (!KungBuild.MODRINTH) AutoHarpFeature.observeMenuPacket(packet.containerId());
         FeastOverlayFeature.observeContentUpdate(packet.containerId(), packet.items());
     }

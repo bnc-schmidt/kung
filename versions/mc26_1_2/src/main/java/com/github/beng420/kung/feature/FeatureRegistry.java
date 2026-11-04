@@ -16,6 +16,7 @@ import com.github.beng420.kung.feature.garden.GreenhouseHologram;
 import com.github.beng420.kung.feature.garden.PlotCleaningHelperFeature;
 import com.github.beng420.kung.feature.garden.EffectAlarmsFeature;
 import com.github.beng420.kung.feature.garden.VisitorAlarmFeature;
+import com.github.beng420.kung.feature.foraging.BeaconSolverFeature;
 import com.github.beng420.kung.feature.hunting.InvisibugLineFeature;
 import com.github.beng420.kung.feature.mining.GourmandAlertFeature;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature;
@@ -95,6 +96,7 @@ public final class FeatureRegistry {
         register(EffectAlarmsFeature.INSTANCE);
         register(PlotCleaningHelperFeature.INSTANCE);
         register(GourmandAlertFeature.INSTANCE);
+        register(BeaconSolverFeature.INSTANCE);
         register(WaypointsFeature.INSTANCE);
         GreenhouseHologram.initialize();
 

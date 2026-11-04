@@ -121,6 +121,32 @@ public final class ChatChannelsFeatureTest {
     }
 
     @Test
+    public void aShownCountBecomesTheIndexOfAllMessagesSkippingHiddenOnes() {
+        // Index 0 is the newest message. Shown: 1, 2 and 5; the rest is hidden and has no lines.
+        java.util.function.IntPredicate shown = index -> index == 1 || index == 2 || index == 5;
+        assertEquals(1, ChatChannelsFeature.indexOfShown(0, 8, shown));
+        assertEquals(2, ChatChannelsFeature.indexOfShown(1, 8, shown));
+        assertEquals(5, ChatChannelsFeature.indexOfShown(2, 8, shown));
+        assertEquals("no fourth shown message", -1, ChatChannelsFeature.indexOfShown(3, 8, shown));
+        assertEquals("no click", -1, ChatChannelsFeature.indexOfShown(-1, 8, shown));
+        assertEquals("nothing hidden changes nothing", 4, ChatChannelsFeature.indexOfShown(4, 8, index -> true));
+    }
+
+    @Test
+    public void anIndexOfAllMessagesBecomesTheShownCountAndAHiddenMessageHasNone() {
+        java.util.function.IntPredicate shown = index -> index == 1 || index == 2 || index == 5;
+        assertEquals(0, ChatChannelsFeature.shownBefore(1, 8, shown));
+        assertEquals(1, ChatChannelsFeature.shownBefore(2, 8, shown));
+        assertEquals(2, ChatChannelsFeature.shownBefore(5, 8, shown));
+        assertEquals("hidden", -1, ChatChannelsFeature.shownBefore(3, 8, shown));
+        assertEquals("out of range", -1, ChatChannelsFeature.shownBefore(8, 8, index -> true));
+        assertEquals("no index", -1, ChatChannelsFeature.shownBefore(-1, 8, index -> true));
+        for (int count = 0; count < 3; count++) {
+            assertEquals("round trip", count, ChatChannelsFeature.shownBefore(ChatChannelsFeature.indexOfShown(count, 8, shown), 8, shown));
+        }
+    }
+
+    @Test
     public void aClickCountsOnlyInsideASlot() {
         Slot slot = tabs(427).getFirst();
         assertTrue(slot.contains(slot.x(), slot.y()));

@@ -110,21 +110,6 @@ public class SackItemsTest {
     }
 
     @Test
-    public void aWorldChangeWarnsOncePerStretchWithoutASackRead() {
-        var wheat = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Wheat", 0xFFFFFF, 1_234, 0);
-        var unread = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Carrot", 0xFFFFFF, -1, 0);
-        var marked = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<com.github.beng420.kung.config.category.MiscConfig.SackItem, Boolean>());
-        assertTrue(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat, unread), marked)); // first change: warn
-        marked.add(wheat);
-        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat, unread), marked)); // already marked: quiet
-        marked.remove(wheat); // a sack read cleared it: the next change warns again
-        assertTrue(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(wheat), marked));
-        // Nothing tracked, or only rows without a count: nothing to warn about.
-        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(), marked));
-        assertFalse(SackTrackerFeature.shouldWarnAfterWorldChange(List.of(unread), marked));
-    }
-
-    @Test
     public void aGoalRingsOnceWhenTheCountRisesToIt() {
         assertTrue(SackTrackerFeature.goalReached(900, 1_000, 1_000)); // exactly the goal
         assertTrue(SackTrackerFeature.goalReached(900, 5_000, 1_000)); // a big pick-up jumps over it

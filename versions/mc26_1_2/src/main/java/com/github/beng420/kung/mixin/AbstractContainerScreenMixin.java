@@ -1,6 +1,7 @@
 package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.feature.experiment.ExperimentSolverFeature;
+import com.github.beng420.kung.feature.foraging.BeaconSolverFeature;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
@@ -39,6 +40,7 @@ public abstract class AbstractContainerScreenMixin {
             input
         );
         ExperimentSolverFeature.observeSlotClick((AbstractContainerScreen<?>) (Object) this, slotId);
+        BeaconSolverFeature.observeSlotClick((AbstractContainerScreen<?>) (Object) this, slotId, button, input);
     }
 
     @Inject(method = "keyPressed", at = @At("HEAD"), cancellable = true)
@@ -84,6 +86,7 @@ public abstract class AbstractContainerScreenMixin {
         kung$extractingSlot = null;
         SuperpairsHelperFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
         ExperimentSolverFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
+        BeaconSolverFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
     }
 
     @ModifyArg(
@@ -98,9 +101,8 @@ public abstract class AbstractContainerScreenMixin {
         if (original != null) {
             return original;
         }
-        return LoadoutsAutoCloseFeature.loadoutStackSizeLabel(
-            (AbstractContainerScreen<?>) (Object) this,
-            kung$extractingSlot
-        );
+        var screen = (AbstractContainerScreen<?>) (Object) this;
+        String loadout = LoadoutsAutoCloseFeature.loadoutStackSizeLabel(screen, kung$extractingSlot);
+        return loadout != null ? loadout : BeaconSolverFeature.slotLabel(screen, kung$extractingSlot);
     }
 }

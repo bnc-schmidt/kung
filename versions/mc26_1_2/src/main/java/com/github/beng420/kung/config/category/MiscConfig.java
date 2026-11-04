@@ -73,6 +73,8 @@ public final class MiscConfig extends ConfigCategory {
     private Set<String> chatChannelsHidden = new LinkedHashSet<>();
     /** Whether a /chat switch (typed or a tab click's) also changes the tab; off, only a click on a tab does. */
     private boolean chatChannelsFollowChat = false;
+    /** The {@code ChatChannels.Send} Hypixel was last seen in, by enum name, so a restart still has it. */
+    private String chatSend = "ALL";
     private boolean currentChatDisplayEnabled = false;
     private int currentChatDisplayX = 6;
     private int currentChatDisplayY = 90;
@@ -321,6 +323,12 @@ public final class MiscConfig extends ConfigCategory {
     public void setChatChannelsEnabled(boolean value) { chatChannelsEnabled = value; save(); }
     public boolean chatChannelsFollowChat() { return chatChannelsFollowChat; }
     public void setChatChannelsFollowChat(boolean value) { chatChannelsFollowChat = value; save(); }
+    public String chatSend() { return chatSend; }
+    public void setChatSend(String value) {
+        if (value.equals(chatSend)) return;
+        chatSend = value;
+        save();
+    }
     public boolean currentChatDisplayEnabled() { return currentChatDisplayEnabled; }
     public void setCurrentChatDisplayEnabled(boolean value) { currentChatDisplayEnabled = value; save(); }
     public int currentChatDisplayX() { return currentChatDisplayX; }

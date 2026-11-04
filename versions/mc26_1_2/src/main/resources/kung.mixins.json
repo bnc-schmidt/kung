@@ -6,6 +6,7 @@
     "AbstractContainerScreenMixin",
     "ChatComponentAccessor",
     "ChatComponentMixin",
+    "ChatPatchesChatUtilMixin",
     "ClientCommonPacketListenerMixin",
     "ClientPacketListenerMixin",
     "ConnectionMixin",

@@ -292,11 +292,6 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return true;
     }
 
-    /** A world change warns when some row holds a real count and none is marked yet: the first one since a sack was read. */
-    static boolean shouldWarnAfterWorldChange(List<SackItem> items, Set<SackItem> approximate) {
-        return items.stream().anyMatch(item -> item.amount() >= 0) && items.stream().noneMatch(approximate::contains);
-    }
-
     /** Rows a [Sacks] message changed within {@link #ACTIVE_MILLIS}: the ones that can have unreported pick-ups. */
     private List<SackItem> activeItems(long nowMillis) {
         return config().sackTrackerAllItems().stream().filter(item -> active(changedAt.get(item), nowMillis)).toList();
@@ -472,13 +467,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (!first && tracking()) {
                 // Only rows grinded just before the change can be short; a quiet row (a relog, an island hop) stays exact.
                 List<SackItem> active = activeItems(System.currentTimeMillis());
-                // One notice per stretch without a sack read, not one per world change (every dungeon run is one).
-                boolean notify = !active.isEmpty() && shouldWarnAfterWorldChange(config().sackTrackerItems(), approximate);
                 approximate.addAll(active);
                 startResync();
-                if (notify) KungMessages.send(client, KungMessages.Type.WARNING, "Sack Tracker",
-                    "Counts may be off after a world change (marked ~): Hypixel drops finds it had not reported yet. "
-                        + "Open the sack for exact values.");
             }
         }
         tickResync(client);

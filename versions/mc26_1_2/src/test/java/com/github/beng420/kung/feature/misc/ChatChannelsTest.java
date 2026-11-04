@@ -89,6 +89,15 @@ public final class ChatChannelsTest {
         assertKind(Channel.PARTY, "  Party >  [MVP+] Beng114: hi");
     }
 
+    @Test
+    public void theSavedChannelComesBackByNameAndAnythingElseIsAll() {
+        for (ChatChannels.Send send : ChatChannels.Send.values()) {
+            assertEquals(send, ChatChannels.storedSend(send.name()));
+        }
+        assertEquals(ChatChannels.Send.ALL, ChatChannels.storedSend("NOPE"));
+        assertEquals(ChatChannels.Send.ALL, ChatChannels.storedSend(null));
+    }
+
     /** Both notices below are real lines from Kung traces and SkyHanni's logs. */
     @Test
     public void hypixelsSwitchNoticeNamesTheChannel() {

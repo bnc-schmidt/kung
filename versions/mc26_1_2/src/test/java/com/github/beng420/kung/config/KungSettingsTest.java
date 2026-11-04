@@ -28,11 +28,11 @@ public final class KungSettingsTest {
         Path file = temporary.getRoot().toPath().resolve("kung.json");
         var categories = KungSettings.categories(new KungConfig(file), () -> { });
 
-        assertEquals(List.of("Dungeon", "Garden", "Hunting", "Mining", "Slayer", "Util", "Debug"),
+        assertEquals(List.of("Dungeon", "Foraging", "Garden", "Hunting", "Mining", "Slayer", "Util", "Debug"),
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue. Waypoints is developer only.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 4, 2, 1, 2, modrinth ? 18 : 20, 4),
+        assertEquals(List.of(modrinth ? 12 : 13, 1, 4, 2, 1, 2, modrinth ? 18 : 20, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {

@@ -144,6 +144,14 @@ public final class ChatChannels {
         };
     }
 
+    /** The channel saved under its enum name, All for a missing or unknown one. */
+    public static Send storedSend(String name) {
+        for (Send send : Send.values()) {
+            if (send.name().equals(name)) return send;
+        }
+        return Send.ALL;
+    }
+
     /** The channel a tab sends to: All (null) and the kinds that have a channel; DMs have none (null as well). */
     public static Send sendFor(Channel tab) {
         if (tab == null) return Send.ALL;

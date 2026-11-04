@@ -68,6 +68,7 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
 
     @Override
     protected void onInitialize() {
+        send = ChatChannels.storedSend(config().chatSend());
         ClientReceiveMessageEvents.GAME.register((message, overlay) -> {
             if (!overlay && tracking()) onLine(message.getString());
         });
@@ -95,8 +96,8 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     /** Where your next message goes. */
     public static ChatChannels.Send send() { return send; }
 
+    /** The sent-to channel is kept and saved, so a reconnect or restart still shows it; only the pending switch goes. */
     private static void forgetChannel() {
-        send = ChatChannels.Send.ALL;
         pending = null;
         if (view != null) {
             view = null;
@@ -126,7 +127,9 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     private static void switched(ChatChannels.Send channel) {
         send = channel;
         pending = null;
-        if (INSTANCE.initialized() && INSTANCE.config().chatChannelsFollowChat()) setView(channel.channel());
+        if (!INSTANCE.initialized()) return;
+        INSTANCE.config().setChatSend(channel.name());
+        if (INSTANCE.config().chatChannelsFollowChat()) setView(channel.channel());
     }
 
     // ---- What the chat shows -----------------------------------------------------------------------------------
@@ -250,6 +253,48 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
             if (newer >= 0 && visible.test(newer)) return newer;
         }
         return -1;
+    }
+
+    /**
+     * Chat Patches turns a clicked line into an index of allMessages by counting messages with lines, so every hidden
+     * message in front of it throws the index off. ChatPatchesChatUtilMixin runs its two conversions through these.
+     * An index counts shown messages only, newest first; the all-index is the one of allMessages.
+     */
+    public static int allIndexOfShown(int shown) {
+        if (!INSTANCE.isEnabled()) return shown;
+        List<GuiMessage> all = allMessages();
+        return indexOfShown(shown, all.size(), index -> !hidden(all.get(index)));
+    }
+
+    /** The reverse of {@link #allIndexOfShown}: -1 for a hidden message, which has no line to mark. */
+    public static int shownIndexOfAll(int index) {
+        if (!INSTANCE.isEnabled()) return index;
+        List<GuiMessage> all = allMessages();
+        return shownBefore(index, all.size(), at -> !hidden(all.get(at)));
+    }
+
+    private static List<GuiMessage> allMessages() {
+        return ((ChatComponentAccessor) McCompat.chat(Minecraft.getInstance())).kung$getAllMessages();
+    }
+
+    /** The index of the {@code shown}-th shown message, newest first; -1 when there is none. */
+    static int indexOfShown(int shown, int size, IntPredicate visible) {
+        if (shown < 0) return -1;
+        int left = shown;
+        for (int index = 0; index < size; index++) {
+            if (visible.test(index) && left-- == 0) return index;
+        }
+        return -1;
+    }
+
+    /** How many shown messages are newer than {@code index}; -1 when that message is out of range or hidden itself. */
+    static int shownBefore(int index, int size, IntPredicate visible) {
+        if (index < 0 || index >= size || !visible.test(index)) return -1;
+        int count = 0;
+        for (int newer = 0; newer < index; newer++) {
+            if (visible.test(newer)) count++;
+        }
+        return count;
     }
 
     /** The lines of one message the way vanilla stores them: the last one first, and it ends the entry. */

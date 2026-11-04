@@ -98,7 +98,7 @@ public final class KungDebugRecorder {
                 SCORE_EVENTS.addLast(line);
                 while (SCORE_EVENTS.size() > MAX_SCORE_EVENTS) SCORE_EVENTS.removeFirst();
             }
-            if (cleanArea.equals("safari-throw") || cleanArea.equals("sack-api")) {
+            if (cleanArea.equals("safari-throw") || cleanArea.equals("sack-api") || cleanArea.equals("beacon")) {
                 THROW_EVENTS.addLast(line);
                 while (THROW_EVENTS.size() > MAX_THROW_EVENTS) THROW_EVENTS.removeFirst();
             }
@@ -282,6 +282,8 @@ public final class KungDebugRecorder {
             case "safari-throw" -> new AreaPolicy(0, 60_000L, 0L, false, false);
             // The sack API probe compares API polls with [Sacks] messages by time: every line is evidence.
             case "sack-api" -> new AreaPolicy(0, 60_000L, 0L, false, false);
+            // Beacon menu lines are timed by hand to work out the reference speed and pitch: keep every one.
+            case "beacon" -> new AreaPolicy(0, 60_000L, 0L, false, false);
             case "map-change" -> new AreaPolicy(120, 60_000L, 3_000L, false, important);
             case "map-check" -> new AreaPolicy(30, 60_000L, DEFAULT_DEDUPE_MILLIS, false, important);
             case "mimic-esp" -> new AreaPolicy(40, 60_000L, DEFAULT_DEDUPE_MILLIS, true, important);

@@ -10,12 +10,14 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.client.gui.screens.ChatScreen;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.Identifier;
 
 /**
  * "Chat: Party": the channel Hypixel sends your next message to. {@link ChatChannelsFeature} reads it from the
- * "You are now in the PARTY channel" notices, from /chat sent by you and from the tabs.
+ * "You are now in the PARTY channel" notices, from /chat sent by you and from the tabs. It shows only while the chat
+ * is open, and the channel is saved, so it is still there after a restart.
  */
 public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscConfig> {
     public static final CurrentChatDisplayFeature INSTANCE = new CurrentChatDisplayFeature();
@@ -38,7 +40,8 @@ public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscCon
 
     private void render(GuiGraphicsExtractor graphics) {
         var client = Minecraft.getInstance();
-        if (!isEnabled() || client.level == null || McCompat.hudHidden(client) || KungHudEditorState.externalEditing()) return;
+        if (!isEnabled() || client.level == null || !(McCompat.screen(client) instanceof ChatScreen) || McCompat.hudHidden(client)
+            || KungHudEditorState.externalEditing()) return;
         draw(graphics, config(), ChatChannelsFeature.send());
     }
 

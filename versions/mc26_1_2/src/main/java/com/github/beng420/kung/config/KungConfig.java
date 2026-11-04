@@ -7,6 +7,7 @@ import com.github.beng420.kung.config.category.DungeonChatFilterConfig;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.FeastConfig;
 import com.github.beng420.kung.config.category.GardenAlarmsConfig;
+import com.github.beng420.kung.config.category.ForagingConfig;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.config.category.InvisibugConfig;
@@ -53,6 +54,7 @@ public final class KungConfig {
     public InvisibugConfig invisibug = new InvisibugConfig();
     public PlotCleaningConfig plotCleaning = new PlotCleaningConfig();
     public MiningConfig mining = new MiningConfig();
+    public ForagingConfig foraging = new ForagingConfig();
     public WaypointsConfig waypoints = new WaypointsConfig();
 
     private transient Path explicitConfigFile;
@@ -105,6 +107,7 @@ public final class KungConfig {
                     invisibug = loaded.invisibug;
                     plotCleaning = loaded.plotCleaning;
                     mining = loaded.mining;
+                    foraging = loaded.foraging;
                     waypoints = loaded.waypoints;
                     loadedSuccessfully = true;
                 }
@@ -184,6 +187,7 @@ public final class KungConfig {
         if (invisibug == null) invisibug = new InvisibugConfig();
         if (plotCleaning == null) plotCleaning = new PlotCleaningConfig();
         if (mining == null) mining = new MiningConfig();
+        if (foraging == null) foraging = new ForagingConfig();
         if (waypoints == null) waypoints = new WaypointsConfig();
     }
 
@@ -203,6 +207,7 @@ public final class KungConfig {
         invisibug.onChange(this::save);
         plotCleaning.onChange(this::save);
         mining.onChange(this::save);
+        foraging.onChange(this::save);
         waypoints.onChange(this::save);
     }
 
