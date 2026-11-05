@@ -24,9 +24,9 @@ public final class DungeonRunRosterRegressionTest {
         var stats = currentRun();
         assertEquals(Set.copyOf(CURRENT), names(stats));
         assertEquals(5, stats.summaryPlayers().size());
-        assertEquals(5, stats.knownTrackedPlayerUuids().size());
+        assertEquals(5, stats.knownDungeonPlayerUuids().size());
         for (String stale : List.of("ABCtheBass", "ImBlatte", "RaketeX")) {
-            assertFalse(stats.isKnownTrackedPlayer(stale));
+            assertFalse(stats.isKnownDungeonPlayer(stale));
             assertNull(stats.trackedPlayerUuid(stale));
         }
         // A party change after completion must not rewrite the run's participants.
@@ -71,7 +71,7 @@ public final class DungeonRunRosterRegressionTest {
         stats.reset();
         stats.rememberSelf(uuid("Beng114"), "Beng114");
         assertEquals(Set.of("Beng114"), names(stats));
-        assertFalse(stats.isKnownTrackedPlayer("GlossyPenguin"));
+        assertFalse(stats.isKnownDungeonPlayer("GlossyPenguin"));
     }
 
     private static DungeonRunStats currentRun() {

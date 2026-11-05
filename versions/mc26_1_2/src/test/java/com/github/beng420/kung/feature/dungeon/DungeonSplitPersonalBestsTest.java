@@ -46,7 +46,8 @@ public final class DungeonSplitPersonalBestsTest {
         assertEquals(135_000L, tracker.predictedFinishMillis());
         event(100_000L, SADAN);
         assertEquals(130_000L, tracker.predictedFinishMillis());
-        assertEquals("2m 10.00s", DungeonSplitsOverlayFeature.formatDurationMillis(tracker.predictedFinishMillis()));
+        assertEquals("2m 10.00s", DungeonSplitsOverlayFeature.formatDurationMillis(
+            tracker.predictedFinishMillis(), SplitsConfig.TimeFormat.MINUTES));
         assertEquals("130.00s", DungeonSplitsOverlayFeature.formatDurationMillis(
             tracker.predictedFinishMillis(), SplitsConfig.TimeFormat.SECONDS));
     }

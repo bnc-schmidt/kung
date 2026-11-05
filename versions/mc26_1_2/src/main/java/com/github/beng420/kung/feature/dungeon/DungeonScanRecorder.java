@@ -237,7 +237,7 @@ public final class DungeonScanRecorder {
             return;
         }
 
-        for (UUID uuid : stats.knownTrackedPlayerUuids()) {
+        for (UUID uuid : stats.knownDungeonPlayerUuids()) {
             if (uuid.equals(client.player.getUUID())) {
                 continue;
             }
@@ -302,7 +302,7 @@ public final class DungeonScanRecorder {
         int roomGridZ
     ) {
         if (!name.isEmpty()) {
-            return name.equalsIgnoreCase(client.player.getName().getString()) || stats.isKnownTrackedPlayer(name);
+            return name.equalsIgnoreCase(client.player.getName().getString()) || stats.isKnownDungeonPlayer(name);
         }
         DungeonScanUtils.GridPosition selfGrid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
         if (selfGrid.gridX() == roomGridX && selfGrid.gridZ() == roomGridZ) {
@@ -312,7 +312,7 @@ public final class DungeonScanRecorder {
             return false;
         }
         for (AbstractClientPlayer player : client.level.players()) {
-            if (player == client.player || player.isInvisible() || !stats.isKnownTrackedPlayer(player.getName().getString())) {
+            if (player == client.player || player.isInvisible() || !stats.isKnownDungeonPlayer(player.getName().getString())) {
                 continue;
             }
             if (client.getConnection().getPlayerInfo(player.getUUID()) == null) {

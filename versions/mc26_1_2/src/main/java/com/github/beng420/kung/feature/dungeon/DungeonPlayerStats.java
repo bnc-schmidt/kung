@@ -12,7 +12,6 @@ public final class DungeonPlayerStats {
     private int soloRoomsCleared;
     private final DungeonSecretCounter secrets = new DungeonSecretCounter();
     private int totalSecretsFound = -1;
-    private int runSecretBaseline = -1;
     private int roomGridX = -1;
     private int roomGridZ = -1;
     private long lastSeenTick;
@@ -69,9 +68,6 @@ public final class DungeonPlayerStats {
     void setTotalSecretsFound(int totalSecretsFound) {
         this.totalSecretsFound = Math.max(this.totalSecretsFound, totalSecretsFound);
     }
-    void setRunSecretBaseline(int runSecretBaseline) {
-        this.runSecretBaseline = Math.max(this.runSecretBaseline, runSecretBaseline);
-    }
     void setApiRunSecretsFound(int apiRunSecretsFound) {
         secrets.apiDelta(apiRunSecretsFound);
     }
@@ -95,7 +91,6 @@ public final class DungeonPlayerStats {
         soloRoomsCleared = Math.max(soloRoomsCleared, other.soloRoomsCleared);
         secrets.merge(other.secrets);
         totalSecretsFound = Math.max(totalSecretsFound, other.totalSecretsFound);
-        runSecretBaseline = Math.max(runSecretBaseline, other.runSecretBaseline);
         if (dungeonClass == DungeonRunStats.DungeonClass.UNKNOWN
             && other.dungeonClass != DungeonRunStats.DungeonClass.UNKNOWN) {
             dungeonClass = other.dungeonClass;

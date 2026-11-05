@@ -102,11 +102,8 @@ public final class DungeonDeathTrackerTest {
     @Test public void countersAcceptOnlyExactServerStatFields() {
         assertEquals(2, DungeonDeathTracker.teamTotal("§cTeam Deaths: 2"));
         assertEquals(-1, DungeonDeathTracker.teamTotal("Deaths: 2"));
-        assertEquals(1, DungeonDeathTracker.playerTotal("Deaths: 1"));
-        assertEquals(-1, DungeonDeathTracker.playerTotal("Team Deaths: 2"));
         assertEquals(-1, DungeonDeathTracker.teamTotal("Party > [MVP+] Beng114: Total Deaths: 2"));
         assertEquals(-1, DungeonDeathTracker.teamTotal("[Kung] Party died 1 time | Total Deaths: 1"));
-        assertEquals(-1, DungeonDeathTracker.playerTotal("[300] Beng114 Tank Deaths: 7"));
     }
 
     @Test public void resolvingADuplicatePlayerIdentityMergesCountsInsteadOfAddingThem() {

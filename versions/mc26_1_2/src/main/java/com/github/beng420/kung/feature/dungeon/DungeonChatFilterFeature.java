@@ -46,7 +46,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
         }
 
         DungeonChatFilterConfig config = config();
-        if (!config.enabled() || !tracker.canFilterDungeonChat(client)) {
+        if (!config.enabled() || !tracker.canProcessDungeonRunMessage(client)) {
             return false;
         }
 

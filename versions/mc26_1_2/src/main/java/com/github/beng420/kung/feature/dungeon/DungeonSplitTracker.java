@@ -35,6 +35,15 @@ public final class DungeonSplitTracker {
     private static final String[] MASTER_7_BOSS_SPLITS = {
         "Maxor", "Storm", "Terminals", "Goldor", "Necron", "Relics", "Dragons"
     };
+    /** The boss's opening line, by the floor it starts. */
+    private static final Map<String, Integer> BOSS_ENTRY = Map.of(
+        "[BOSS] Bonzo: Gratz for making it this far, but I'm basically unbeatable.", 1,
+        "[BOSS] Scarf: This is where the journey ends for you, Adventurers.", 2,
+        "[BOSS] The Professor: I was burdened with terrible news recently...", 3,
+        "[BOSS] Thorn: Welcome Adventurers! I am Thorn, the Spirit! And host of the Vegan Trials!", 4,
+        "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows.", 5,
+        "[BOSS] Sadan: So you made it all the way here... Now you wish to defy me? Sadan?!", 6,
+        "[BOSS] Maxor: WELL! WELL! WELL! LOOK WHO'S HERE!", 7);
     private static final String WITHER_KING_DEATH = "[BOSS] Wither King: Incredible. You did what I couldn't do myself.";
     /** Hypixel dropped most Necron/Wither King dialogue; a relic pickup is the surviving Relics start. */
     private static final Pattern RELIC_PICKUP = Pattern.compile("^(?:\\[[^\\]]+] )?\\w{1,16} picked the Corrupted \\w+ Relic!$");
@@ -333,15 +342,16 @@ public final class DungeonSplitTracker {
         return running ? Math.max(0L, clock.getAsLong() - startedAtMillis) : stoppedElapsedMillis;
     }
     public long currentSplitServerDurationMillis() {
-        return splitServerDurationMillis();
+        if (!serverClockAvailable) return -1L;
+        return serverElapsedMillis - currentSplitStartServerMillis;
     }
     /** No observed tick stream is an unavailable measurement, never a zero-TPS run. */
-    public long currentTotalServerDurationMillis() { return totalServerDurationMillis(); }
+    public long currentTotalServerDurationMillis() { return serverClockAvailable ? serverElapsedMillis : -1L; }
     /** Sample both clocks at one instant so a frame cannot combine different wall-time bounds. */
     public Timings currentTimings() {
         long elapsed = currentTotalDurationMillis();
         return new Timings(Math.max(0L, elapsed - currentSplitStartMillis), elapsed,
-            splitServerDurationMillis(), totalServerDurationMillis());
+            currentSplitServerDurationMillis(), currentTotalServerDurationMillis());
     }
     public List<CompletedSplit> completedSplits() { return completedView; }
     public CompletedSplit stoppedCurrentSplit() { return stoppedCurrentSplit; }
@@ -435,15 +445,6 @@ public final class DungeonSplitTracker {
         if (completedRun) runMeasurements.clear();
     }
 
-    private long splitServerDurationMillis() {
-        if (!serverClockAvailable) return -1L;
-        return serverElapsedMillis - currentSplitStartServerMillis;
-    }
-
-    private long totalServerDurationMillis() {
-        return serverClockAvailable ? serverElapsedMillis : -1L;
-    }
-
     private void startClockSegment(long elapsed) {
         currentSplitStartMillis = elapsed;
         currentSplitStartServerMillis = serverElapsedMillis;
@@ -455,8 +456,8 @@ public final class DungeonSplitTracker {
             currentSplitName,
             timingKnown ? Math.max(0L, elapsed - currentSplitStartMillis) : -1L,
             elapsed,
-            timingKnown ? splitServerDurationMillis() : -1L,
-            totalServerDurationMillis()
+            timingKnown ? currentSplitServerDurationMillis() : -1L,
+            currentTotalServerDurationMillis()
         ));
         completedView = List.copyOf(completed);
         CompletedSplit split = completed.getLast();
@@ -542,7 +543,7 @@ public final class DungeonSplitTracker {
         if (!hasCurrentSplit()) return;
         stoppedCurrentSplit = new CompletedSplit(currentSplitName,
             Math.max(0L, elapsed - currentSplitStartMillis), elapsed,
-            splitServerDurationMillis(), totalServerDurationMillis());
+            currentSplitServerDurationMillis(), currentTotalServerDurationMillis());
         tracePhase("phase-stop", stoppedCurrentSplit, boundary);
     }
 
@@ -563,7 +564,7 @@ public final class DungeonSplitTracker {
 
     private void traceStopped(String event, String boundary) {
         diagnostics.accept(event + " totalWallMs=" + stoppedElapsedMillis
-            + " totalServerMs=" + totalServerDurationMillis()
+            + " totalServerMs=" + currentTotalServerDurationMillis()
             + " totalTicks=" + serverElapsedMillis / 50L + " boundary=\"" + boundary + "\"" + personalBestDiagnostics());
     }
 
@@ -574,7 +575,7 @@ public final class DungeonSplitTracker {
         for (String name : splitNames) {
             if (settings.personalBestMillis(recordFloor, masterMode, name) < 0L) missing.add(name);
         }
-        return " pbFloor=" + (hasKnownFloor() ? floor == 0 ? "Entrance" : (masterMode ? "M" : "F") + floor : "unknown")
+        return " pbFloor=" + (hasKnownFloor() ? DungeonPbTitle.floorLabel(floor, masterMode) : "unknown")
             + " pbTracking=" + settings.enabled() + " predictionMode=" + settings.predictionMode()
             + " predictionSource=" + settings.predictionSource() + " avgRuns=" + settings.recentRunCount(recordFloor, masterMode)
             + " pbKnown=" + (splitNames.length - missing.size()) + "/" + splitNames.length
@@ -620,15 +621,9 @@ public final class DungeonSplitTracker {
     private String nextSplitFromMessage(String message) {
         if (BLOOD_OPEN.matcher(message).matches()) return "Blood Clear";
         if (RELIC_PICKUP.matcher(message).matches()) return "Relics";
+        if (BOSS_ENTRY.containsKey(message)) return "Boss Start";
         return switch (message) {
             case "[BOSS] The Watcher: You have proven yourself. You may pass." -> "Portal Entry";
-            case "[BOSS] Bonzo: Gratz for making it this far, but I'm basically unbeatable.",
-                "[BOSS] Scarf: This is where the journey ends for you, Adventurers.",
-                "[BOSS] The Professor: I was burdened with terrible news recently...",
-                "[BOSS] Thorn: Welcome Adventurers! I am Thorn, the Spirit! And host of the Vegan Trials!",
-                "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows.",
-                "[BOSS] Sadan: So you made it all the way here... Now you wish to defy me? Sadan?!",
-                "[BOSS] Maxor: WELL! WELL! WELL! LOOK WHO'S HERE!" -> "Boss Start";
             case "[BOSS] Bonzo: Oh I'm dead!" -> "Bonzo Phase 2";
             case "[BOSS] Scarf: Did you forget? I was taught by the best! Let's dance." -> "Scarf";
             case "[BOSS] The Professor: Oh? You found my Guardians' one weakness?" -> "The Professor";
@@ -647,16 +642,7 @@ public final class DungeonSplitTracker {
     }
 
     private static int bossEntryFloor(String message) {
-        return switch (message) {
-            case "[BOSS] Bonzo: Gratz for making it this far, but I'm basically unbeatable." -> 1;
-            case "[BOSS] Scarf: This is where the journey ends for you, Adventurers." -> 2;
-            case "[BOSS] The Professor: I was burdened with terrible news recently..." -> 3;
-            case "[BOSS] Thorn: Welcome Adventurers! I am Thorn, the Spirit! And host of the Vegan Trials!" -> 4;
-            case "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows." -> 5;
-            case "[BOSS] Sadan: So you made it all the way here... Now you wish to defy me? Sadan?!" -> 6;
-            case "[BOSS] Maxor: WELL! WELL! WELL! LOOK WHO'S HERE!" -> 7;
-            default -> 0;
-        };
+        return BOSS_ENTRY.getOrDefault(message, 0);
     }
 
     public record Timings(long splitMillis, long totalMillis, long serverSplitMillis, long serverTotalMillis) { }

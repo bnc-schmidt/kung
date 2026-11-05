@@ -101,7 +101,7 @@ final class KungCommandActions {
             return 0;
         }
 
-        DungeonStateTracker.LearnRoomTypeResult result =
+        DungeonStateTracker.LearnRoomResult result =
             dungeonStateTracker.learnCurrentRoomType(context.getSource().getClient(), roomType);
 
         context.getSource().sendFeedback(roomWriteMessage(result.message(), result.learned()));

@@ -4,7 +4,7 @@ import com.github.beng420.kung.KungBuild;
 import com.github.beng420.kung.config.KungConfig;
 
 /** The shared lifecycle stays active; expensive consumers opt into their data sources. */
-record DungeonWorkload(boolean rooms, boolean mapData, boolean players, boolean roomSync) {
+record DungeonWorkload(boolean rooms, boolean players, boolean roomSync) {
     static DungeonWorkload current() { return from(KungConfig.get()); }
 
     static DungeonWorkload from(KungConfig config) {
@@ -12,11 +12,11 @@ record DungeonWorkload(boolean rooms, boolean mapData, boolean players, boolean 
         boolean sync = dungeon.roomSyncEnabled();
         boolean rooms = dungeon.enabled() || !KungBuild.MODRINTH && config.bloodRush.enabled()
             || dungeon.playerTrackingEnabled() || sync;
-        boolean players = rooms || config.splits.enabled() || dungeon.playerTrackingEnabled()
+        boolean players = rooms || config.splits.enabled()
             || dungeon.deathMessagesEnabled() || dungeon.fiveCryptPartyMessageEnabled()
             || dungeon.extraScoreMessagesEnabled()
             || dungeon.cryptProgressPartyMessageEnabled() || dungeon.fiveCryptTitleEnabled()
             || dungeon.witherDragonsEnabled() && dungeon.dragonPrioEnabled();
-        return new DungeonWorkload(rooms, rooms, players, sync);
+        return new DungeonWorkload(rooms, players, sync);
     }
 }

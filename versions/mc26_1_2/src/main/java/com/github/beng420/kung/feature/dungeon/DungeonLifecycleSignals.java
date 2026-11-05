@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.skyblock.HypixelLocation;
+import java.util.Locale;
 import java.util.regex.Pattern;
 
 public final class DungeonLifecycleSignals {
@@ -14,6 +15,8 @@ public final class DungeonLifecycleSignals {
     );
     private static final Pattern TIME_PART = Pattern.compile("(\\d+)([hms])");
     private static final Pattern TEAM_SCORE = Pattern.compile("^Team Score: \\d{1,3} \\([SABCDUF][+]?\\)$");
+    /** The boss that ends floors 0 to 6, by floor number; floor 7 has several. */
+    private static final String[] BOSS_BY_FLOOR = {"Watcher", "Bonzo", "Scarf", "Professor", "Thorn", "Livid", "Sadan"};
 
     private DungeonLifecycleSignals() {
     }
@@ -34,18 +37,20 @@ public final class DungeonLifecycleSignals {
         if (!victory.matches()) return false;
         String boss = victory.group(1);
         if (boss.startsWith("The ")) boss = boss.substring(4);
-        return switch (floor) {
-            case 0 -> boss.equals("Watcher");
-            case 1 -> boss.equals("Bonzo");
-            case 2 -> boss.equals("Scarf");
-            case 3 -> boss.equals("Professor");
-            case 4 -> boss.equals("Thorn");
-            case 5 -> boss.equals("Livid");
-            case 6 -> boss.equals("Sadan");
-            case 7 -> masterMode ? boss.equals("Wither King")
+        if (floor == 7) {
+            return masterMode ? boss.equals("Wither King")
                 : boss.equals("Necron") || boss.equals("Maxor, Storm, Goldor, and Necron");
-            default -> false;
-        };
+        }
+        return floor >= 0 && floor < BOSS_BY_FLOOR.length && boss.equals(BOSS_BY_FLOOR[floor]);
+    }
+
+    /** The floor whose boss a "[BOSS]" speaker name belongs to; any other name is a floor 7 boss. */
+    static int floorForBoss(String bossName) {
+        String lower = bossName.toLowerCase(Locale.ROOT);
+        for (int floor = 1; floor < BOSS_BY_FLOOR.length; floor++) {
+            if (lower.contains(BOSS_BY_FLOOR[floor].toLowerCase(Locale.ROOT))) return floor;
+        }
+        return 7;
     }
 
     public record FloorFinish(String boss, long millis, boolean newRecord) { }

@@ -789,9 +789,9 @@ public final class DungeonSplitTrackerTest {
 
     @Test
     public void splitFormattingKeepsMillisecondsAndMarksMissingValues() {
-        assertEquals("--", DungeonSplitsOverlayFeature.formatDurationMillis(-1L));
-        assertEquals("0.00s", DungeonSplitsOverlayFeature.formatDurationMillis(0L));
-        assertEquals("1.03s", DungeonSplitsOverlayFeature.formatDurationMillis(1_039L));
-        assertEquals("2m 5.67s", DungeonSplitsOverlayFeature.formatDurationMillis(125_678L));
+        assertEquals("--", DungeonSplitsOverlayFeature.formatDurationMillis(-1L, SplitsConfig.TimeFormat.MINUTES));
+        assertEquals("0.00s", DungeonSplitsOverlayFeature.formatDurationMillis(0L, SplitsConfig.TimeFormat.MINUTES));
+        assertEquals("1.03s", DungeonSplitsOverlayFeature.formatDurationMillis(1_039L, SplitsConfig.TimeFormat.MINUTES));
+        assertEquals("2m 5.67s", DungeonSplitsOverlayFeature.formatDurationMillis(125_678L, SplitsConfig.TimeFormat.MINUTES));
     }
 }

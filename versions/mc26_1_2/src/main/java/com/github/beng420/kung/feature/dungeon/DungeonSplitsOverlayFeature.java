@@ -150,7 +150,7 @@ public final class DungeonSplitsOverlayFeature extends ConfigurableFeature<Split
         return name.equals("Blood Open") || name.equals("Blood Clear") || name.equals("Portal Entry");
     }
 
-    private static DungeonSplitTracker.CompletedSplit completedSplit(
+    static DungeonSplitTracker.CompletedSplit completedSplit(
         String name, List<DungeonSplitTracker.CompletedSplit> completed
     ) {
         for (DungeonSplitTracker.CompletedSplit split : completed) {
@@ -203,10 +203,6 @@ public final class DungeonSplitsOverlayFeature extends ConfigurableFeature<Split
         if (millis < 0L) return "--";
         long tenths = millis / 100L + (millis % 100L >= 50L ? 1L : 0L);
         return (tenths > 0L ? "-" : "") + tenths / 10L + "." + tenths % 10L + "s";
-    }
-
-    static String formatDurationMillis(long millis) {
-        return formatDurationMillis(millis, SplitsConfig.TimeFormat.MINUTES);
     }
 
     static String formatDurationMillis(long millis, SplitsConfig.TimeFormat format) {

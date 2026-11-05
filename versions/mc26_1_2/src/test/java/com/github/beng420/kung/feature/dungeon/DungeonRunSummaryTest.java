@@ -137,7 +137,6 @@ public final class DungeonRunSummaryTest {
         config.dungeon.setPlayerTrackingEnabled(true);
         assertFalse(config.dungeon.enabled());
         assertTrue(DungeonWorkload.from(config).rooms());
-        assertTrue(DungeonWorkload.from(config).mapData());
         assertTrue(DungeonWorkload.from(config).players());
     }
 

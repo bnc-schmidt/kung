@@ -60,7 +60,7 @@ public final class DungeonApiEnrichment {
         if (!requestedTotals.add(requestedName)) {
             return;
         }
-        request(client, name, "total-secrets", result -> onSuccess.accept(result), () -> { });
+        request(client, name, "total-secrets", onSuccess, () -> { });
     }
 
     public void requestBaseline(
@@ -95,9 +95,9 @@ public final class DungeonApiEnrichment {
         // Only a start snapshot established before the final request can be compared.
         Integer baseline = baselines.get(requestedName);
         pendingFinalFetches++;
-        request(client, name, "run-secret final", result -> {
-            onSuccess.accept(result, runSecretDelta(baseline, result.secretsFound()));
-        }, () -> pendingFinalFetches = Math.max(0, pendingFinalFetches - 1));
+        request(client, name, "run-secret final",
+            result -> onSuccess.accept(result, runSecretDelta(baseline, result.secretsFound())),
+            () -> pendingFinalFetches = Math.max(0, pendingFinalFetches - 1));
     }
 
     private void request(

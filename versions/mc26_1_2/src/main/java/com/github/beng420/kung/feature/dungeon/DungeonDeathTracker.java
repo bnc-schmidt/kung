@@ -19,7 +19,6 @@ public final class DungeonDeathTracker {
         Pattern.CASE_INSENSITIVE
     );
     private static final Pattern TEAM_TOTAL = Pattern.compile("^Team Deaths:\\s*(\\d{1,5})$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern PLAYER_TOTAL = Pattern.compile("^Deaths:\\s*(\\d{1,5})$", Pattern.CASE_INSENSITIVE);
     private final Map<UUID, PlayerDeaths> players = new HashMap<>();
     private int reportedTeamTotal;
 
@@ -84,11 +83,6 @@ public final class DungeonDeathTracker {
 
     public static int teamTotal(String line) {
         Matcher matcher = TEAM_TOTAL.matcher(DungeonLifecycleSignals.clean(line));
-        return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
-    }
-
-    public static int playerTotal(String line) {
-        Matcher matcher = PLAYER_TOTAL.matcher(DungeonLifecycleSignals.clean(line));
         return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 

@@ -17,6 +17,8 @@ import java.util.Set;
 import java.util.UUID;
 import java.util.function.Consumer;
 import java.util.function.ToIntFunction;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 import java.lang.reflect.Field;
 import java.text.NumberFormat;
 import java.util.regex.Matcher;
@@ -34,12 +36,14 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.PlayerTabOverlay;
 import net.minecraft.client.multiplayer.PlayerInfo;
 import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EquipmentSlotGroup;
 import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 
 public final class DungeonRunStats {
@@ -108,7 +112,6 @@ public final class DungeonRunStats {
     private int secretsFound;
     private boolean serverSecretsFoundObserved;
     private int secretsAvailable = -1;
-    private int secretsTotalAvailable = -1;
     private int derivedSecretsTotalAvailable = -1;
     private DungeonSecretCounts.TotalRange derivedTotalRange = DungeonSecretCounts.TotalRange.ANY;
     private long derivedTotalConflictTick = -1L;
@@ -119,7 +122,6 @@ public final class DungeonRunStats {
     private int totalRoomsFromTab;
     private int deaths;
     private int cryptsOpened;
-    private int cryptsAvailable = -1;
     private int serverScore = -1;
     private String serverScoreSource = "";
     private int sidebarScore = -1;
@@ -201,7 +203,6 @@ public final class DungeonRunStats {
         secretsFound = 0;
         serverSecretsFoundObserved = false;
         secretsAvailable = -1;
-        secretsTotalAvailable = -1;
         derivedSecretsTotalAvailable = -1;
         secretsPercent = -1.0;
         clearedPercent = -1.0;
@@ -211,7 +212,6 @@ public final class DungeonRunStats {
         deaths = 0;
         puzzles.reset();
         cryptsOpened = 0;
-        cryptsAvailable = -1;
         serverScore = -1;
         serverScoreSource = "";
         sidebarScore = -1;
@@ -265,7 +265,7 @@ public final class DungeonRunStats {
         }
         if (floor <= 0) {
             Matcher boss = FLOOR_NAME_PATTERN.matcher(line);
-            if (boss.find()) floor = floorForBossName(boss.group(1));
+            if (boss.find()) floor = DungeonLifecycleSignals.floorForBoss(boss.group(1));
         }
     }
 
@@ -319,7 +319,7 @@ public final class DungeonRunStats {
         observeTabList(client);
         registerPlayerName(client.player.getName().getString(), client.player.getUUID());
         observePlayerRoom(client.player.getUUID(), client.player.blockPosition(), nowTick);
-        for (UUID uuid : knownTrackedPlayerUuids()) {
+        for (UUID uuid : knownDungeonPlayerUuids()) {
             if (uuid.equals(client.player.getUUID())) {
                 continue;
             }
@@ -342,10 +342,6 @@ public final class DungeonRunStats {
         return secretsAvailable;
     }
 
-    public int secretsTotalAvailable() {
-        return secretsTotalAvailable;
-    }
-
     public int derivedSecretsTotalAvailable() {
         return derivedSecretsTotalAvailable;
     }
@@ -364,10 +360,6 @@ public final class DungeonRunStats {
 
     public int cryptsOpened() {
         return cryptsOpened;
-    }
-
-    public int cryptsAvailable() {
-        return cryptsAvailable;
     }
 
     public int score() {
@@ -406,17 +398,13 @@ public final class DungeonRunStats {
         return serverScore >= 0 ? serverScoreSource : observedScore() >= 0 ? "sidebar" : "";
     }
 
-    public int estimatedScore() {
-        return estimatedScore;
-    }
-
     public int sPlusSecretTarget(DungeonLiveMapWriter.MatchRenderPlan renderPlan, int estimatedSecretsAvailable) {
         int totalSecrets = bestSecretsAvailable(estimatedSecretsAvailable);
         if (totalSecrets <= 0) {
             return -1;
         }
 
-        int scoreWithoutSecrets = projectedSPlusSkillScore() + 60 + speedScore() + bonusScore() + paulScoreBonus();
+        int scoreWithoutSecrets = DungeonScoreCalculator.projectedSkillScore(deaths, puzzles.failed()) + 60 + speedScore() + bonusScore() + paulScoreBonus();
         int neededSecretScore = Math.clamp(300 - scoreWithoutSecrets, 0, 40);
         if (neededSecretScore <= 0) {
             return displayedSecretsFound(totalSecrets);
@@ -461,7 +449,7 @@ public final class DungeonRunStats {
         int remaining
     ) {
         int skillRoomScore = roomProgressScore(renderPlan, 80.0);
-        int deathPenalty = deathPenalty();
+        int deathPenalty = DungeonScoreCalculator.deathPenalty(deaths);
         int unfinishedPuzzles = unfinishedPuzzles(renderPlan);
         int puzzlePenalty = unfinishedPuzzles * 10;
         int skill = skillScore(renderPlan);
@@ -491,7 +479,7 @@ public final class DungeonRunStats {
             + " total=" + totalSecrets
             + " serverFound=" + serverSecretsFoundObserved
             + " available=" + secretsAvailable
-            + " totalAvailable=" + secretsTotalAvailable
+            + " totalAvailable=-1"
             + " derivedTotal=" + derivedSecretsTotalAvailable
             + " totalSource=" + secretsTotalSource(totalSecrets, estimatedSecretsAvailable)
             + " percent=" + secretsPercent
@@ -539,7 +527,7 @@ public final class DungeonRunStats {
             + ",unfinishedClearCells:" + unfinishedClearRoomCells(renderPlan)
             + " unfinishedPuzzles=" + unfinishedPuzzles
             + " failedPuzzles=" + puzzles.failed()
-            + " crypts=" + cryptsOpened + "/" + cryptsAvailable
+            + " crypts=" + cryptsOpened + "/-1"
             + " mimic=" + mimicKilled
             + " prince=" + princeKilled
             + " bat=" + batScoreKilled
@@ -609,7 +597,7 @@ public final class DungeonRunStats {
         if (!isPlayerName(name)) {
             return DungeonClass.UNKNOWN;
         }
-        return playerClasses.getOrDefault(name.toLowerCase(java.util.Locale.ROOT), DungeonClass.UNKNOWN);
+        return playerClasses.getOrDefault(name.toLowerCase(Locale.ROOT), DungeonClass.UNKNOWN);
     }
 
     public void observeClearStates(Minecraft client, DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -620,8 +608,8 @@ public final class DungeonRunStats {
         for (DungeonKnownRoomCatalog.MatchedRoom match : renderPlan.matches()) {
             Set<Integer> roomCells = match.components().stream()
                 .map(component -> clearCell(component.roomGridX(), component.roomGridZ()))
-                .collect(java.util.stream.Collectors.toSet());
-            if (!isClearableRoom(match.template().type())) {
+                .collect(Collectors.toSet());
+            if (!DungeonRoomProgress.isClearable(match.template().type())) {
                 if (roomClearAttribution.exclude(roomCells)) updateRoomClearBounds();
                 continue;
             }
@@ -649,7 +637,7 @@ public final class DungeonRunStats {
 
         for (int roomGridZ = 0; roomGridZ <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridZ++) {
             for (int roomGridX = 0; roomGridX <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridX++) {
-                if (!isClearableRoom(renderPlan.roomTypeAt(roomGridX, roomGridZ))) {
+                if (!DungeonRoomProgress.isClearable(renderPlan.roomTypeAt(roomGridX, roomGridZ))) {
                     if (roomClearAttribution.exclude(Set.of(clearCell(roomGridX, roomGridZ)))) updateRoomClearBounds();
                     continue;
                 }
@@ -660,7 +648,7 @@ public final class DungeonRunStats {
 
                 RoomKey room = new RoomKey(roomGridX, roomGridZ);
                 String roomKey = "cell:" + roomGridX + "," + roomGridZ;
-                recordClearedRoom(Set.of(clearCell(roomGridX, roomGridZ)), playersForClearedCell(room), lastPlayerInRoom.get(room));
+                recordClearedRoom(Set.of(clearCell(roomGridX, roomGridZ)), playersInRooms(Set.of(room)), lastPlayerInRoom.get(room));
                 sendRoomDebugOnce(client, debugClearedRooms, roomKey, "Room cleared: " + roomNameFor(room, null));
             }
         }
@@ -735,7 +723,7 @@ public final class DungeonRunStats {
                 output.accept(KungMessages.detail(
                     "Score " + score(renderPlan, 0)
                         + " | Secrets " + unknownDash(totalFoundSecrets) + "/" + unknownPositive(availableSecrets)
-                        + " | Crypts " + cryptsOpened + "/" + unknownDash(cryptsAvailable)
+                        + " | Crypts " + cryptsOpened + "/?"
                 ));
                 output.accept(KungMessages.detail("Party Secrets: " + unknownDash(totalFoundSecrets)));
             }
@@ -795,7 +783,8 @@ public final class DungeonRunStats {
     }
 
     static String playerStatsSummaryLine(DungeonPlayerStats stats, int totalFoundSecrets) {
-        return stats.name() + " - " + playerStatsDetails(stats, totalFoundSecrets);
+        return stats.name() + " - " + playerStatsCells(stats, totalFoundSecrets).stream()
+            .map(DungeonRunSummaryLayout.Cell::text).collect(Collectors.joining());
     }
 
     static String personalSecretAvailability(List<DungeonPlayerStats> players, boolean apiConfigured) {
@@ -803,11 +792,6 @@ public final class DungeonRunStats {
         if (known == players.size()) return "";
         return "Personal secrets: " + known + "/" + players.size() + " available. "
             + (apiConfigured ? "Missing player data was not received." : "No Hypixel API key or Kung server set.");
-    }
-
-    private static String playerStatsDetails(DungeonPlayerStats stats, int totalFoundSecrets) {
-        return playerStatsCells(stats, totalFoundSecrets).stream()
-            .map(DungeonRunSummaryLayout.Cell::text).collect(java.util.stream.Collectors.joining());
     }
 
     /** The details line in pieces: every number is a column that the layout right-aligns across the players. */
@@ -847,10 +831,6 @@ public final class DungeonRunStats {
         return roomSecretsFound.getOrDefault(new RoomKey(roomGridX, roomGridZ), 0);
     }
 
-    public int matchedRoomSecretsFound(DungeonKnownRoomCatalog.MatchedRoom match) {
-        return secretsFoundFor(match);
-    }
-
     public List<DungeonRoomDataSyncClient.LivePlayerReport> livePlayerReports(Minecraft client) {
         UUID selfUuid = client != null && client.player != null ? client.player.getUUID() : null;
         List<DungeonRoomDataSyncClient.LivePlayerReport> reports = new ArrayList<>();
@@ -876,7 +856,7 @@ public final class DungeonRunStats {
             return;
         }
         for (DungeonRoomDataSyncClient.LivePlayerReport report : reports) {
-            if (report == null || !isKnownTrackedPlayer(report.name()) || report.secretsFound() < 0
+            if (report == null || !isKnownDungeonPlayer(report.name()) || report.secretsFound() < 0
                 || !report.hasPersonalSecretSource()
                 || !report.name().equalsIgnoreCase(report.source()) || report.updatedAtMillis() <= 0) {
                 continue;
@@ -903,7 +883,7 @@ public final class DungeonRunStats {
 
     public void observeMapPlayerRoom(String name, int roomGridX, int roomGridZ, long nowTick) {
         observeMapPlayerRoom(roomGridX, roomGridZ, nowTick);
-        if (name == null || name.isBlank() || !isKnownTrackedPlayer(name)) {
+        if (name == null || name.isBlank() || !isKnownDungeonPlayer(name)) {
             return;
         }
 
@@ -920,19 +900,7 @@ public final class DungeonRunStats {
     }
 
     public boolean isKnownDungeonPlayer(String name) {
-        return name != null && dungeonPlayerNames.contains(name.toLowerCase(java.util.Locale.ROOT));
-    }
-
-    public boolean isKnownPartyPlayer(String name) {
-        return HypixelPartyTracker.INSTANCE.isKnownPartyPlayer(name);
-    }
-
-    public boolean isKnownTrackedPlayer(String name) {
-        return isKnownDungeonPlayer(name);
-    }
-
-    public int partyPlayerCount() {
-        return HypixelPartyTracker.INSTANCE.partyPlayerCount();
+        return name != null && dungeonPlayerNames.contains(name.toLowerCase(Locale.ROOT));
     }
 
     public int dungeonPlayerCount() {
@@ -948,10 +916,6 @@ public final class DungeonRunStats {
             }
         }
         return Set.copyOf(uuids);
-    }
-
-    public Set<UUID> knownTrackedPlayerUuids() {
-        return knownDungeonPlayerUuids();
     }
 
     public List<DungeonPlayerSlot> dungeonPlayerSlots(Minecraft client) {
@@ -979,14 +943,14 @@ public final class DungeonRunStats {
         if (name == null || name.isBlank()) {
             return null;
         }
-        return playerNames.get(name.toLowerCase(java.util.Locale.ROOT));
+        return playerNames.get(name.toLowerCase(Locale.ROOT));
     }
 
     public UUID trackedPlayerUuid(String name) {
-        if (name == null || name.isBlank() || !isKnownTrackedPlayer(name)) {
+        if (name == null || name.isBlank() || !isKnownDungeonPlayer(name)) {
             return null;
         }
-        UUID dungeonUuid = playerNames.get(name.toLowerCase(java.util.Locale.ROOT));
+        UUID dungeonUuid = playerNames.get(name.toLowerCase(Locale.ROOT));
         if (dungeonUuid != null) {
             return dungeonUuid;
         }
@@ -1059,7 +1023,7 @@ public final class DungeonRunStats {
             KungDebugRecorder.event("mimic-kill", "death-packet id=" + entity.getId()
                 + " pos=" + entity.blockPosition().toShortString() + " floor=" + floor
                 + " mimicCandidate=" + mimic + " alreadyKilled=" + mimicKilled
-                + " armor=" + java.util.Arrays.stream(EquipmentSlot.values())
+                + " armor=" + Arrays.stream(EquipmentSlot.values())
                     .filter(slot -> slot.getType() == EquipmentSlot.Type.HUMANOID_ARMOR)
                     .filter(slot -> !zombie.getItemBySlot(slot).isEmpty())
                     .map(slot -> slot.name() + ":" + BuiltInRegistries.ITEM.getKey(zombie.getItemBySlot(slot).getItem()))
@@ -1067,7 +1031,7 @@ public final class DungeonRunStats {
         }
         if (mimic) {
             var damage = ((Zombie) entity).getLastDamageSource();
-            if (damage != null && damage.getEntity() instanceof net.minecraft.world.entity.player.Player killer
+            if (damage != null && damage.getEntity() instanceof Player killer
                 && isKnownStatsUuid(killer.getUUID())) {
                 recordBonusContributor(killer.getUUID(), DungeonBonusContribution.MIMIC);
             }
@@ -1076,30 +1040,19 @@ public final class DungeonRunStats {
         }
     }
 
-    public void observeMimicEspKill(Minecraft client) {
-        observeMimicEspKill(client, "esp");
-    }
-
     void observeMimicEspKill(Minecraft client, String source) {
         markMimicKilled(client, true, source);
         updateEstimatedScore();
     }
 
+    /** Only other players: the caller already skipped the local one. */
     private void observePlayer(Minecraft client, AbstractClientPlayer player, long nowTick) {
-        boolean self = player == client.player || player.getUUID().equals(client.player.getUUID());
-        if (!self) {
-            if (client.getConnection() == null || client.getConnection().getPlayerInfo(player.getUUID()) == null) {
-                return;
-            }
-            if (!isPlayerName(player.getName().getString())) {
-                return;
-            }
-            if (!isKnownTrackedPlayer(player.getName().getString())) {
-                return;
-            }
+        String name = player.getName().getString();
+        if (client.getConnection() == null || client.getConnection().getPlayerInfo(player.getUUID()) == null
+            || !isPlayerName(name) || !isKnownDungeonPlayer(name)) {
+            return;
         }
-
-        registerPlayerName(player.getName().getString(), player.getUUID());
+        registerPlayerName(name, player.getUUID());
         observePlayerRoom(player.getUUID(), player.blockPosition(), nowTick);
     }
 
@@ -1185,7 +1138,7 @@ public final class DungeonRunStats {
         line = DungeonLifecycleSignals.clean(line);
         int partySecrets = DungeonSecretCounts.partyFound(line);
         if (partySecrets >= 0) {
-            observeSecretsTotal(client, partySecrets);
+            observeSecretsTotal(partySecrets);
             return null;
         }
         int teamDeaths = DungeonDeathTracker.teamTotal(line);
@@ -1298,7 +1251,7 @@ public final class DungeonRunStats {
         observeServerScoreLine(line);
         var fraction = DungeonSecretCounts.party(line);
         if (fraction != null) {
-            observeSecretsTotal(client, fraction.found());
+            observeSecretsTotal(fraction.found());
             if (fraction.total() >= 0) observeServerSecretsAvailable(fraction.total());
         }
     }
@@ -1354,13 +1307,10 @@ public final class DungeonRunStats {
             return;
         }
         secretsAvailable = observedAvailable;
-        if (secretsTotalAvailable > 0 && secretsTotalAvailable != observedAvailable) {
-            secretsTotalAvailable = -1;
-        }
         updateDerivedSecretsTotalFromPercent();
     }
 
-    private void observeSecretsTotal(Minecraft client, int observedTotal) {
+    private void observeSecretsTotal(int observedTotal) {
         if (observedTotal < 0) return;
         // A server snapshot replaces a previous observation; it never credits the current room/player.
         serverSecretsFoundObserved = true;
@@ -1393,7 +1343,7 @@ public final class DungeonRunStats {
         }
     }
 
-    private int secretsFoundFor(DungeonKnownRoomCatalog.MatchedRoom match) {
+    int secretsFoundFor(DungeonKnownRoomCatalog.MatchedRoom match) {
         int total = 0;
         for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
             total += roomSecretsFound.getOrDefault(new RoomKey(component.roomGridX(), component.roomGridZ()), 0);
@@ -1470,7 +1420,7 @@ public final class DungeonRunStats {
         if (!matcher.find()) {
             return DungeonClass.UNKNOWN;
         }
-        return switch (matcher.group(1).toLowerCase(java.util.Locale.ROOT)) {
+        return switch (matcher.group(1).toLowerCase(Locale.ROOT)) {
             case "archer" -> DungeonClass.ARCHER;
             case "berserk", "berserker" -> DungeonClass.BERSERKER;
             case "mage" -> DungeonClass.MAGE;
@@ -1502,7 +1452,7 @@ public final class DungeonRunStats {
             return null;
         }
 
-        String lowerName = name.toLowerCase(java.util.Locale.ROOT);
+        String lowerName = name.toLowerCase(Locale.ROOT);
         UUID loadedUuid = loadedPlayerUuidByName(client, name);
         UUID observedPartyUuid = HypixelPartyTracker.INSTANCE.observedOnlinePlayerUuid(name);
         UUID partyUuid = HypixelPartyTracker.INSTANCE.partyPlayerUuid(name);
@@ -1568,40 +1518,20 @@ public final class DungeonRunStats {
     }
 
     private String describeDungeonSlots() {
-        StringBuilder builder = new StringBuilder("[");
-        for (int index = 0; index < dungeonPlayerSlots.length; index++) {
-            if (index > 0) {
-                builder.append(',');
-            }
+        return IntStream.range(0, dungeonPlayerSlots.length).mapToObj(index -> {
             UUID uuid = dungeonPlayerSlots[index];
-            builder.append(index).append(':');
-            if (uuid == null) {
-                builder.append("<empty>");
-            } else {
-                builder.append(trackedPlayerName(uuid))
-                    .append(':')
-                    .append(shortUuid(uuid))
-                    .append(':')
-                    .append(dungeonClass(uuid));
-            }
-        }
-        return builder.append(']').toString();
+            return index + ":" + (uuid == null ? "<empty>"
+                : trackedPlayerName(uuid) + ":" + shortUuid(uuid) + ":" + dungeonClass(uuid));
+        }).collect(Collectors.joining(",", "[", "]"));
     }
 
     private String describeUuids(List<UUID> uuids) {
-        StringBuilder builder = new StringBuilder("[");
-        for (int index = 0; index < uuids.size(); index++) {
-            if (index > 0) {
-                builder.append(',');
-            }
-            UUID uuid = uuids.get(index);
-            builder.append(trackedPlayerName(uuid)).append(':').append(shortUuid(uuid));
-        }
-        return builder.append(']').toString();
+        return uuids.stream().map(uuid -> trackedPlayerName(uuid) + ":" + shortUuid(uuid))
+            .collect(Collectors.joining(",", "[", "]"));
     }
 
     private void registerPlayerName(String name, UUID uuid) {
-        String lowerName = name.toLowerCase(java.util.Locale.ROOT);
+        String lowerName = name.toLowerCase(Locale.ROOT);
         UUID previousUuid = playerNames.put(lowerName, uuid);
         DungeonPlayerStats stats = playerStats(uuid, name);
         stats.setName(name);
@@ -1634,22 +1564,30 @@ public final class DungeonRunStats {
         DungeonPlayerStats stats = playerStats(uuid, playerName(uuid));
         stats.setDungeonClass(dungeonClass);
         if (isPlayerName(stats.name())) {
-            playerClasses.put(stats.name().toLowerCase(java.util.Locale.ROOT), dungeonClass);
+            playerClasses.put(stats.name().toLowerCase(Locale.ROOT), dungeonClass);
         }
     }
 
+    /** An API lookup needs a world, a player and a configured secrets source. */
+    private static boolean canLookUpSecrets(Minecraft client, String name) {
+        return client != null && client.player != null
+            && HypixelSkyBlockProfileClient.secretsSourceAvailable() && isPlayerName(name);
+    }
+
+    /** The roster entry of an API result: filed under the result's own name, else under the requested one. */
+    private UUID uuidForResult(String requestedName, String resultName) {
+        String key = (isPlayerName(resultName) ? resultName : requestedName).toLowerCase(Locale.ROOT);
+        UUID uuid = playerNames.get(key);
+        return uuid != null ? uuid : playerNames.get(requestedName.toLowerCase(Locale.ROOT));
+    }
+
     private void requestTotalSecrets(Minecraft client, String name) {
-        if (client == null
-            || client.player == null
-            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
-            || !isPlayerName(name)) {
-            return;
-        }
-        String requestedName = name.toLowerCase(java.util.Locale.ROOT);
+        if (!canLookUpSecrets(client, name)) return;
+        String requestedName = name.toLowerCase(Locale.ROOT);
         apiEnrichment.requestTotal(client, name, result -> {
             UUID uuid = playerNames.get(requestedName);
             if (uuid == null && isPlayerName(result.name())) {
-                uuid = playerNames.get(result.name().toLowerCase(java.util.Locale.ROOT));
+                uuid = playerNames.get(result.name().toLowerCase(Locale.ROOT));
             }
             if (uuid == null) {
                 return;
@@ -1662,57 +1600,34 @@ public final class DungeonRunStats {
     }
 
     private void requestRunSecretBaseline(Minecraft client, String name) {
-        if (client == null
-            || client.player == null
-            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
-            || !isPlayerName(name)) {
-            return;
-        }
-        String requestedName = name.toLowerCase(java.util.Locale.ROOT);
+        if (!canLookUpSecrets(client, name)) return;
         apiEnrichment.requestBaseline(client, name, result -> {
-            String resultName = isPlayerName(result.name()) ? result.name() : name;
-            String key = resultName.toLowerCase(java.util.Locale.ROOT);
-            UUID uuid = playerNames.get(key);
-            if (uuid == null) {
-                uuid = playerNames.get(requestedName);
-            }
+            UUID uuid = uuidForResult(name, result.name());
             if (uuid == null) {
                 return;
             }
             DungeonPlayerStats stats = playerStats(uuid, playerName(uuid));
             stats.setTotalSecretsFound(result.secretsFound());
-            stats.setRunSecretBaseline(result.secretsFound());
             KungDebugRecorder.event("player-stats", "run-secret baseline player=" + stats.name()
                 + " total=" + result.secretsFound());
         });
     }
 
     private void requestRunSecretFinal(Minecraft client, String name) {
-        if (client == null
-            || client.player == null
-            || !HypixelSkyBlockProfileClient.secretsSourceAvailable()
-            || !isPlayerName(name)) {
-            return;
-        }
-        String requestedName = name.toLowerCase(java.util.Locale.ROOT);
+        if (!canLookUpSecrets(client, name)) return;
         apiEnrichment.requestFinal(client, name, (result, delta) -> {
-                String resultName = isPlayerName(result.name()) ? result.name() : name;
-                String key = resultName.toLowerCase(java.util.Locale.ROOT);
-                UUID uuid = playerNames.get(key);
-                if (uuid == null) {
-                    uuid = playerNames.get(requestedName);
-                }
-                if (uuid == null) {
-                    return;
-                }
-                DungeonPlayerStats stats = playerStats(uuid, playerName(uuid));
-                stats.setTotalSecretsFound(result.secretsFound());
-                if (delta >= 0) {
-                    stats.setApiRunSecretsFound(delta);
-                    KungDebugRecorder.event("player-stats", "run-secret delta player=" + stats.name()
-                        + " final=" + result.secretsFound()
-                        + " delta=" + delta);
-                }
+            UUID uuid = uuidForResult(name, result.name());
+            if (uuid == null) {
+                return;
+            }
+            DungeonPlayerStats stats = playerStats(uuid, playerName(uuid));
+            stats.setTotalSecretsFound(result.secretsFound());
+            if (delta >= 0) {
+                stats.setApiRunSecretsFound(delta);
+                KungDebugRecorder.event("player-stats", "run-secret delta player=" + stats.name()
+                    + " final=" + result.secretsFound()
+                    + " delta=" + delta);
+            }
         });
     }
 
@@ -1738,7 +1653,7 @@ public final class DungeonRunStats {
         }
     }
 
-    private void observePlayerRoom(UUID uuid, net.minecraft.core.BlockPos position, long nowTick) {
+    private void observePlayerRoom(UUID uuid, BlockPos position, long nowTick) {
         DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(position);
         if (!DungeonScanUtils.isValidRoomGrid(grid.gridX(), grid.gridZ())) {
             return;
@@ -1756,7 +1671,11 @@ public final class DungeonRunStats {
         for (DungeonKnownRoomCatalog.MatchedComponent component : components) {
             rooms.add(new RoomKey(component.roomGridX(), component.roomGridZ()));
         }
+        return playersInRooms(rooms);
+    }
 
+    /** The players last seen in one of these rooms, unless they have been out of sight for too long. */
+    private Set<UUID> playersInRooms(Set<RoomKey> rooms) {
         Set<UUID> playerUuids = new HashSet<>();
         for (Map.Entry<UUID, RoomKey> entry : playerRooms.entrySet()) {
             if (!rooms.contains(entry.getValue())) {
@@ -1784,24 +1703,6 @@ public final class DungeonRunStats {
         return null;
     }
 
-    private Set<UUID> playersForClearedCell(RoomKey room) {
-        Set<UUID> playerUuids = new HashSet<>();
-        for (Map.Entry<UUID, RoomKey> entry : playerRooms.entrySet()) {
-            if (!room.equals(entry.getValue())) {
-                continue;
-            }
-            DungeonPlayerStats stats = players.get(entry.getKey());
-            if (stats == null
-                || currentObserveTick > 0L
-                    && stats.lastSeenTick() > 0L
-                    && currentObserveTick - stats.lastSeenTick() > ROOM_CLEAR_PLAYER_STALE_TICKS) {
-                continue;
-            }
-            playerUuids.add(entry.getKey());
-        }
-        return playerUuids;
-    }
-
     private void recordClearedRoom(Set<Integer> cells, Set<UUID> playerUuids, UUID fallbackPlayerUuid) {
         Set<UUID> knownPlayers = new HashSet<>();
         for (UUID playerUuid : playerUuids) {
@@ -1823,10 +1724,6 @@ public final class DungeonRunStats {
 
     private static int clearCell(int x, int z) { return z * 6 + x; }
 
-    private static boolean isClearableRoom(RoomType type) {
-        return DungeonRoomProgress.isClearable(type);
-    }
-
     private static String roomKeyFor(DungeonKnownRoomCatalog.MatchedRoom match) {
         DungeonKnownRoomCatalog.RoomBounds bounds = match.bounds();
         return "match:" + bounds.minX() + "," + bounds.minZ() + ":" + bounds.maxX() + "," + bounds.maxZ()
@@ -1839,7 +1736,7 @@ public final class DungeonRunStats {
 
     private boolean isKnownStatsUuid(UUID uuid) {
         DungeonPlayerStats stats = players.get(uuid);
-        return stats != null && isPlayerName(stats.name()) && isKnownTrackedPlayer(stats.name());
+        return stats != null && isPlayerName(stats.name()) && isKnownDungeonPlayer(stats.name());
     }
 
     private String playerName(UUID uuid) {
@@ -1848,7 +1745,7 @@ public final class DungeonRunStats {
     }
 
     private static UUID syntheticUuid(String name) {
-        return UUID.nameUUIDFromBytes(("kung:dungeon-player:" + name.toLowerCase(java.util.Locale.ROOT))
+        return UUID.nameUUIDFromBytes(("kung:dungeon-player:" + name.toLowerCase(Locale.ROOT))
             .getBytes(StandardCharsets.UTF_8));
     }
 
@@ -1861,7 +1758,7 @@ public final class DungeonRunStats {
     }
 
     private static boolean isIgnoredNpcName(String name) {
-        String lowerName = name.toLowerCase(java.util.Locale.ROOT);
+        String lowerName = name.toLowerCase(Locale.ROOT);
         return lowerName.equals("mort")
             || lowerName.equals("tomioka")
             || lowerName.equals("duncan")
@@ -1885,14 +1782,6 @@ public final class DungeonRunStats {
     private int skillScore(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
         int completedRoomScore = roomProgressScore(renderPlan, 80.0);
         return DungeonScoreCalculator.skillScore(completedRoomScore, deaths, unfinishedPuzzles(renderPlan));
-    }
-
-    private int projectedSPlusSkillScore() {
-        return DungeonScoreCalculator.projectedSkillScore(deaths, puzzles.failed());
-    }
-
-    private int deathPenalty() {
-        return DungeonScoreCalculator.deathPenalty(deaths);
     }
 
     private int exploreScore(DungeonLiveMapWriter.MatchRenderPlan renderPlan, int estimatedSecretsAvailable) {
@@ -2082,7 +1971,7 @@ public final class DungeonRunStats {
     }
 
     /** The run's puzzle names as the tab lists them, lower case. */
-    java.util.Set<String> puzzleNames() {
+    Set<String> puzzleNames() {
         return puzzles.names();
     }
 
@@ -2169,11 +2058,7 @@ public final class DungeonRunStats {
         long seconds = elapsedSeconds >= 0L
             ? elapsedSeconds
             : runStartTick > 0L ? ticksToSeconds(0L) : 0L;
-        return DungeonScoreCalculator.speedScore(seconds, speedGraceSeconds());
-    }
-
-    private long speedGraceSeconds() {
-        return DungeonScoreCalculator.speedGraceSeconds(floor, masterMode);
+        return DungeonScoreCalculator.speedScore(seconds, DungeonScoreCalculator.speedGraceSeconds(floor, masterMode));
     }
 
     boolean hasMimic() {
@@ -2181,8 +2066,7 @@ public final class DungeonRunStats {
     }
 
     public int bestSecretsAvailable(int estimatedSecretsAvailable) {
-        int observedServerTotal = Math.max(secretsTotalAvailable, secretsAvailable);
-        int observedTabTotal = Math.max(observedServerTotal, derivedSecretsTotal(estimatedSecretsAvailable));
+        int observedTabTotal = Math.max(secretsAvailable, derivedSecretsTotal(estimatedSecretsAvailable));
         if (observedTabTotal > 0) {
             return observedTabTotal;
         }
@@ -2196,8 +2080,8 @@ public final class DungeonRunStats {
     }
 
     private String secretsTotalSource(int totalSecrets, int estimatedSecretsAvailable) {
-        if (totalSecrets > 0 && totalSecrets == Math.max(secretsTotalAvailable, secretsAvailable)) {
-            return secretsTotalAvailable > 0 ? "server-total" : "server-fraction";
+        if (totalSecrets > 0 && totalSecrets == secretsAvailable) {
+            return "server-fraction";
         }
         if (totalSecrets > 0 && totalSecrets == derivedSecretsTotal(estimatedSecretsAvailable)) {
             return "derived-percent";
@@ -2235,7 +2119,7 @@ public final class DungeonRunStats {
             if (owner != null) totals.putIfAbsent(owner, hint.secrets());
         });
         for (var entry : plan.roomOwners().entrySet()) {
-            if (!isClearableRoom(plan.roomTypes().getOrDefault(entry.getKey(), RoomType.UNKNOWN))) {
+            if (!DungeonRoomProgress.isClearable(plan.roomTypes().getOrDefault(entry.getKey(), RoomType.UNKNOWN))) {
                 totals.put(entry.getValue(), 0);
             } else if (!totals.containsKey(entry.getValue())) return -1;
         }
@@ -2404,7 +2288,7 @@ public final class DungeonRunStats {
     }
 
     private static boolean isCryptProgressMessage(String message) {
-        String lower = message.toLowerCase(java.util.Locale.ROOT);
+        String lower = message.toLowerCase(Locale.ROOT);
         if (lower.contains("party >")
             || lower.contains("guild >")
             || lower.contains("from ")
@@ -2466,33 +2350,8 @@ public final class DungeonRunStats {
         return true;
     }
 
-
-
-    private static int floorForBossName(String bossName) {
-        String lower = bossName.toLowerCase(java.util.Locale.ROOT);
-        if (lower.contains("bonzo")) {
-            return 1;
-        }
-        if (lower.contains("scarf")) {
-            return 2;
-        }
-        if (lower.contains("professor")) {
-            return 3;
-        }
-        if (lower.contains("thorn")) {
-            return 4;
-        }
-        if (lower.contains("livid")) {
-            return 5;
-        }
-        if (lower.contains("sadan")) {
-            return 6;
-        }
-        return 7;
-    }
-
     private static long parseElapsedSeconds(String value) {
-        Matcher matcher = TIME_PATTERN.matcher(value.toLowerCase(java.util.Locale.ROOT));
+        Matcher matcher = TIME_PATTERN.matcher(value.toLowerCase(Locale.ROOT));
         if (!matcher.find()) {
             return -1L;
         }

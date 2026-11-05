@@ -242,7 +242,7 @@ public final class DungeonExtraScoreMessagesTest {
                 config.setPrinceMessageEnabled((switches & 2) != 0);
                 config.setBatMessageEnabled((switches & 1) != 0);
                 var stats = new DungeonRunStats();
-                stats.observeMimicEspKill(null);
+                stats.observeMimicEspKill(null, "esp");
                 stats.observeMessage(null, "A Prince falls. +1 Bonus Score", 1L);
                 stats.observeMessage(null, "A Bat has been slain. +1 Bonus Score", 2L);
                 assertTrue(stats.mimicKilled());
@@ -267,7 +267,6 @@ public final class DungeonExtraScoreMessagesTest {
         var workload = DungeonWorkload.from(config);
         assertTrue(workload.players());
         assertFalse(workload.rooms());
-        assertFalse(workload.mapData());
     }
 
     private static boolean requested(DungeonRunStats stats, String fieldName) throws Exception {

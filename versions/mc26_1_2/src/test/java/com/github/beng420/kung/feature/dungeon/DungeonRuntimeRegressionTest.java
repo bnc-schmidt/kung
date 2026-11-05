@@ -34,7 +34,7 @@ public final class DungeonRuntimeRegressionTest {
     }
 
     @Test public void allDisabledKeepsExpensiveWorkOff() {
-        assertEquals(new DungeonWorkload(false, false, false, false), DungeonWorkload.from(config()));
+        assertEquals(new DungeonWorkload(false, false, false), DungeonWorkload.from(config()));
     }
 
     @Test public void mapAndBloodRushCanEachRequestTheirOwnData() {
@@ -45,7 +45,6 @@ public final class DungeonRuntimeRegressionTest {
             // The Modrinth build has no Blood Rush, so it never scans for it.
             boolean scans = map || !KungBuild.MODRINTH;
             assertEquals(scans, DungeonWorkload.from(config).rooms());
-            assertEquals(scans, DungeonWorkload.from(config).mapData());
         }
     }
 

@@ -11,6 +11,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog.RoomBounds;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
@@ -1515,11 +1516,11 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             + " worldPlayers="
             + (client.level == null ? 0 : client.level.players().size())
             + " partyKnown="
-            + stats.partyPlayerCount()
+            + HypixelPartyTracker.INSTANCE.partyPlayerCount()
             + " dungeonKnown="
             + stats.dungeonPlayerCount()
             + " trackedUuids="
-            + stats.knownTrackedPlayerUuids().size()
+            + stats.knownDungeonPlayerUuids().size()
             + " slots="
             + dungeonPlayerSlotSummary(client, stats)
             + " classes="
@@ -1585,7 +1586,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static String trackedClassSummary(DungeonRunStats stats) {
         StringBuilder builder = new StringBuilder("[");
         int count = 0;
-        for (UUID uuid : stats.knownTrackedPlayerUuids()) {
+        for (UUID uuid : stats.knownDungeonPlayerUuids()) {
             if (count++ > 0) {
                 builder.append(',');
             }
@@ -1916,7 +1917,7 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         x = drawFooterText(graphics, " | Crypts: ", x, secondLineY, TEXT);
         x = drawFooterText(graphics, String.valueOf(stats.cryptsOpened()), x, secondLineY, cryptColor(stats.cryptsOpened()));
         x = drawFooterText(graphics, "/", x, secondLineY, TEXT);
-        drawFooterText(graphics, cryptTotalText(stats, snapshot, renderPlan, totalsShown), x, secondLineY, TEXT);
+        drawFooterText(graphics, cryptTotalText(snapshot, renderPlan, totalsShown), x, secondLineY, TEXT);
     }
 
     private static int drawFooterStatus(GuiGraphicsExtractor graphics, int x, int y, boolean value) {
@@ -1948,15 +1949,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     }
 
     private static String cryptTotalText(
-        DungeonRunStats stats,
         DungeonMapSnapshot snapshot,
         DungeonLiveMapWriter.MatchRenderPlan renderPlan,
         boolean totalsShown
     ) {
-        if (stats.cryptsAvailable() >= 0) {
-            return String.valueOf(stats.cryptsAvailable());
-        }
-
         CryptEstimate estimate = estimatedCryptTotal(snapshot, renderPlan);
         // Modrinth: the entered rooms' crypts plus "?" until every room is entered.
         if (totalsShown && !estimate.hasUnknownRooms()) {
