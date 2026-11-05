@@ -21,6 +21,9 @@ record GreenhouseOrientation(int rotation, boolean mirror) {
     /** A whole cell's offset from the corner. */
     record Offset(int dx, int dz) { }
 
+    /** The compass letter ({@code N}, {@code E}, {@code S} or {@code W}) of the world direction each edge faces. */
+    record Compass(String top, String right, String bottom, String left) { }
+
     GreenhouseOrientation {
         rotation = Math.floorMod(rotation, 4);
     }
@@ -47,6 +50,22 @@ record GreenhouseOrientation(int rotation, boolean mirror) {
     Offset offset(int row, int column) {
         Point centre = point(row + 0.5, column + 0.5);
         return new Offset((int) Math.floor(centre.x()), (int) Math.floor(centre.z()));
+    }
+
+    /** The letters around the planner grid; they follow the mapping the hologram uses, so the two agree. */
+    Compass compass() {
+        double middle = SIZE / 2.0;
+        Point centre = point(middle, middle);
+        return new Compass(direction(point(0, middle), centre), direction(point(middle, SIZE), centre),
+            direction(point(SIZE, middle), centre), direction(point(middle, 0), centre));
+    }
+
+    /** The world direction from the grid's centre to the middle of an edge: +X is east, +Z is south. */
+    private static String direction(Point edge, Point centre) {
+        double dx = edge.x() - centre.x();
+        double dz = edge.z() - centre.z();
+        if (Math.abs(dx) >= Math.abs(dz)) return dx > 0 ? "E" : "W";
+        return dz > 0 ? "S" : "N";
     }
 
     /** For chat: the state the player is calibrating. */

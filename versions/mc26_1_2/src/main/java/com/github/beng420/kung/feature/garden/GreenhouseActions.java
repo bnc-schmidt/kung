@@ -41,11 +41,6 @@ final class GreenhouseActions {
         return Outcome.close(show.apply(layout).message());
     }
 
-    /** {@link #showLayout(GreenhouseGrid, boolean, Function)} with no solve running. */
-    static Outcome showLayout(GreenhouseGrid layout, Function<GreenhouseGrid, GreenhouseHologram.ShowResult> show) {
-        return showLayout(layout, false, show);
-    }
-
     /** "Show in world (clipboard)": {@code show} is empty when the clipboard holds no valid layout code. */
     static Outcome showClipboard(Supplier<Optional<GreenhouseHologram.ShowResult>> show) {
         return show.get().map(shown -> Outcome.close(shown.message()))

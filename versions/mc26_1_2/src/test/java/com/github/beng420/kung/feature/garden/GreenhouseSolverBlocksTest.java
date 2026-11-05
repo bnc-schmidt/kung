@@ -15,7 +15,7 @@ public final class GreenhouseSolverBlocksTest {
     private static final long ITERATIONS = 600_000;
 
     private static SolveResult solve(Goal goal) {
-        return GreenhouseSolver.solve(SolveRequest.of(goal), BUDGET, SEED, ITERATIONS, () -> false);
+        return GreenhouseSolveSupport.solve(SolveRequest.of(goal), BUDGET, SEED, ITERATIONS, () -> false);
     }
 
     /** The ingredient cells named {@code crop} tile into squares of {@code side}, the way the scan groups them. */

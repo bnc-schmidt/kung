@@ -206,10 +206,10 @@ public final class GreenhouseCodeTest {
     @Test
     public void aSkyMutationsLinkOrBareLayoutStringAlsoWorks() {
         GreenhouseGrid grid = sample();
-        String link = GreenhouseLayoutCodec.encode(grid);
+        String link = GreenhouseLinkEncoder.encode(grid);
 
         assertEquals(grid, decoded(link));
-        assertEquals(grid, decoded(link.substring(GreenhouseLayoutCodec.URL.length())));
+        assertEquals(grid, decoded(link.substring(GreenhouseLinkEncoder.URL.length())));
         assertEquals(grid, decoded("see\n" + link + "\n"));
     }
 

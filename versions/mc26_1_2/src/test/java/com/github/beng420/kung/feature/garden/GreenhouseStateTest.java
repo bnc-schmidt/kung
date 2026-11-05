@@ -157,7 +157,7 @@ public final class GreenhouseStateTest {
             state.targets().stream().map(GreenhouseState.Target::mutation).toList());
         assertEquals(1, state.targets().get(0).count());
         assertEquals(GreenhouseState.Mode.TARGET, state.targets().get(0).mode());
-        assertTrue(state.contains("noctilume"));
+        assertTrue(state.indexOf("noctilume") >= 0);
     }
 
     @Test
@@ -171,7 +171,7 @@ public final class GreenhouseStateTest {
         assertTrue(state.isSelected("Noctilume"));
         // The render path asks by exact name; loose spellings are for contains().
         assertFalse(state.isSelected("cindershade"));
-        assertTrue(state.contains("cindershade"));
+        assertTrue(state.indexOf("cindershade") >= 0);
         state.remove(0);
         assertFalse(state.isSelected("Cindershade"));
         assertTrue(state.isSelected("Noctilume"));
@@ -447,7 +447,7 @@ public final class GreenhouseStateTest {
         GreenhouseSummary summary = new GreenhouseSummary(List.of(
             new GreenhouseSummary.Goal("Cindershade 1 / 1", GreenhouseSummary.Level.REACHED, ""),
             new GreenhouseSummary.Goal("Zombud 0.50 / 1", GreenhouseSummary.Level.SHORT, "Best layout found has 0.50 of 1")),
-            List.of("a note", "another"), 4_250, 2, 1);
+            List.of("a note", "another"), 4_250, 2, 1, "");
         state.setLayout(grid);
         state.setSummary(summary);
 

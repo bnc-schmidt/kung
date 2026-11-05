@@ -154,7 +154,6 @@ public final class GreenhouseScreen extends Screen {
     private static final List<String> IRONMAN_TIP = List.of("Prices: Ironman", "Minimises difficulty by rarity,",
         "not coins. Applies to the next solve.");
     private static final String[] TOOLS = {"Clear", "Copy code"};
-    private static final String[] TOOL_RESULTS = {"Layout cleared"};
     /** Room kept free left and right of a button label before it counts as too long. */
     private static final int BUTTON_PAD = 3;
     private static final int KIND_TARGET_NAME = 1;
@@ -179,7 +178,7 @@ public final class GreenhouseScreen extends Screen {
 
     private record GoalRow(String text, int color, String note) { }
 
-    private record CropRow(String name, String text, int count) { }
+    private record CropRow(String name, int count) { }
 
     /** Truncated strings by source text; cleared when the font or the device scale changes. */
     private static final class Fit {
@@ -269,7 +268,7 @@ public final class GreenhouseScreen extends Screen {
     private String soilText = "";
     private boolean editingCells;
     private GreenhouseOrientation compassFor;
-    private String[] compass = new String[4];
+    private GreenhouseOrientation.Compass compass;
     private String flashName;
     private long flashUntilNanos;
     /** Toolbar button positions inside the middle column; null until measured for the font. */
@@ -727,14 +726,14 @@ public final class GreenhouseScreen extends Screen {
         GreenhouseOrientation orientation = GreenhouseHologram.orientation();
         if (!orientation.equals(compassFor)) {
             compassFor = orientation;
-            compass = GreenhouseCompass.labels(orientation);
+            compass = orientation.compass();
         }
         int gridLeft = x + GRID_X;
         int gridTop = y + GRID_Y;
-        String topLabel = compass[GreenhouseCompass.TOP];
-        String bottomLabel = compass[GreenhouseCompass.BOTTOM];
-        String leftLabel = compass[GreenhouseCompass.LEFT];
-        String rightLabel = compass[GreenhouseCompass.RIGHT];
+        String topLabel = compass.top();
+        String bottomLabel = compass.bottom();
+        String leftLabel = compass.left();
+        String rightLabel = compass.right();
         text(graphics, topLabel, gridLeft + (GRID_SIZE - width(topLabel)) / 2, y + NORTH_Y, THEME.muted());
         text(graphics, bottomLabel, gridLeft + (GRID_SIZE - width(bottomLabel)) / 2, gridTop + GRID_SIZE + 4, THEME.muted());
         text(graphics, leftLabel, gridLeft - 4 - width(leftLabel), gridTop + (GRID_SIZE - menuFont.lineHeight) / 2,
@@ -767,7 +766,7 @@ public final class GreenhouseScreen extends Screen {
             CropRow row = cropRows.get(cropScroll.offset() + slot);
             int top = y + RESULT_Y + slot * RESULT_ROW;
             icon(graphics, row.name(), x + CROPS_X + 1, top + 1);
-            fitted(graphics, cropText, row.text(), x + CROPS_X + 20, top + 5, THEME.text(),
+            fitted(graphics, cropText, row.name(), x + CROPS_X + 20, top + 5, THEME.text(),
                 inside(mx, my, x + CROPS_X + 20, top, CROP_TEXT_W, RESULT_ROW), KIND_CROP, cropScroll.offset() + slot);
             GreenhouseStock.Stock stock = GreenhouseStock.of(row.name(), row.count(), SACKS);
             String badge = stock.badge();
@@ -939,9 +938,6 @@ public final class GreenhouseScreen extends Screen {
 
     private void say(String message, Tone tone) { session.say(message, tone); }
 
-    /** Shows a short message in the popup near the top centre of the panel; a newer message replaces it. */
-    void showNotice(String message) { notice.show(message); }
-
     private int toneColor(Tone tone) {
         return switch (tone) {
             case MUTED -> THEME.muted();
@@ -965,7 +961,7 @@ public final class GreenhouseScreen extends Screen {
         if (plan != shownPlan) {
             shownPlan = plan;
             List<CropRow> rows = new ArrayList<>();
-            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, crop, count)));
+            plan.crops().forEach((crop, count) -> rows.add(new CropRow(crop, count)));
             cropRows = List.copyOf(rows);
             // A live preview replaces the lists several times a second: keep the player's scroll position then,
             // but never past the end of a list that just got shorter.
@@ -1001,7 +997,7 @@ public final class GreenhouseScreen extends Screen {
     /** Loads link text into the grid; the field mirrors what was loaded, and a failure also opens the popup. */
     private void load(String text) {
         String error = session.loadLayout(text);
-        if (error != null) showNotice(error);
+        if (error != null) notice.show(error);
         else link.setValue(text.strip());
     }
 
@@ -1021,7 +1017,7 @@ public final class GreenhouseScreen extends Screen {
             say("Layout code copied", Tone.SUCCESS);
         } else {
             say("Layout code copied. " + warning, Tone.WARNING);
-            showNotice(warning);
+            notice.show(warning);
         }
     }
 
@@ -1036,19 +1032,17 @@ public final class GreenhouseScreen extends Screen {
             return;
         }
         say(outcome.status(), outcome.tone());
-        showNotice(outcome.notice());
+        notice.show(outcome.notice());
     }
 
     /** A grid change the session refused (a solve is running) also opens the popup; null means it was done. */
     private void refused(String reason) {
-        if (reason != null) showNotice(reason);
+        if (reason != null) notice.show(reason);
     }
 
     private void tool(int index) {
-        switch (index) {
-            case 0 -> refused(session.change(GreenhouseGrid::cleared, false, TOOL_RESULTS[0]));
-            default -> copy();
-        }
+        if (index == 0) refused(session.clearLayout());
+        else copy();
     }
 
     /**

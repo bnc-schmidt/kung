@@ -14,7 +14,7 @@ public final class GreenhouseSummaryTest {
     private static GreenhouseSummary summary(int fixed, int met) {
         return new GreenhouseSummary(
             List.of(new GreenhouseSummary.Goal("Cindershade 37 / 52", GreenhouseSummary.Level.SHORT, "note")),
-            List.of("a note"), 5_040, fixed, met);
+            List.of("a note"), 5_040, fixed, met, "");
     }
 
     @Test
@@ -37,7 +37,7 @@ public final class GreenhouseSummaryTest {
 
     private static GreenhouseSummary of(GreenhouseSolver.GoalResult... goals) {
         return GreenhouseSummary.of(new SolveResult(new GreenhouseGrid(), List.of(goals), List.of(), java.util.Map.of(),
-            0, 0, List.of(), 1_200, List.of(), false));
+            0, 0, List.of(), 1_200, List.of(), false, 0, java.util.Map.of()), null, java.util.Map.of());
     }
 
     @Test
@@ -91,11 +91,11 @@ public final class GreenhouseSummaryTest {
     @Test
     public void noModeOrNoUnitCostsLeavesTheCostLineEmpty() {
         SolveResult plain = new SolveResult(new GreenhouseGrid(), List.of(), List.of(), java.util.Map.of(), 0, 0,
-            List.of(), 100, List.of(), false);
+            List.of(), 100, List.of(), false, 0, java.util.Map.of());
 
         assertEquals("", GreenhouseSummary.costLine(withCosts(1, java.util.Map.of("Carrot", 1)), null, java.util.Map.of()));
         assertEquals("", GreenhouseSummary.costLine(plain, GreenhouseCosts.CostMode.BAZAAR, java.util.Map.of()));
-        assertEquals("", GreenhouseSummary.of(plain).costLine());
+        assertEquals("", GreenhouseSummary.of(plain, null, java.util.Map.of()).costLine());
         assertEquals("", GreenhouseSummary.of(plain, GreenhouseCosts.CostMode.IRONMAN, java.util.Map.of()).costLine());
     }
 
@@ -157,10 +157,10 @@ public final class GreenhouseSummaryTest {
 
     @Test
     public void aRealResultBecomesOneLinePerGoalWithItsCounts() {
-        SolveResult result = GreenhouseSolver.solve(
+        SolveResult result = GreenhouseSolveSupport.solve(
             SolveRequest.of(Goal.fixed("Dustgrain", 6), Goal.maximize("Choconut")), 1_000, 3);
 
-        GreenhouseSummary summary = GreenhouseSummary.of(result);
+        GreenhouseSummary summary = GreenhouseSummary.of(result, null, java.util.Map.of());
 
         assertEquals(2, summary.goals().size());
         assertTrue(summary.goals().get(0).text(), summary.goals().get(0).text().startsWith("Dustgrain "));

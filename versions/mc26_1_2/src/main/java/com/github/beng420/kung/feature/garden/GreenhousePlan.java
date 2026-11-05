@@ -81,11 +81,11 @@ final class GreenhousePlan {
                 int height = recipe == null ? 1 : recipe.height();
                 // The first free target cell in row-major order is the top-left of its footprint. A footprint
                 // that does not fit (a hand-edited link) falls back to the turned one, then to one cell.
-                if (!fits(grid, blockAt, name, row, column, width, height)) {
+                if (!fits(grid, blockAt, name, true, row, column, width, height)) {
                     int turned = width;
                     width = height;
                     height = turned;
-                    if (!fits(grid, blockAt, name, row, column, width, height)) {
+                    if (!fits(grid, blockAt, name, true, row, column, width, height)) {
                         width = 1;
                         height = 1;
                     }
@@ -108,7 +108,7 @@ final class GreenhousePlan {
                     key -> GreenhouseMutations.find(key).orElse(null));
                 if (recipe == null || recipe.width() != recipe.height() || recipe.width() < 2) continue;
                 int side = recipe.width();
-                if (!fitsPlant(grid, plantAt, cell.name(), row, column, side)) continue;
+                if (!fits(grid, plantAt, cell.name(), false, row, column, side, side)) continue;
                 for (int r = row; r < row + side; r++) {
                     for (int c = column; c < column + side; c++) plantAt[r * size + c] = plants.size();
                 }
@@ -143,25 +143,18 @@ final class GreenhousePlan {
             Collections.unmodifiableMap(crops), List.copyOf(soils));
     }
 
-    /** Whether a full side x side square of unclaimed ingredient cells of this crop starts at (row, column). */
-    private static boolean fitsPlant(GreenhouseGrid grid, int[] plantAt, String name, int row, int column, int side) {
-        for (int r = row; r < row + side; r++) {
-            for (int c = column; c < column + side; c++) {
-                if (!GreenhouseGrid.inside(r, c) || plantAt[r * GreenhouseGrid.SIZE + c] >= 0) return false;
-                GreenhouseGrid.Cell cell = grid.get(r, c);
-                if (cell == null || cell.flag() == GreenhouseGrid.TARGET || !cell.name().equals(name)) return false;
-            }
-        }
-        return true;
-    }
-
-    private static boolean fits(GreenhouseGrid grid, int[] blockAt, String name, int row, int column, int width,
-                                int height) {
+    /**
+     * Whether a full width x height rectangle of unclaimed cells of this crop starts at (row, column): all target
+     * cells when {@code target}, else all ingredient cells.
+     */
+    private static boolean fits(GreenhouseGrid grid, int[] claimed, String name, boolean target, int row, int column,
+                                int width, int height) {
         for (int r = row; r < row + height; r++) {
             for (int c = column; c < column + width; c++) {
-                if (!GreenhouseGrid.inside(r, c) || blockAt[r * GreenhouseGrid.SIZE + c] >= 0) return false;
+                if (!GreenhouseGrid.inside(r, c) || claimed[r * GreenhouseGrid.SIZE + c] >= 0) return false;
                 GreenhouseGrid.Cell cell = grid.get(r, c);
-                if (cell == null || cell.flag() != GreenhouseGrid.TARGET || !cell.name().equals(name)) return false;
+                if (cell == null || (cell.flag() == GreenhouseGrid.TARGET) != target) return false;
+                if (!cell.name().equals(name)) return false;
             }
         }
         return true;

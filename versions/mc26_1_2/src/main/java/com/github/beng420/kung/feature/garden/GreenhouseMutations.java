@@ -23,12 +23,14 @@ final class GreenhouseMutations {
     /** The solver keeps one bit per recipe in a long. */
     static final int MAX_SUPPORTED = 64;
     private static final Gson JSON = new Gson();
+    private static final Set<String> RARITIES = Set.of("Common", "Uncommon", "Rare", "Epic", "Legendary");
 
     /**
-     * {@code needs} is an ordered crop to count map; {@code emptyRing} (Lonelily) means no crop may stand
-     * in the ring at all. {@code unsupported} holds the reason a mutation has no ring recipe, else null.
+     * {@code rarity} is the wiki rarity ("Common" ... "Legendary"), empty when the row has none. {@code needs} is an
+     * ordered crop to count map; {@code emptyRing} (Lonelily) means no crop may stand in the ring at all.
+     * {@code unsupported} holds the reason a mutation has no ring recipe, else null.
      */
-    record Mutation(String name, int width, int height, Map<String, Integer> needs, boolean emptyRing,
+    record Mutation(String name, String rarity, int width, int height, Map<String, Integer> needs, boolean emptyRing,
                     List<String> soil, int chancePct, String source, String unsupported) {
         boolean supported() { return unsupported == null; }
 
@@ -36,8 +38,8 @@ final class GreenhouseMutations {
         int ringSize() { return (width + 2) * (height + 2) - width * height; }
     }
 
-    private record Row(String name, int width, int height, Map<String, Integer> needs, Boolean emptyRing,
-                       List<String> soil, Integer chancePct, String source, String unsupported) { }
+    private record Row(String name, String rarity, int width, int height, Map<String, Integer> needs,
+                       Boolean emptyRing, List<String> soil, Integer chancePct, String source, String unsupported) { }
 
     private record Data(int schema, List<Row> mutations) { }
 
@@ -96,6 +98,9 @@ final class GreenhouseMutations {
             if (!seen.add(GreenhouseCrops.normalize(row.name()))) {
                 throw new IllegalArgumentException("Duplicate mutation " + row.name());
             }
+            if (row.rarity() != null && !RARITIES.contains(row.rarity())) {
+                throw new IllegalArgumentException("Unknown rarity " + row.rarity() + " for " + row.name());
+            }
             if (row.width() < 1 || row.width() > 3 || row.height() < 1 || row.height() > 3) {
                 throw new IllegalArgumentException("Bad footprint for " + row.name());
             }
@@ -112,10 +117,10 @@ final class GreenhouseMutations {
                 supported++;
             }
             boolean emptyRing = Boolean.TRUE.equals(row.emptyRing());
-            Mutation mutation = new Mutation(row.name(), row.width(), row.height(),
-                Collections.unmodifiableMap(needs), emptyRing, List.copyOf(row.soil() == null ? List.of() : row.soil()),
-                row.chancePct() == null ? 0 : row.chancePct(), row.source() == null ? "" : row.source(),
-                row.unsupported());
+            Mutation mutation = new Mutation(row.name(), row.rarity() == null ? "" : row.rarity(), row.width(),
+                row.height(), Collections.unmodifiableMap(needs), emptyRing,
+                List.copyOf(row.soil() == null ? List.of() : row.soil()), row.chancePct() == null ? 0 : row.chancePct(),
+                row.source() == null ? "" : row.source(), row.unsupported());
             if (!unsupported) {
                 int total = needs.values().stream().mapToInt(Integer::intValue).sum();
                 // Without any need and without emptyRing the recipe would match every empty cell.

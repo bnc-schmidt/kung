@@ -43,15 +43,6 @@ final class GreenhouseCompaction {
     private GreenhouseCompaction() { }
 
     /**
-     * Every valid move of the occupied cells of {@code grid}, best first; see {@link #shifts(boolean[], boolean[])}.
-     */
-    static List<Shift> shifts(GreenhouseGrid grid, boolean[] unlocked) {
-        boolean[] occupied = new boolean[SIZE * SIZE];
-        for (int p = 0; p < occupied.length; p++) occupied[p] = grid.get(p / SIZE, p % SIZE) != null;
-        return shifts(occupied, unlocked);
-    }
-
-    /**
      * Every valid move of the {@code occupied} cells (row-major, 100 entries), best first; {@code unlocked} has the
      * same shape (null: all open). Nothing occupied gives only {@link Shift#NONE}; cells that already sit on a
      * locked one may leave no valid move at all.
@@ -94,23 +85,5 @@ final class GreenhouseCompaction {
         if (unlocked == null) return true;
         for (int p = 0; p < occupied.length; p++) if (occupied[p] && !unlocked[shift.move(p)]) return false;
         return true;
-    }
-
-    /** A copy of the grid moved by {@code shift}; the caller passes a valid one. */
-    static GreenhouseGrid shifted(GreenhouseGrid grid, Shift shift) {
-        GreenhouseGrid out = new GreenhouseGrid();
-        for (int row = 0; row < SIZE; row++) {
-            for (int column = 0; column < SIZE; column++) {
-                GreenhouseGrid.Cell cell = grid.get(row, column);
-                if (cell != null) out.set(row + shift.rows(), column + shift.columns(), cell);
-            }
-        }
-        return out;
-    }
-
-    /** The grid moved by its best valid move, or an unchanged copy when none is valid. */
-    static GreenhouseGrid compact(GreenhouseGrid grid, boolean[] unlocked) {
-        List<Shift> all = shifts(grid, unlocked);
-        return shifted(grid, all.isEmpty() ? Shift.NONE : all.get(0));
     }
 }

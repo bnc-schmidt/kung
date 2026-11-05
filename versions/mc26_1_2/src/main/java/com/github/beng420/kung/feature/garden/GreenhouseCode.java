@@ -3,7 +3,6 @@ package com.github.beng420.kung.feature.garden;
 import java.io.ByteArrayOutputStream;
 import java.util.Arrays;
 import java.util.Base64;
-import java.util.List;
 import java.util.Optional;
 import java.util.zip.DataFormatException;
 import java.util.zip.Deflater;
@@ -36,12 +35,11 @@ final class GreenhouseCode {
     static String encode(GreenhouseGrid grid) {
         byte[] payload = new byte[PAYLOAD];
         payload[0] = VERSION;
-        List<String> names = GreenhouseCrops.NAMES;
         for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
             for (int column = 0; column < GreenhouseGrid.SIZE; column++) {
                 GreenhouseGrid.Cell cell = grid.get(row, column);
-                int crop = cell == null ? -1 : names.indexOf(cell.name());
-                if (crop < 0 || cell.flag() < 0 || cell.flag() > GreenhouseGrid.BONUS) continue;
+                int crop = cropIndex(cell);
+                if (crop < 0) continue;
                 int at = 1 + (row * GreenhouseGrid.SIZE + column) * 2;
                 payload[at] = (byte) (crop + 1);
                 payload[at + 1] = (byte) cell.flag();
@@ -56,11 +54,19 @@ final class GreenhouseCode {
         for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
             for (int column = 0; column < GreenhouseGrid.SIZE; column++) {
                 GreenhouseGrid.Cell cell = grid.get(row, column);
-                if (cell != null && (!GreenhouseCrops.NAMES.contains(cell.name()) || cell.flag() < 0
-                    || cell.flag() > GreenhouseGrid.BONUS)) dropped++;
+                if (cell != null && cropIndex(cell) < 0) dropped++;
             }
         }
         return dropped;
+    }
+
+    /**
+     * The index into {@link GreenhouseCrops#NAMES} of a cell the key can hold; -1 for an empty cell, an unknown
+     * crop or a flag outside 0..2.
+     */
+    private static int cropIndex(GreenhouseGrid.Cell cell) {
+        if (cell == null || cell.flag() < 0 || cell.flag() > GreenhouseGrid.BONUS) return -1;
+        return GreenhouseCrops.NAMES.indexOf(cell.name());
     }
 
     /**

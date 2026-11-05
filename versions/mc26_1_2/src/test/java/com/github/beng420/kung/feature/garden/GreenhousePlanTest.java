@@ -122,12 +122,13 @@ public final class GreenhousePlanTest {
     }
 
     @Test
-    public void footprintsSurviveRotationAndMirroring() {
+    public void footprintsSurviveRotation() {
         GreenhouseGrid grid = new GreenhouseGrid();
         target(grid, "Noctilume", 1, 1, 2);
         target(grid, "Cindershade", 7, 2, 1);
 
-        for (GreenhouseGrid shown : List.of(grid.rotatedLeft(), grid.rotatedRight(), grid.mirrored())) {
+        GreenhouseGrid half = grid.rotatedRight().rotatedRight();
+        for (GreenhouseGrid shown : List.of(half.rotatedRight(), grid.rotatedRight(), half)) {
             GreenhousePlan plan = GreenhousePlan.of(shown);
             assertEquals(2, plan.blocks().size());
             assertEquals(2, plan.blocks().stream().filter(b -> b.mutation().equals("Noctilume")).findFirst()

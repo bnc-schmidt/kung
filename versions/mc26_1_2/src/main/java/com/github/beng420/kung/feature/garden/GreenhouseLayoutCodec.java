@@ -1,7 +1,5 @@
 package com.github.beng420.kung.feature.garden;
 
-import com.google.gson.Gson;
-import com.google.gson.GsonBuilder;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonParser;
@@ -15,13 +13,10 @@ import java.util.Optional;
  * where the JSON is a list of {@code [row, column, "Crop name", flag]} entries.
  */
 final class GreenhouseLayoutCodec {
-    static final String URL = "https://skymutations.eu/greenhouse?layout=";
     /** A full 10x10 layout is about a thousand characters; this also bounds what a paste may decompress to. */
     static final int MAX_LINK_LENGTH = 8192;
     /** The longest crop name the site has is 19 characters; anything much longer is not a crop. */
     static final int MAX_NAME_LENGTH = 40;
-    // The site writes its JSON with JSON.stringify, which does not escape =, & or quotes like Gson's default does.
-    private static final Gson GSON = new GsonBuilder().disableHtmlEscaping().create();
 
     private GreenhouseLayoutCodec() { }
 
@@ -49,10 +44,6 @@ final class GreenhouseLayoutCodec {
             // Gson and the helpers below signal every kind of malformed layout with runtime exceptions.
             return Optional.empty();
         }
-    }
-
-    static String encode(GreenhouseGrid grid) {
-        return URL + LZString.compressToEncodedURIComponent(GSON.toJson(entries(grid)));
     }
 
     /** The grid as the site's list of {@code [row, column, "Name", flag]} entries, row-major. */

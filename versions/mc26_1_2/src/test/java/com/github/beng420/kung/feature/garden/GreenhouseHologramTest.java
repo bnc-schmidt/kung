@@ -108,7 +108,7 @@ public final class GreenhouseHologramTest {
 
         assertTrue(GreenhouseHologram.showFromText(GreenhouseCode.encode(grid), true).isPresent());
         assertEquals(Optional.of(grid), GreenhouseHologram.grid());
-        assertTrue(GreenhouseHologram.showFromText(GreenhouseLayoutCodec.encode(grid), false).isPresent());
+        assertTrue(GreenhouseHologram.showFromText(GreenhouseLinkEncoder.encode(grid), false).isPresent());
 
         GreenhouseHologram.hide();
         assertTrue(GreenhouseHologram.showFromText("nothing useful", true).isEmpty());

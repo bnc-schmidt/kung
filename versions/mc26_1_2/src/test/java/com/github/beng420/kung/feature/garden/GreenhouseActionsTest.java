@@ -23,7 +23,7 @@ public final class GreenhouseActionsTest {
         AtomicInteger calls = new AtomicInteger();
         GreenhouseGrid layout = oneCell();
 
-        GreenhouseActions.Outcome outcome = GreenhouseActions.showLayout(layout, grid -> {
+        GreenhouseActions.Outcome outcome = GreenhouseActions.showLayout(layout, false, grid -> {
             calls.incrementAndGet();
             assertEquals(layout, grid);
             return new ShowResult("Hologram armed: walk into your greenhouse", false);
@@ -58,7 +58,7 @@ public final class GreenhouseActionsTest {
     public void anEmptyLayoutStaysOpenWithAPopupAndNeverTouchesTheHologram() {
         AtomicInteger calls = new AtomicInteger();
 
-        GreenhouseActions.Outcome outcome = GreenhouseActions.showLayout(new GreenhouseGrid(), grid -> {
+        GreenhouseActions.Outcome outcome = GreenhouseActions.showLayout(new GreenhouseGrid(), false, grid -> {
             calls.incrementAndGet();
             return new ShowResult("unused", true);
         });

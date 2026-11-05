@@ -37,11 +37,11 @@ public final class GreenhouseSolverTest {
     private static final long SEED = 7;
 
     private static SolveResult solve(SolveRequest request) {
-        return GreenhouseSolver.solve(request, BUDGET, SEED, ITERATIONS, () -> false);
+        return GreenhouseSolveSupport.solve(request, BUDGET, SEED, ITERATIONS, () -> false);
     }
 
     private static SolveResult solveLong(SolveRequest request) {
-        return GreenhouseSolver.solve(request, BUDGET, SEED, LONG_ITERATIONS, () -> false);
+        return GreenhouseSolveSupport.solve(request, BUDGET, SEED, LONG_ITERATIONS, () -> false);
     }
 
     private static SolveResult solve(boolean[] unlocked, Goal... goals) {
@@ -277,7 +277,7 @@ public final class GreenhouseSolverTest {
         // Glasscorn's own ingredients cannot create Zombud sites, but the leftover space is tempting: Zombud
         // fixed at 2 used to end with four or five sites (2.27 expected) because sites are shared with Witherbloom.
         for (long seed = 1; seed <= 4; seed++) {
-            SolveResult result = GreenhouseSolver.solve(
+            SolveResult result = GreenhouseSolveSupport.solve(
                 SolveRequest.of(Goal.fixed("Zombud", 2), Goal.maximize("Glasscorn")), BUDGET, seed, ITERATIONS,
                 () -> false);
 
@@ -389,7 +389,7 @@ public final class GreenhouseSolverTest {
 
         SolveResult result = solve(request);
 
-        GreenhouseGrid decoded = GreenhouseLayoutCodec.decode(GreenhouseLayoutCodec.encode(result.grid())).orElseThrow();
+        GreenhouseGrid decoded = GreenhouseLayoutCodec.decode(GreenhouseLinkEncoder.encode(result.grid())).orElseThrow();
         assertEquals(result.grid(), decoded);
         boolean[] open = request.unlocked();
         Map<String, Double> counted = reference(decoded, open);
@@ -458,7 +458,7 @@ public final class GreenhouseSolverTest {
             double locked = round % 3 == 0 ? 0 : random.nextDouble() * 0.35;
             for (int p = 0; p < open.length; p++) open[p] = random.nextDouble() >= locked;
 
-            SolveResult result = GreenhouseSolver.solve(new SolveRequest(goals, open), BUDGET, round, 15_000, () -> false);
+            SolveResult result = GreenhouseSolveSupport.solve(new SolveRequest(goals, open), BUDGET, round, 15_000, () -> false);
 
             Outcome counted = outcome(result.grid(), open);
             for (GoalResult goal : result.goals()) {
@@ -535,21 +535,21 @@ public final class GreenhouseSolverTest {
 
     @Test
     public void solveAsyncCompletesOnAnotherThread() throws Exception {
-        CompletableFuture<SolveResult> future = GreenhouseSolver.solveAsync(
+        CompletableFuture<SolveResult> future = GreenhouseSolveSupport.solveAsync(
             SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1, () -> false);
 
         SolveResult result = future.get(10, TimeUnit.SECONDS);
 
         assertEquals(6.0, goal(result, "Dustgrain").achieved(), EPS);
         assertEquals(6, goal(result, "Dustgrain").sites());
-        assertTrue(GreenhouseSolver.solveAsync(SolveRequest.of(Goal.maximize("Dustgrain")), 60_000, 1, () -> true)
+        assertTrue(GreenhouseSolveSupport.solveAsync(SolveRequest.of(Goal.maximize("Dustgrain")), 60_000, 1, () -> true)
             .get(10, TimeUnit.SECONDS).notes().stream()
             .anyMatch(n -> n.startsWith("Search stopped early")));
     }
 
     @Test
     public void anErrorOnTheWorkerCompletesTheFutureInsteadOfLeavingItPending() throws Exception {
-        CompletableFuture<SolveResult> future = GreenhouseSolver.solveAsync(
+        CompletableFuture<SolveResult> future = GreenhouseSolveSupport.solveAsync(
             SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1, () -> { throw new StackOverflowError(); });
 
         try {
@@ -566,7 +566,7 @@ public final class GreenhouseSolverTest {
         AtomicInteger priority = new AtomicInteger();
         AtomicBoolean daemon = new AtomicBoolean();
 
-        GreenhouseSolver.solveAsync(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1, () -> {
+        GreenhouseSolveSupport.solveAsync(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1, () -> {
             priority.set(Thread.currentThread().getPriority());
             daemon.set(Thread.currentThread().isDaemon());
             return true;
@@ -602,7 +602,7 @@ public final class GreenhouseSolverTest {
 
     private static GreenhouseSolver.Options stagnating(LongSupplier clock, long maxIterations,
                                                        GreenhouseSearch.Observer observer) {
-        return new GreenhouseSolver.Options(maxIterations, () -> false, clock, true, observer);
+        return GreenhouseSolveSupport.options(maxIterations, () -> false, clock, true, observer);
     }
 
     @Test
@@ -663,7 +663,7 @@ public final class GreenhouseSolverTest {
     public void stopReturnsPromptlyEvenWhileTheExactTypingIsBusy() throws Exception {
         // Exact re-typing used to run to its node limit after the flag was set (seconds with six goals).
         java.util.concurrent.atomic.AtomicBoolean stop = new java.util.concurrent.atomic.AtomicBoolean();
-        CompletableFuture<SolveResult> future = GreenhouseSolver.solveAsync(pricedSixGoals(), 60_000, 1, stop::get);
+        CompletableFuture<SolveResult> future = GreenhouseSolveSupport.solveAsync(pricedSixGoals(), 60_000, 1, stop::get);
 
         Thread.sleep(1_500);
         long stopped = System.nanoTime();
@@ -679,7 +679,7 @@ public final class GreenhouseSolverTest {
     @Test
     public void aRunEndsNearItsBudgetEvenWhenTheExactTypingIsBusy() {
         long started = System.nanoTime();
-        GreenhouseSolver.solve(pricedSixGoals(), 2_000, 1);
+        GreenhouseSolveSupport.solve(pricedSixGoals(), 2_000, 1);
 
         long overshootMillis = (System.nanoTime() - started) / 1_000_000 - 2_000;
         assertTrue("overshoot " + overshootMillis + " ms", overshootMillis < 300);
@@ -709,14 +709,8 @@ public final class GreenhouseSolverTest {
     }
 
     @Test
-    public void everyPublicOverloadRunsTheWholeBudgetByDefault() {
-        assertFalse(GreenhouseSolver.Options.standard(Long.MAX_VALUE, () -> false, null).stopOnStagnation());
-        assertFalse(GreenhouseSolver.Options.standard(ITERATIONS, () -> false, null).stopOnStagnation());
-    }
-
-    @Test
     public void anIterationCapRunDoesNotStopEarlyEither() {
-        SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 600_000, SEED,
+        SolveResult result = GreenhouseSolveSupport.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 600_000, SEED,
             ITERATIONS, () -> false);
 
         assertFalse(result.stoppedEarly());
@@ -737,7 +731,7 @@ public final class GreenhouseSolverTest {
         };
 
         GreenhouseSolver.solve(SolveRequest.of(Goal.fixed("Cindershade", 3), Goal.maximize("Dustgrain")), 600_000, SEED,
-            new GreenhouseSolver.Options(ITERATIONS, () -> false, new FakeClock(1_000_000), false, observer));
+            GreenhouseSolveSupport.options(ITERATIONS, () -> false, new FakeClock(1_000_000), false, observer));
 
         assertFalse(keys.isEmpty());
         assertFalse(boundaries.isEmpty());
@@ -927,14 +921,14 @@ public final class GreenhouseSolverTest {
         Arrays.fill(open, true);
         GreenhouseSearch search = new GreenhouseSearch(open, 3, new GreenhouseSearch.Recipe[] {zombud},
             new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[3],
-            new long[] {0, 1_000_000, 300_000}, 1);
+            new long[] {0, 1_000_000, 300_000}, null, 1);
 
         assertNull(search.retype(layout, 300_000, Long.MAX_VALUE));
 
         // Make Dead Plants the dear crop instead: the same lattice now has a cheaper typing with fewer of them.
         GreenhouseSearch repriced = new GreenhouseSearch(open, 3, new GreenhouseSearch.Recipe[] {zombud},
             new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[3],
-            new long[] {1_000_000, 10_000, 10_000}, 1);
+            new long[] {1_000_000, 10_000, 10_000}, null, 1);
         byte[] cheaper = repriced.retype(layout, 2_000_000, Long.MAX_VALUE);
         assertNotNull(cheaper);
         int before = 0;
@@ -1034,7 +1028,7 @@ public final class GreenhouseSolverTest {
         List<SolveResult> seen = java.util.Collections.synchronizedList(new ArrayList<>());
         List<String> threads = java.util.Collections.synchronizedList(new ArrayList<>());
 
-        SolveResult result = GreenhouseSolver.solveAsync(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1,
+        SolveResult result = GreenhouseSolveSupport.solveAsync(SolveRequest.of(Goal.fixed("Dustgrain", 6)), 300, 1,
             () -> false, snapshot -> {
                 seen.add(snapshot);
                 threads.add(Thread.currentThread().getName());
@@ -1049,7 +1043,7 @@ public final class GreenhouseSolverTest {
     @Test
     public void cancellationReturnsTheBestLayoutSoFarQuickly() {
         long started = System.nanoTime();
-        SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 60_000, 1,
+        SolveResult result = GreenhouseSolveSupport.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 60_000, 1,
             Long.MAX_VALUE, () -> true);
 
         assertTrue((System.nanoTime() - started) / 1_000_000 < 2_000);
@@ -1061,7 +1055,7 @@ public final class GreenhouseSolverTest {
     @Test
     public void theTimeBudgetIsHonoured() {
         long started = System.nanoTime();
-        SolveResult result = GreenhouseSolver.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 300, 1);
+        SolveResult result = GreenhouseSolveSupport.solve(SolveRequest.of(Goal.maximize("Dustgrain")), 300, 1);
 
         long elapsed = (System.nanoTime() - started) / 1_000_000;
         assertTrue("elapsed " + elapsed, elapsed < 900);
@@ -1099,7 +1093,7 @@ public final class GreenhouseSolverTest {
     private static GreenhouseSearch oneCropSearch(boolean[] open) {
         GreenhouseSearch.Recipe next = new GreenhouseSearch.Recipe(1, 1, new int[] {0}, new int[] {1}, false, 10);
         return new GreenhouseSearch(open, 1, new GreenhouseSearch.Recipe[] {next},
-            new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[1], new long[1], 1);
+            new GreenhouseSearch.Aim[] {new GreenhouseSearch.Aim(0, Long.MAX_VALUE, 0)}, new int[1], new long[1], null, 1);
     }
 
     private static void assertSameOutcome(GreenhouseSearch.Evaluation expected, GreenhouseSearch.Evaluation actual) {
@@ -1200,7 +1194,7 @@ public final class GreenhouseSolverTest {
         for (SolveRequest request : List.of(SolveRequest.of(Goal.fixed("Timestalk", 6)),
             SolveRequest.of(Goal.fixed("Dustgrain", 6)), SolveRequest.of(Goal.fixed("Snoozling", 1)))) {
             for (long seed = 1; seed <= 3; seed++) {
-                SolveResult result = GreenhouseSolver.solve(request, BUDGET, seed, ITERATIONS, () -> false);
+                SolveResult result = GreenhouseSolveSupport.solve(request, BUDGET, seed, ITERATIONS, () -> false);
 
                 String label = request.goals() + " seed " + seed;
                 assertEquals(label, 0, cornerGap(result.grid()));

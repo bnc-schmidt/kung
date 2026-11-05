@@ -78,8 +78,8 @@ final class GreenhouseCosts {
     static Tier tierOf(String crop) {
         String name = GreenhouseCrops.canonical(crop);
         if (FREE_CROPS.contains(name)) return Tier.FREE;
-        Optional<GreenhouseRarity.Rarity> rarity = GreenhouseRarity.of(name);
-        if (rarity.isPresent()) return Tier.valueOf(rarity.get().name());
+        String rarity = GreenhouseMutations.find(name).map(GreenhouseMutations.Mutation::rarity).orElse("");
+        if (!rarity.isEmpty()) return Tier.valueOf(rarity.toUpperCase(Locale.ROOT));
         return SPECIAL_CROPS.contains(name) ? Tier.SPECIAL : Tier.BASE;
     }
 
@@ -117,10 +117,10 @@ final class GreenhouseCosts {
         return Collections.unmodifiableMap(out);
     }
 
-    /** What the solver takes: {@link #quotes} without the basis. */
-    static Map<String, Double> costs(CostMode mode, GreenhousePrices prices) {
+    /** What the solver takes: the {@link #quotes} without the basis. */
+    static Map<String, Double> costs(Map<String, Quote> quotes) {
         Map<String, Double> out = new LinkedHashMap<>();
-        quotes(mode, prices).forEach((crop, quote) -> out.put(crop, quote.cost()));
+        quotes.forEach((crop, quote) -> out.put(crop, quote.cost()));
         return Collections.unmodifiableMap(out);
     }
 
@@ -157,16 +157,6 @@ final class GreenhouseCosts {
             case ESTIMATED -> "~" + coins(quote.cost()) + " (estimated)";
             case DIFFICULTY -> "difficulty " + number(quote.cost()) + " (" + tierOf(crop).label() + ")";
         };
-    }
-
-    /** Cost of a shopping list (crop name to cells, like {@code GreenhousePlan.crops()}); crops without a cost count 0. */
-    static double total(Map<String, Integer> shoppingList, Map<String, Double> costs) {
-        double sum = 0;
-        for (Map.Entry<String, Integer> entry : shoppingList.entrySet()) {
-            Double cost = costs.get(GreenhouseCrops.canonical(entry.getKey()));
-            if (cost != null && entry.getValue() != null && entry.getValue() > 0) sum += cost * entry.getValue();
-        }
-        return sum;
     }
 
     /** The total for the result summary: "1.25M coins" or "difficulty 340". */

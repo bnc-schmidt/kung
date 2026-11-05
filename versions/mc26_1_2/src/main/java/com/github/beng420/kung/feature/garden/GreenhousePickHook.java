@@ -128,19 +128,8 @@ public final class GreenhousePickHook {
 
     /**
      * World volumes of the cells that show something. A cell whose plant is already right draws nothing, so its
-     * volume is left out and the ray reaches the real crop or farmland under it.
-     */
-    static List<Cell> worldCells(List<GreenhouseHologramShapes.CellBox> boxes, BlockPos corner) {
-        return worldCells(boxes, List.of(), corner);
-    }
-
-    static List<Cell> worldCells(List<GreenhouseHologramShapes.CellBox> boxes,
-                                 List<GreenhouseHologram.SoilGhost> ghosts, BlockPos corner) {
-        return worldCells(boxes, ghosts, List.of(), corner);
-    }
-
-    /**
-     * Crop cells plus soil ghosts. A ghost is always pickable. A cell with a ghost in its column becomes a SOIL hit
+     * volume is left out and the ray reaches the real crop or farmland under it. Crop cells plus soil ghosts: a
+     * ghost is always pickable. A cell with a ghost in its column becomes a SOIL hit
      * over the cell's own volume: the ghost (one block at the soil layer) sits right under the cell's volume and the
      * translucent crop head is what the player aims at, so the whole column has to answer with the soil; nothing
      * can be planted on a missing soil anyway, so the soil is what that spot needs first. A cell of a

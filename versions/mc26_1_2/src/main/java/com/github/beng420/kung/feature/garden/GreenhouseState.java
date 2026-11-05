@@ -159,9 +159,6 @@ final class GreenhouseState {
         return true;
     }
 
-    /** Loose match (case, hyphens); for the render path use {@link #isSelected}. */
-    boolean contains(String mutation) { return indexOf(mutation) >= 0; }
-
     /** Exact match on the mutation name as the recipe list spells it; no text processing, safe once per frame. */
     boolean isSelected(String mutationName) { return selected.contains(mutationName); }
 

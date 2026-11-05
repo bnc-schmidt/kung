@@ -13,7 +13,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import java.util.function.LongSupplier;
-import java.util.function.UnaryOperator;
 
 /**
  * Everything the Greenhouse planner remembers while Minecraft runs, owned by the client thread: the settings,
@@ -96,10 +95,6 @@ final class GreenhouseSession {
     private long budgetMillis;
     private AtomicBoolean stopFlag = new AtomicBoolean();
     private boolean saveFailureLogged;
-
-    GreenhouseSession(Path file, Host host, Starter starter, LongSupplier nanoClock) {
-        this(file, host, starter, nanoClock, null);
-    }
 
     GreenhouseSession(Path file, Host host, Starter starter, LongSupplier nanoClock, GreenhousePrices prices) {
         this.file = file;
@@ -202,14 +197,13 @@ final class GreenhouseSession {
     // --- the grid on show ---------------------------------------------------------------------------------------
 
     /**
-     * Replaces the shown grid with {@code op} applied to it. The last result's lines stay when the grid is only
-     * turned or mirrored, and go when it is cleared. While a solve runs nothing changes and the reason comes back
-     * (also in the status line), since the solve's layout would replace the change; null when it was done.
+     * Empties the shown grid and drops the last result's lines. While a solve runs nothing changes and the reason
+     * comes back (also in the status line), since the solve's layout would replace the change; null when it was done.
      */
-    String change(UnaryOperator<GreenhouseGrid> op, boolean keepResult, String message) {
+    String clearLayout() {
         if (running) return refuse();
-        replace(op.apply(plan.grid()), keepResult ? summary : null);
-        sayAboutGrid(message, Tone.MUTED);
+        replace(plan.grid().cleared(), null);
+        sayAboutGrid("Layout cleared", Tone.MUTED);
         persist();
         return null;
     }
@@ -302,14 +296,13 @@ final class GreenhouseSession {
         refreshPrices();
         runMode = state.costMode();
         runQuotes = GreenhouseCosts.quotes(runMode, prices);
-        Map<String, Double> costs = new LinkedHashMap<>();
-        runQuotes.forEach((crop, quote) -> costs.put(crop, quote.cost()));
         sayRun("Solving...");
         persist();
         CompletableFuture<GreenhouseSolver.SolveResult> future;
         try {
-            future = Objects.requireNonNull(starter.start(state.request().withCosts(costs), budgetMillis, runStartNanos,
-                stop::get, best -> host.runOnClient(() -> preview(id, best)), state.stopEarly()));
+            future = Objects.requireNonNull(starter.start(state.request().withCosts(GreenhouseCosts.costs(runQuotes)),
+                budgetMillis, runStartNanos, stop::get, best -> host.runOnClient(() -> preview(id, best)),
+                state.stopEarly()));
         } catch (Throwable failure) {
             // The worker never started (no thread, out of memory): without this the run would look live until Stop.
             abandon();
@@ -406,11 +399,9 @@ final class GreenhouseSession {
             message = (stopped ? "Stopped: " : "Finished: ") + (made.goals().isEmpty() ? "no goals" : made.firstLine());
         }
         persist();
-        if (needsToast(viewing)) host.toast(message);
+        // A run that ended deserves a toast only when nobody is looking at the planner.
+        if (!viewing) host.toast(message);
     }
-
-    /** A run that ended deserves a toast only when nobody is looking at the planner. */
-    static boolean needsToast(boolean viewing) { return !viewing; }
 
     // --- saving ------------------------------------------------------------------------------------------------
 

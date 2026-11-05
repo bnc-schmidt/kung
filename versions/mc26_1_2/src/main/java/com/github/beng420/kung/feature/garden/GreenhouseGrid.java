@@ -47,15 +47,6 @@ final class GreenhouseGrid {
         return remap((row, column) -> index(SIZE - 1 - column, row));
     }
 
-    GreenhouseGrid rotatedLeft() {
-        return remap((row, column) -> index(column, SIZE - 1 - row));
-    }
-
-    /** Horizontal flip: left and right swap. */
-    GreenhouseGrid mirrored() {
-        return remap((row, column) -> index(row, SIZE - 1 - column));
-    }
-
     GreenhouseGrid cleared() {
         return new GreenhouseGrid();
     }

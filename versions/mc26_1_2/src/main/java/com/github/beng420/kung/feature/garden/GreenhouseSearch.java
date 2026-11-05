@@ -275,17 +275,9 @@ final class GreenhouseSearch {
     /**
      * {@code priorities} holds one 0..100 penalty per crop index and {@code costUnits} the fixed-point cost of one
      * planted cell per crop index (the caller picks the scale; totals must fit a long). Both only break ties
-     * between layouts with equal goal counts and ambiguity.
-     */
-    GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities,
-                     long[] costUnits, long seed) {
-        this(unlocked, cropCount, recipes, goals, priorities, costUnits, null, seed);
-    }
-
-    /**
-     * {@code blockSizes} holds, per crop index, the side of the square block its cells must come in: 1 for an
-     * ordinary crop, 3 for a Snoozling (a mutation planted as an ingredient takes its whole footprint, and every
-     * one of its cells counts in a ring). Null means all 1.
+     * between layouts with equal goal counts and ambiguity. {@code blockSizes} holds, per crop index, the side of
+     * the square block its cells must come in: 1 for an ordinary crop, 3 for a Snoozling (a mutation planted as an
+     * ingredient takes its whole footprint, and every one of its cells counts in a ring). Null means all 1.
      */
     GreenhouseSearch(boolean[] unlocked, int cropCount, Recipe[] recipes, Aim[] goals, int[] priorities,
                      long[] costUnits, int[] blockSizes, long seed) {

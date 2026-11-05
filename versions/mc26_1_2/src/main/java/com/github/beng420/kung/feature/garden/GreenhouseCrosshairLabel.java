@@ -34,7 +34,8 @@ final class GreenhouseCrosshairLabel {
     private static List<Cell> cells = List.of();
     /** After an error the label rests this long, then tries again: one transient failure must not end it for good. */
     private static final long RETRY_NANOS = 10_000_000_000L;
-    private static final GreenhouseBackoff BACKOFF = new GreenhouseBackoff(RETRY_NANOS, System::nanoTime);
+    private static boolean resting;
+    private static long retryAt;
     private static boolean logged;
 
     private GreenhouseCrosshairLabel() { }
@@ -47,8 +48,10 @@ final class GreenhouseCrosshairLabel {
     private static void render(GuiGraphicsExtractor graphics) {
         // Guarded like the pick hook: an exception inside a HUD element would crash the frame.
         try {
+            // The difference, not a comparison: nanoTime values may wrap.
+            if (resting && System.nanoTime() - retryAt >= 0) resting = false;
             Minecraft client = Minecraft.getInstance();
-            if (!BACKOFF.ready() || !GreenhouseHologramSettings.showCrosshairLabel() || !GreenhouseHologram.isDrawn()
+            if (resting || !GreenhouseHologramSettings.showCrosshairLabel() || !GreenhouseHologram.isDrawn()
                 || client.player == null || McCompat.hudHidden(client) || McCompat.screen(client) != null) return;
             Optional<BlockPos> corner = GreenhouseLocator.current(client, false);
             if (corner.isEmpty()) return;
@@ -60,7 +63,8 @@ final class GreenhouseCrosshairLabel {
                 graphics.guiHeight() / 2 + OFFSET_Y, TEXT_COLOR, true);
         } catch (Throwable failure) {
             // Throwable: a LinkageError from a changed game class would otherwise end the label until the next start.
-            BACKOFF.trip();
+            resting = true;
+            retryAt = System.nanoTime() + RETRY_NANOS;
             if (!logged) {
                 logged = true;
                 KungMod.LOGGER.warn("Greenhouse crosshair label hit an error; retrying in 10 seconds", failure);

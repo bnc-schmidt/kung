@@ -8,18 +8,18 @@ import org.junit.Test;
 
 public final class LZStringTest {
     private static String roundTrip(String text) {
-        return LZString.decompressFromEncodedURIComponent(LZString.compressToEncodedURIComponent(text));
+        return LZString.decompressFromEncodedURIComponent(GreenhouseLinkEncoder.compress(text));
     }
 
     @Test
     public void matchesOutputOfTheReferenceImplementation() {
         // Captured from the lz-string reference algorithm, so links stay readable by the website.
-        assertEquals("Q", LZString.compressToEncodedURIComponent(""));
-        assertEquals("IZA", LZString.compressToEncodedURIComponent("a"));
-        assertEquals("BYUwNmD2AEoTcrQO6QE5gCZA", LZString.compressToEncodedURIComponent("hello hello hello world"));
+        assertEquals("Q", GreenhouseLinkEncoder.compress(""));
+        assertEquals("IZA", GreenhouseLinkEncoder.compress("a"));
+        assertEquals("BYUwNmD2AEoTcrQO6QE5gCZA", GreenhouseLinkEncoder.compress("hello hello hello world"));
         assertEquals("NrAMBoIIgdQCwKYEMAuACAyghATAzlOAIwC64Yx4UAwkgE50D2KhoJJQA",
-            LZString.compressToEncodedURIComponent("[[0,0,\"Wheat Seeds\",1],[0,1,\"Carrot\",0]]"));
-        assertEquals("CeGoJLRyQ", LZString.compressToEncodedURIComponent("ä€中"));
+            GreenhouseLinkEncoder.compress("[[0,0,\"Wheat Seeds\",1],[0,1,\"Carrot\",0]]"));
+        assertEquals("CeGoJLRyQ", GreenhouseLinkEncoder.compress("ä€中"));
     }
 
     @Test
@@ -38,14 +38,14 @@ public final class LZStringTest {
 
     @Test
     public void outputOnlyUsesTheUriSafeAlphabet() {
-        String compressed = LZString.compressToEncodedURIComponent("[[1,2,\"Do-not-eat-shroom\",0]] € & = ?");
+        String compressed = GreenhouseLinkEncoder.compress("[[1,2,\"Do-not-eat-shroom\",0]] € & = ?");
         assertEquals(compressed.replaceAll("[A-Za-z0-9+$-]", ""), "");
     }
 
     @Test
     public void spacesStandInForPlusSigns() {
         String json = "[[0,0,\"Cactus\",1],[0,1,\"Cactus\",1],[0,2,\"Cactus\",1]]";
-        String compressed = LZString.compressToEncodedURIComponent(json);
+        String compressed = GreenhouseLinkEncoder.compress(json);
         assertEquals("NrAMBoIIgYQQwMYBcCuBnK4CMBdcZtxZFUNs8CAmI+ZdTXHIA", compressed);
         assertEquals(json, LZString.decompressFromEncodedURIComponent(compressed.replace('+', ' ')));
     }
@@ -55,7 +55,7 @@ public final class LZStringTest {
         assertNull(LZString.decompressFromEncodedURIComponent(""));
         assertNull(LZString.decompressFromEncodedURIComponent("not a layout!"));
         assertNull(LZString.decompressFromEncodedURIComponent("NrAMBoIIgdQC.wKYEM"));
-        String compressed = LZString.compressToEncodedURIComponent("[[0,0,\"Wheat Seeds\",1],[0,1,\"Carrot\",0]]");
+        String compressed = GreenhouseLinkEncoder.compress("[[0,0,\"Wheat Seeds\",1],[0,1,\"Carrot\",0]]");
         assertNull(LZString.decompressFromEncodedURIComponent(compressed.substring(0, compressed.length() / 2)));
     }
 }

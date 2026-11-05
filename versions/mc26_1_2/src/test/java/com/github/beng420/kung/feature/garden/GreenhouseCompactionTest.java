@@ -55,6 +55,27 @@ public final class GreenhouseCompactionTest {
         return open;
     }
 
+    /** Every valid move of the occupied cells of the grid, best first. */
+    private static List<Shift> shifts(GreenhouseGrid grid, boolean[] unlocked) {
+        boolean[] occupied = new boolean[SIZE * SIZE];
+        for (int p = 0; p < occupied.length; p++) occupied[p] = grid.get(p / SIZE, p % SIZE) != null;
+        return GreenhouseCompaction.shifts(occupied, unlocked);
+    }
+
+    /** The grid moved by its best valid move, or an unchanged copy when none is valid. */
+    private static GreenhouseGrid compact(GreenhouseGrid grid, boolean[] unlocked) {
+        List<Shift> all = shifts(grid, unlocked);
+        Shift shift = all.isEmpty() ? Shift.NONE : all.get(0);
+        GreenhouseGrid out = new GreenhouseGrid();
+        for (int row = 0; row < SIZE; row++) {
+            for (int column = 0; column < SIZE; column++) {
+                GreenhouseGrid.Cell cell = grid.get(row, column);
+                if (cell != null) out.set(row + shift.rows(), column + shift.columns(), cell);
+            }
+        }
+        return out;
+    }
+
     @Test
     public void aFloatingLayoutMovesIntoTheTopLeftCornerOfAnOpenPlot() {
         GreenhouseGrid floating = grid(
@@ -65,13 +86,13 @@ public final class GreenhouseCompactionTest {
             "..CCCCCCC.",
             "..........");
 
-        String moved = show(GreenhouseCompaction.compact(floating, open()));
+        String moved = show(compact(floating, open()));
 
         assertEquals(expected(
             "CCCCCCC",
             "CTTTTTC",
             "CCCCCCC"), moved);
-        assertEquals(moved, show(GreenhouseCompaction.compact(floating, null)));
+        assertEquals(moved, show(compact(floating, null)));
     }
 
     @Test
@@ -83,7 +104,7 @@ public final class GreenhouseCompactionTest {
             "......CTTC",
             "..........");
 
-        GreenhouseGrid moved = GreenhouseCompaction.compact(source, open());
+        GreenhouseGrid moved = compact(source, open());
 
         assertEquals(expected(
             ".B..",
@@ -105,7 +126,7 @@ public final class GreenhouseCompactionTest {
             "...CTTTC..",
             "...CCCCC..");
 
-        GreenhouseGrid moved = GreenhouseCompaction.compact(source, open());
+        GreenhouseGrid moved = compact(source, open());
 
         assertEquals(expected(
             "CCCCC",
@@ -127,7 +148,7 @@ public final class GreenhouseCompactionTest {
             "....CTC...");
 
         // (0, 0) is locked, so the top-left corner is out; the top-right one is next in line.
-        GreenhouseGrid moved = GreenhouseCompaction.compact(block, open("X"));
+        GreenhouseGrid moved = compact(block, open("X"));
 
         assertEquals(expected(
             ".......CCC",
@@ -147,8 +168,8 @@ public final class GreenhouseCompactionTest {
             "...CCC....",
             "...CTC....");
 
-        List<Shift> ranked = GreenhouseCompaction.shifts(block, mask);
-        GreenhouseGrid moved = GreenhouseCompaction.compact(block, mask);
+        List<Shift> ranked = shifts(block, mask);
+        GreenhouseGrid moved = compact(block, mask);
 
         // Rows 0-2 are locked, so the block cannot touch a top corner; the bottom-left one comes before the
         // bottom-right one.
@@ -181,7 +202,7 @@ public final class GreenhouseCompactionTest {
         mask[1 * SIZE + 3] = true;
         mask[4 * SIZE + 0] = true;
 
-        GreenhouseGrid moved = GreenhouseCompaction.compact(grid("", "", "", "...C"), mask);
+        GreenhouseGrid moved = compact(grid("", "", "", "...C"), mask);
 
         assertEquals(expected("", "...C"), show(moved));
     }
@@ -197,16 +218,16 @@ public final class GreenhouseCompactionTest {
         mask[2 * SIZE + 2] = true;
         mask[2 * SIZE + 3] = true;
 
-        assertEquals(List.of(Shift.NONE), GreenhouseCompaction.shifts(source, mask));
-        assertEquals(show(source), show(GreenhouseCompaction.compact(source, mask)));
+        assertEquals(List.of(Shift.NONE), shifts(source, mask));
+        assertEquals(show(source), show(compact(source, mask)));
     }
 
     @Test
     public void aLayoutOnLockedCellsHasNoValidMoveAndIsCopiedAsItIs() {
         GreenhouseGrid source = grid("C");
 
-        assertTrue(GreenhouseCompaction.shifts(source, new boolean[SIZE * SIZE]).isEmpty());
-        GreenhouseGrid copy = GreenhouseCompaction.compact(source, new boolean[SIZE * SIZE]);
+        assertTrue(shifts(source, new boolean[SIZE * SIZE]).isEmpty());
+        GreenhouseGrid copy = compact(source, new boolean[SIZE * SIZE]);
         assertEquals(source, copy);
         assertNotSame(source, copy);
     }
@@ -219,16 +240,16 @@ public final class GreenhouseCompactionTest {
             full.set(p / SIZE, p % SIZE, new GreenhouseGrid.Cell("Wheat Seeds", GreenhouseGrid.INGREDIENT));
         }
 
-        assertEquals(List.of(Shift.NONE), GreenhouseCompaction.shifts(empty, open()));
-        assertEquals(List.of(Shift.NONE), GreenhouseCompaction.shifts(full, open()));
-        assertEquals(empty, GreenhouseCompaction.compact(empty, open()));
-        assertEquals(full, GreenhouseCompaction.compact(full, open()));
+        assertEquals(List.of(Shift.NONE), shifts(empty, open()));
+        assertEquals(List.of(Shift.NONE), shifts(full, open()));
+        assertEquals(empty, compact(empty, open()));
+        assertEquals(full, compact(full, open()));
     }
 
     @Test
     public void everyOffsetOfASmallLayoutIsRankedExactlyOnce() {
         // A 2x3 block can sit at 9 x 8 positions on the 10x10 plot.
-        List<Shift> shifts = GreenhouseCompaction.shifts(grid("CCC", "CCC"), open());
+        List<Shift> shifts = shifts(grid("CCC", "CCC"), open());
 
         assertEquals(9 * 8, shifts.size());
         assertEquals(shifts.size(), shifts.stream().distinct().count());
@@ -247,8 +268,8 @@ public final class GreenhouseCompactionTest {
 
         for (GreenhouseGrid layout : layouts) {
             for (boolean[] mask : masks) {
-                GreenhouseGrid once = GreenhouseCompaction.compact(layout, mask);
-                assertEquals(show(once), show(GreenhouseCompaction.compact(once, mask)));
+                GreenhouseGrid once = compact(layout, mask);
+                assertEquals(show(once), show(compact(once, mask)));
                 assertEquals(layout.filled(), once.filled());
             }
         }

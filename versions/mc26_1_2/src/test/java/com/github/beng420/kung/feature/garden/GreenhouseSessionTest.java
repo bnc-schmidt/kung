@@ -34,7 +34,7 @@ public final class GreenhouseSessionTest {
     /** A real, small solve, made once: the session only needs a result to apply. */
     private static synchronized SolveResult solved() {
         if (solved == null) {
-            solved = GreenhouseSolver.solve(SolveRequest.of(GreenhouseSolver.Goal.fixed("Dustgrain", 6)), 1_000, 1);
+            solved = GreenhouseSolveSupport.solve(SolveRequest.of(GreenhouseSolver.Goal.fixed("Dustgrain", 6)), 1_000, 1);
         }
         return solved;
     }
@@ -42,8 +42,8 @@ public final class GreenhouseSessionTest {
     /** The same solve with the Bazaar-estimate costs a real run would pass, so the result carries a total cost. */
     private static synchronized SolveResult solvedWithCosts() {
         if (solvedCosts == null) {
-            Map<String, Double> costs = GreenhouseCosts.costs(CostMode.BAZAAR, null);
-            solvedCosts = GreenhouseSolver.solve(
+            Map<String, Double> costs = GreenhouseCosts.costs(GreenhouseCosts.quotes(CostMode.BAZAAR, null));
+            solvedCosts = GreenhouseSolveSupport.solve(
                 SolveRequest.of(GreenhouseSolver.Goal.fixed("Dustgrain", 6)).withCosts(costs), 1_000, 1);
         }
         return solvedCosts;
@@ -165,8 +165,6 @@ public final class GreenhouseSessionTest {
         watched.worker.complete(solved());
 
         assertTrue(watched.toasts.isEmpty());
-        assertTrue(GreenhouseSession.needsToast(false));
-        assertFalse(GreenhouseSession.needsToast(true));
     }
 
     @Test
@@ -220,7 +218,7 @@ public final class GreenhouseSessionTest {
         Fixture bazaar = new Fixture(file(), prices).solving();
 
         Map<String, Double> bazaarCosts = bazaar.request.costs();
-        assertEquals(GreenhouseCosts.costs(CostMode.BAZAAR, prices), bazaarCosts);
+        assertEquals(GreenhouseCosts.costs(GreenhouseCosts.quotes(CostMode.BAZAAR, prices)), bazaarCosts);
         assertEquals(GreenhouseCrops.NAMES.size(), bazaarCosts.size());
         assertEquals(0.0, bazaarCosts.get("Dead Plants"), 0.0);
         assertTrue(bazaarCosts.get("Cindershade") > 0);
@@ -229,7 +227,7 @@ public final class GreenhouseSessionTest {
         ironman.session.state().setCostMode(CostMode.IRONMAN);
         ironman.solving();
 
-        assertEquals(GreenhouseCosts.costs(CostMode.IRONMAN, prices), ironman.request.costs());
+        assertEquals(GreenhouseCosts.costs(GreenhouseCosts.quotes(CostMode.IRONMAN, prices)), ironman.request.costs());
         assertTrue(!ironman.request.costs().equals(bazaarCosts));
         // The goals and the mask are what they were: only the costs differ.
         assertEquals(bazaar.request.goals(), ironman.request.goals());
@@ -239,7 +237,7 @@ public final class GreenhouseSessionTest {
     public void withoutAPriceSourceBazaarCostsAreEstimatesAndTheSwitchDoesNotRerunAnything() {
         Fixture fixture = new Fixture(file()).solving();
 
-        assertEquals(GreenhouseCosts.costs(CostMode.BAZAAR, null), fixture.request.costs());
+        assertEquals(GreenhouseCosts.costs(GreenhouseCosts.quotes(CostMode.BAZAAR, null)), fixture.request.costs());
         fixture.session.state().setCostMode(CostMode.IRONMAN);
 
         assertEquals(1, fixture.starts);
@@ -409,7 +407,8 @@ public final class GreenhouseSessionTest {
         SolveResult real = solved();
 
         fixture.worker.complete(new SolveResult(real.grid(), real.goals(), real.targets(), real.ingredients(),
-            real.ambiguousTargets(), real.unrequestedSites(), real.soils(), real.elapsedMillis(), real.notes(), true));
+            real.ambiguousTargets(), real.unrequestedSites(), real.soils(), real.elapsedMillis(), real.notes(), true,
+            real.totalCost(), real.unitCosts()));
 
         assertFalse(fixture.session.running());
         assertTrue(fixture.session.status(), fixture.session.status().startsWith("Stopped early: converged after "));
@@ -479,18 +478,11 @@ public final class GreenhouseSessionTest {
     }
 
     @Test
-    public void turningMirroringAndClearingKeepOrDropTheResultAndAreSaved() {
+    public void clearingDropsTheResultAndIsSaved() {
         Fixture fixture = new Fixture(file()).solving();
         fixture.worker.complete(solved());
-        GreenhouseGrid shown = fixture.session.plan().grid();
-        GreenhouseSummary summary = fixture.session.summary();
 
-        fixture.session.change(GreenhouseGrid::rotatedLeft, true, "Rotated left");
-        assertEquals(shown.rotatedLeft(), fixture.session.plan().grid());
-        assertEquals(summary, fixture.session.summary());
-        assertEquals(shown.rotatedLeft(), new Fixture(file()).session.plan().grid());
-
-        fixture.session.change(GreenhouseGrid::cleared, false, "Layout cleared");
+        fixture.session.clearLayout();
         assertEquals(0, fixture.session.plan().grid().filled());
         assertNull(fixture.session.summary());
         Fixture reopened = new Fixture(file());
@@ -500,7 +492,7 @@ public final class GreenhouseSessionTest {
     }
 
     @Test
-    public void mirroringOntoLockedCellsWarnsInTheStatus() {
+    public void loadingOntoLockedCellsWarnsInTheStatus() {
         Fixture fixture = new Fixture(file()).solving();
         fixture.worker.complete(solved());
         for (int i = 0; i < GreenhouseState.CELLS; i++) {
@@ -508,7 +500,7 @@ public final class GreenhouseSessionTest {
             fixture.session.state().endPaint();
         }
 
-        fixture.session.change(GreenhouseGrid::mirrored, true, "Mirrored");
+        fixture.session.loadLayout(GreenhouseCode.encode(fixture.session.plan().grid()));
 
         assertTrue(fixture.session.status(), fixture.session.status().contains("on locked cells"));
         assertEquals(Tone.WARNING, fixture.session.tone());
@@ -531,7 +523,7 @@ public final class GreenhouseSessionTest {
         assertEquals(Tone.ERROR, fixture.session.tone());
         assertEquals(0, fixture.session.plan().grid().filled());
 
-        assertNull(fixture.session.loadLayout(GreenhouseLayoutCodec.encode(grid)));
+        assertNull(fixture.session.loadLayout(GreenhouseLinkEncoder.encode(grid)));
 
         assertEquals(grid, fixture.session.plan().grid());
         assertNull(fixture.session.summary());
@@ -594,9 +586,7 @@ public final class GreenhouseSessionTest {
         GreenhouseGrid pasted = new GreenhouseGrid();
         pasted.set(2, 2, new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.INGREDIENT));
 
-        assertEquals(GreenhouseSession.BUSY, fixture.session.change(GreenhouseGrid::rotatedLeft, true, "Rotated left"));
-        assertEquals(GreenhouseSession.BUSY, fixture.session.change(GreenhouseGrid::cleared, false, "Layout cleared"));
-        assertEquals(GreenhouseSession.BUSY, fixture.session.change(GreenhouseGrid::mirrored, true, "Mirrored"));
+        assertEquals(GreenhouseSession.BUSY, fixture.session.clearLayout());
         assertEquals(GreenhouseSession.BUSY, fixture.session.loadLayout(GreenhouseCode.encode(pasted)));
 
         assertEquals(before, fixture.session.plan().grid());
@@ -609,7 +599,7 @@ public final class GreenhouseSessionTest {
 
         assertNull(fixture.session.loadLayout(GreenhouseCode.encode(pasted)));
         assertEquals(pasted, fixture.session.plan().grid());
-        assertNull(fixture.session.change(GreenhouseGrid::mirrored, true, "Mirrored"));
+        assertNull(fixture.session.clearLayout());
     }
 
     @Test

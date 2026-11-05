@@ -5,7 +5,9 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.junit.Test;
 
 public final class GreenhouseMutationsTest {
@@ -22,6 +24,21 @@ public final class GreenhouseMutationsTest {
         assertEquals(37, all.stream().filter(GreenhouseMutations.Mutation::supported).count());
         assertTrue(all.stream().filter(m -> !m.supported()).map(GreenhouseMutations.Mutation::name).toList()
             .containsAll(List.of("Godseed", "Shellfruit", "Jerryflower")));
+    }
+
+    @Test
+    public void everyMutationHasARarityAndTheCountsMatchTheWikiTable() {
+        Map<String, Integer> counts = new HashMap<>();
+        for (GreenhouseMutations.Mutation mutation : GreenhouseMutations.all()) {
+            assertFalse(mutation.name(), mutation.rarity().isEmpty());
+            counts.merge(mutation.rarity(), 1, Integer::sum);
+        }
+
+        assertEquals(Map.of("Common", 9, "Uncommon", 6, "Rare", 10, "Epic", 8, "Legendary", 7), counts);
+        assertEquals("Rare", mutation("do not eat shroom").rarity());
+        assertEquals("Epic", mutation("Shellfruit").rarity());
+        assertEquals("Legendary", mutation("godseed").rarity());
+        assertFalse(GreenhouseMutations.find("Wheat Seeds").isPresent());
     }
 
     @Test
@@ -104,6 +121,10 @@ public final class GreenhouseMutationsTest {
         assertThrows(IllegalArgumentException.class, () -> GreenhouseMutations.parse(head
             + "{\"name\":\"Dustgrain\",\"width\":1,\"height\":1,\"needs\":{\"Wheat Seeds\":2},\"chancePct\":30},"
             + "{\"name\":\"Dustgrain\",\"width\":1,\"height\":1,\"needs\":{\"Wheat Seeds\":2},\"chancePct\":30}]}"));
+        // Only the five wiki rarities are accepted.
+        assertThrows(IllegalArgumentException.class, () -> GreenhouseMutations.parse(head
+            + "{\"name\":\"Dustgrain\",\"rarity\":\"Mythic\",\"width\":1,\"height\":1,\"needs\":{\"Wheat Seeds\":2},"
+            + "\"soil\":[\"Farmland\"],\"chancePct\":30}]}"));
         assertThrows(IllegalArgumentException.class, () -> GreenhouseMutations.parse("{\"schema\":2,\"mutations\":[]}"));
     }
 }

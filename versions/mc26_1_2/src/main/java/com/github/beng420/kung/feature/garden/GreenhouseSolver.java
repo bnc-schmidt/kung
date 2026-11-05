@@ -31,7 +31,6 @@ import java.util.function.LongSupplier;
  * then the one with fewer priority points, then the one with fewer crops.
  */
 final class GreenhouseSolver {
-    static final long DEFAULT_BUDGET_MILLIS = 1500;
     /** {@link Goal#quantity()} value that asks for as many as the plot allows. */
     static final int MAX = -1;
     /**
@@ -116,33 +115,16 @@ final class GreenhouseSolver {
     record SolveResult(GreenhouseGrid grid, List<GoalResult> goals, List<Target> targets,
                        Map<String, Integer> ingredients, int ambiguousTargets, int unrequestedSites,
                        List<String> soils, long elapsedMillis, List<String> notes, boolean stoppedEarly,
-                       double totalCost, Map<String, Double> unitCosts) {
-        SolveResult(GreenhouseGrid grid, List<GoalResult> goals, List<Target> targets,
-                    Map<String, Integer> ingredients, int ambiguousTargets, int unrequestedSites,
-                    List<String> soils, long elapsedMillis, List<String> notes, boolean stoppedEarly) {
-            this(grid, goals, targets, ingredients, ambiguousTargets, unrequestedSites, soils, elapsedMillis, notes,
-                stoppedEarly, 0, Map.of());
-        }
-    }
+                       double totalCost, Map<String, Double> unitCosts) { }
 
     /**
-     * Run settings behind the public overloads. {@code clock} reads nanoseconds (tests inject their own);
+     * Run settings. {@code clock} reads nanoseconds (tests inject their own);
      * {@code stopOnStagnation} lets the search end early once it has stopped improving; {@code observer} is for
      * tuning and may be null; {@code onBest} (may be null) receives a complete result every time the best plan
      * improves, on the thread that runs the solve, at most once per quarter second plus a last one at the end.
      */
     record Options(long maxIterations, BooleanSupplier cancelled, LongSupplier clock, boolean stopOnStagnation,
-                   GreenhouseSearch.Observer observer, Consumer<SolveResult> onBest) {
-        Options(long maxIterations, BooleanSupplier cancelled, LongSupplier clock, boolean stopOnStagnation,
-                GreenhouseSearch.Observer observer) {
-            this(maxIterations, cancelled, clock, stopOnStagnation, observer, null);
-        }
-
-        /** The settings of the public overloads: real clock, no early stop. */
-        static Options standard(long maxIterations, BooleanSupplier cancelled, Consumer<SolveResult> onBest) {
-            return new Options(maxIterations, cancelled, System::nanoTime, false, null, onBest);
-        }
-    }
+                   GreenhouseSearch.Observer observer, Consumer<SolveResult> onBest) { }
 
     private GreenhouseSolver() { }
 
@@ -155,31 +137,13 @@ final class GreenhouseSolver {
         return KungErrors.brief(cause);
     }
 
-    /** Time-budget run: uses the whole budget. */
-    static SolveResult solve(SolveRequest request, long budgetMillis, long seed) {
-        return solve(request, budgetMillis, seed, Long.MAX_VALUE, () -> false);
-    }
-
     /**
-     * {@link #solve(SolveRequest, long, long, long, BooleanSupplier)} on a daemon thread, for callers that must
-     * not block (the render thread). Cancel by making {@code cancelled} return true.
+     * {@link #solve(SolveRequest, long, long, Options)} on a daemon thread, for callers that must not block (the
+     * render thread). Cancel by making {@code cancelled} return true. {@code onBest} (may be null) receives a
+     * complete snapshot (grid, goals, ingredients, cost) on the worker thread whenever the best plan improves: at
+     * most one call per quarter second, and the last improvement is always delivered before the future completes.
+     * With {@code stopOnStagnation} the run may also end early once it has stopped improving (opt-in).
      */
-    static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
-                                                     BooleanSupplier cancelled) {
-        return solveAsync(request, budgetMillis, seed, cancelled, null, false);
-    }
-
-    /**
-     * Like the four-argument form, and {@code onBest} receives a complete snapshot (grid, goals, ingredients,
-     * cost) on the worker thread whenever the best plan improves: at most one call per quarter second, and the
-     * last improvement is always delivered before the future completes.
-     */
-    static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
-                                                     BooleanSupplier cancelled, Consumer<SolveResult> onBest) {
-        return solveAsync(request, budgetMillis, seed, cancelled, onBest, false);
-    }
-
-    /** With {@code stopOnStagnation} the run may also end early once it has stopped improving (opt-in). */
     static CompletableFuture<SolveResult> solveAsync(SolveRequest request, long budgetMillis, long seed,
                                                      BooleanSupplier cancelled, Consumer<SolveResult> onBest,
                                                      boolean stopOnStagnation) {
@@ -202,16 +166,11 @@ final class GreenhouseSolver {
     }
 
     /**
-     * Runs the search until the time budget, {@code maxIterations} or {@code cancelled} ends it; the calling
-     * thread's interrupt flag also stops it. The same request, seed and iteration cap (reached before the
-     * budget) always give the same result; with only a time budget, machine speed decides how many annealing
+     * Runs the search until the time budget, {@code options.maxIterations()} or {@code options.cancelled()} ends it;
+     * the calling thread's interrupt flag also stops it. The same request, seed and iteration cap (reached before
+     * the budget) always give the same result; with only a time budget, machine speed decides how many annealing
      * rounds fit.
      */
-    static SolveResult solve(SolveRequest request, long budgetMillis, long seed, long maxIterations,
-                             BooleanSupplier cancelled) {
-        return solve(request, budgetMillis, seed, Options.standard(maxIterations, cancelled, null));
-    }
-
     static SolveResult solve(SolveRequest request, long budgetMillis, long seed, Options options) {
         BooleanSupplier cancelled = options.cancelled();
         long started = options.clock().getAsLong();
@@ -551,7 +510,7 @@ final class GreenhouseSolver {
     /** A result with an empty layout, for requests nothing could be planned for. */
     private static SolveResult bare(List<GoalResult> goals, List<String> notes, long started, Options options) {
         return new SolveResult(new GreenhouseGrid(), List.copyOf(goals), List.of(), Map.of(), 0, 0, List.of(),
-            (options.clock().getAsLong() - started) / 1_000_000L, List.copyOf(notes), false);
+            (options.clock().getAsLong() - started) / 1_000_000L, List.copyOf(notes), false, 0, Map.of());
     }
 
     /** "16" for whole numbers, "7.50" otherwise. */

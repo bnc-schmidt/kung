@@ -39,15 +39,6 @@ record GreenhouseSummary(List<Goal> goals, List<String> notes, long elapsedMilli
         costLine = costLine == null ? "" : costLine;
     }
 
-    GreenhouseSummary(List<Goal> goals, List<String> notes, long elapsedMillis, int fixed, int met) {
-        this(goals, notes, elapsedMillis, fixed, met, "");
-    }
-
-    /** The lines of a result without costs. */
-    static GreenhouseSummary of(GreenhouseSolver.SolveResult solved) {
-        return of(solved, null, Map.of());
-    }
-
     /**
      * The lines of a result that was solved with the costs of {@code mode}; {@code quotes} says which of them were
      * guesses. A null mode leaves the cost line empty.

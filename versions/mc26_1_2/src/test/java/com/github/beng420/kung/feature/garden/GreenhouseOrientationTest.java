@@ -1,11 +1,14 @@
 package com.github.beng420.kung.feature.garden;
 
+import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertTrue;
 
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
+import java.util.TreeSet;
 import org.junit.Test;
 
 public final class GreenhouseOrientationTest {
@@ -108,6 +111,70 @@ public final class GreenhouseOrientationTest {
                 assertEquals(1, Math.abs(a.z() - b.z()), 0);
             }
         }
+    }
+
+    private static String[] letters(int rotation, boolean mirror) {
+        GreenhouseOrientation.Compass compass = new GreenhouseOrientation(rotation, mirror).compass();
+        return new String[] {compass.top(), compass.right(), compass.bottom(), compass.left()};
+    }
+
+    @Test
+    public void theDefaultCompassPutsNorthAtTheTopAndWestAtTheLeft() {
+        // Top, right, bottom, left: grid row 0 is the north end and column 0 the west end.
+        assertArrayEquals(new String[] {"N", "E", "S", "W"}, letters(0, false));
+        assertEquals("N", DEFAULT.compass().top());
+        assertEquals("W", DEFAULT.compass().left());
+    }
+
+    @Test
+    public void clockwiseQuarterTurnsAdvanceEveryCompassLetterOneStep() {
+        assertArrayEquals(new String[] {"E", "S", "W", "N"}, letters(1, false));
+        assertArrayEquals(new String[] {"S", "W", "N", "E"}, letters(2, false));
+        assertArrayEquals(new String[] {"W", "N", "E", "S"}, letters(3, false));
+        assertArrayEquals(letters(0, false), letters(4, false));
+    }
+
+    @Test
+    public void mirroringSwapsTheLeftAndRightCompassLetters() {
+        assertArrayEquals(new String[] {"N", "W", "S", "E"}, letters(0, true));
+    }
+
+    @Test
+    public void everyOrientationLabelsTheFourEdgesWithFourDifferentDirections() {
+        for (int rotation = 0; rotation < 4; rotation++) {
+            for (boolean mirror : new boolean[] {false, true}) {
+                Set<String> seen = new TreeSet<>(List.of(letters(rotation, mirror)));
+                assertEquals(rotation + " " + mirror, Set.of("N", "E", "S", "W"), seen);
+            }
+        }
+    }
+
+    @Test
+    public void theCompassPointsWhereTheHologramActuallyPutsEachEdgeCell() {
+        for (int rotation = 0; rotation < 4; rotation++) {
+            for (boolean mirror : new boolean[] {false, true}) {
+                GreenhouseOrientation orientation = new GreenhouseOrientation(rotation, mirror);
+                GreenhouseOrientation.Compass compass = orientation.compass();
+                GreenhouseOrientation.Offset centre = orientation.offset(4, 4);
+                String where = rotation + " " + mirror;
+
+                assertToward(where, compass.top(), orientation.offset(0, 4), centre);
+                assertToward(where, compass.right(), orientation.offset(4, 9), centre);
+                assertToward(where, compass.bottom(), orientation.offset(9, 4), centre);
+                assertToward(where, compass.left(), orientation.offset(4, 0), centre);
+            }
+        }
+    }
+
+    private static void assertToward(String where, String label, GreenhouseOrientation.Offset edge,
+                                     GreenhouseOrientation.Offset centre) {
+        boolean toward = switch (label) {
+            case "E" -> edge.dx() > centre.dx();
+            case "W" -> edge.dx() < centre.dx();
+            case "S" -> edge.dz() > centre.dz();
+            default -> edge.dz() < centre.dz();
+        };
+        assertTrue(where + " " + label, toward);
     }
 
     @Test

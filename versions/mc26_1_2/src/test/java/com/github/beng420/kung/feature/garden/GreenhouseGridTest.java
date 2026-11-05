@@ -29,32 +29,10 @@ public final class GreenhouseGridTest {
     }
 
     @Test
-    public void rotatingLeftMovesTheTopLeftToTheBottomLeft() {
-        GreenhouseGrid rotated = sample().rotatedLeft();
-
-        assertEquals("Wheat Seeds", rotated.get(9, 0).name());
-        assertEquals("Carrot", rotated.get(0, 0).name());
-        assertEquals("Sunflower", rotated.get(6, 2).name());
-    }
-
-    @Test
-    public void rotationsAreInverseAndFourTurnsAreIdentity() {
+    public void fourTurnsAreTheIdentity() {
         GreenhouseGrid grid = sample();
 
-        assertEquals(grid, grid.rotatedRight().rotatedLeft());
         assertEquals(grid, grid.rotatedRight().rotatedRight().rotatedRight().rotatedRight());
-        assertEquals(grid.rotatedRight().rotatedRight(), grid.rotatedLeft().rotatedLeft());
-    }
-
-    @Test
-    public void mirrorFlipsLeftAndRightAndKeepsFlags() {
-        GreenhouseGrid grid = sample();
-        GreenhouseGrid mirrored = grid.mirrored();
-
-        assertEquals(new GreenhouseGrid.Cell("Wheat Seeds", GreenhouseGrid.INGREDIENT), mirrored.get(0, 9));
-        assertEquals(new GreenhouseGrid.Cell("Carrot", GreenhouseGrid.TARGET), mirrored.get(0, 0));
-        assertEquals(new GreenhouseGrid.Cell("Sunflower", GreenhouseGrid.BONUS), mirrored.get(2, 6));
-        assertEquals(grid, mirrored.mirrored());
     }
 
     @Test
@@ -63,8 +41,6 @@ public final class GreenhouseGridTest {
         GreenhouseGrid copy = sample();
 
         assertNotSame(grid, grid.rotatedRight());
-        grid.rotatedLeft();
-        grid.mirrored();
         grid.cleared();
         assertEquals(copy, grid);
     }

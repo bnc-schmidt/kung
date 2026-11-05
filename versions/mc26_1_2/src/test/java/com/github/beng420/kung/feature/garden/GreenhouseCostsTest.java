@@ -27,6 +27,20 @@ public final class GreenhouseCostsTest {
 
     private static Map<String, Quote> bazaar(GreenhousePrices prices) { return GreenhouseCosts.quotes(CostMode.BAZAAR, prices); }
 
+    private static Map<String, Double> costs(CostMode mode, GreenhousePrices prices) {
+        return GreenhouseCosts.costs(GreenhouseCosts.quotes(mode, prices));
+    }
+
+    /** Cost of a shopping list (crop name to cells); crops without a cost count 0. */
+    private static double total(Map<String, Integer> shoppingList, Map<String, Double> costs) {
+        double sum = 0;
+        for (Map.Entry<String, Integer> entry : shoppingList.entrySet()) {
+            Double cost = costs.get(GreenhouseCrops.canonical(entry.getKey()));
+            if (cost != null && entry.getValue() != null && entry.getValue() > 0) sum += cost * entry.getValue();
+        }
+        return sum;
+    }
+
     @Test
     public void everyCropHasAFiniteNonNegativeCostInEveryModeAndPriceState() {
         List<GreenhousePrices> sources = new ArrayList<>();
@@ -36,7 +50,7 @@ public final class GreenhouseCostsTest {
             "INK_SACK:3", 8.65)));
         for (CostMode mode : CostMode.values()) {
             for (GreenhousePrices source : sources) {
-                Map<String, Double> costs = GreenhouseCosts.costs(mode, source);
+                Map<String, Double> costs = costs(mode, source);
                 assertEquals(GreenhouseCrops.NAMES.size(), costs.size());
                 assertEquals(65, costs.size());
                 for (String crop : GreenhouseCrops.NAMES) {
@@ -80,7 +94,7 @@ public final class GreenhouseCostsTest {
 
     @Test
     public void ironmanDifficultyRisesWithRarity() {
-        Map<String, Double> costs = GreenhouseCosts.costs(CostMode.IRONMAN, null);
+        Map<String, Double> costs = costs(CostMode.IRONMAN, null);
 
         double previous = 0;
         for (Tier tier : List.of(Tier.BASE, Tier.COMMON, Tier.UNCOMMON, Tier.RARE, Tier.EPIC, Tier.LEGENDARY)) {
@@ -101,8 +115,8 @@ public final class GreenhouseCostsTest {
 
     @Test
     public void ironmanIgnoresThePrices() {
-        assertEquals(GreenhouseCosts.costs(CostMode.IRONMAN, null),
-            GreenhouseCosts.costs(CostMode.IRONMAN, prices(Map.of("MELON", 4.0, "THORNSHADE", 9e6))));
+        assertEquals(costs(CostMode.IRONMAN, null),
+            costs(CostMode.IRONMAN, prices(Map.of("MELON", 4.0, "THORNSHADE", 9e6))));
     }
 
     @Test
@@ -207,8 +221,8 @@ public final class GreenhouseCostsTest {
         list.put("Fire", null);
         list.put("Cactus", -4);
 
-        assertEquals(75 + 3000, GreenhouseCosts.total(list, costs), 1e-9);
-        assertEquals(0, GreenhouseCosts.total(Map.of(), costs), 0);
+        assertEquals(75 + 3000, total(list, costs), 1e-9);
+        assertEquals(0, total(Map.of(), costs), 0);
     }
 
     @Test
@@ -224,7 +238,7 @@ public final class GreenhouseCostsTest {
 
     @Test
     public void theMapsCannotBeChangedByTheCaller() {
-        Map<String, Double> costs = GreenhouseCosts.costs(CostMode.BAZAAR, null);
+        Map<String, Double> costs = costs(CostMode.BAZAAR, null);
 
         assertThrows(UnsupportedOperationException.class, () -> costs.put("Carrot", 0.0));
         assertThrows(UnsupportedOperationException.class,
