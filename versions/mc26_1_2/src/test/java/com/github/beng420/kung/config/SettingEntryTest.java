@@ -68,16 +68,15 @@ public final class SettingEntryTest {
         assertTrue(enabled.get());
 
         AtomicInteger value = new AtomicInteger(10);
-        SettingEntry stepper = SettingEntry.stepper("Scale", value::get, value::set, 10, 20, 5);
-        stepper.click(49, 0, 50);
-        stepper.click(49, 0, 50);
-        stepper.click(49, 0, 50);
+        SettingEntry slider = SettingEntry.slider("Scale", value::get, value::set, 10, 20, 5);
+        slider.click(49, 0, 50);
         assertEquals(20, value.get());
+        slider.click(0, 0, 50);
+        assertEquals(10, value.get());
 
         AtomicReference<String> text = new AtomicReference<>("");
         SettingEntry editor = SettingEntry.text("Name", text::get, text::set);
-        editor.appendText("Room");
-        editor.backspaceText();
+        editor.setText("Roo");
         assertEquals("Roo", text.get());
 
         assertFalse(editor.expandable());

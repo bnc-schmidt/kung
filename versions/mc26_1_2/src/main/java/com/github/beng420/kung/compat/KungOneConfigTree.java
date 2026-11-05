@@ -83,7 +83,7 @@ final class KungOneConfigTree {
                 case TOGGLE -> property(key, label, description, setting.booleanSupplier()::getAsBoolean,
                     value -> { if (value != setting.booleanSupplier().getAsBoolean()) setting.toggle().run(); },
                     Boolean.class, Visualizer.SwitchVisualizer.class);
-                case STEPPER, SLIDER -> number(key, label, description, setting, feature);
+                case SLIDER -> number(key, label, description, setting, feature);
                 case CHOICE -> property(key, label, description, setting.intSupplier()::getAsInt,
                     setting.intConsumer()::accept, Integer.class, Visualizer.DropdownVisualizer.class);
                 case TEXT -> property(key, label, description, setting.textSupplier(),

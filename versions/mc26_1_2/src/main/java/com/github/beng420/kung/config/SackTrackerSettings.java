@@ -6,20 +6,18 @@ import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 /** The track key, then one collapsible row per tracked item; rows keep their identity until the list changes. */
-final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
+final class SackTrackerSettings extends LiveRows<List<SackItem>> {
     private final MiscConfig config;
-    private List<SackItem> items = List.of();
-    private List<SettingEntry> rows = List.of();
 
     SackTrackerSettings(MiscConfig config) { this.config = config; }
 
     @Override
-    public List<SettingEntry> get() {
-        if (!rows.isEmpty() && items.equals(config.sackTrackerItems())) return rows;
-        items = List.copyOf(config.sackTrackerItems());
+    protected List<SackItem> key() { return List.copyOf(config.sackTrackerItems()); }
+
+    @Override
+    protected List<SettingEntry> build(List<SackItem> items) {
         var next = new ArrayList<SettingEntry>();
         next.add(SettingEntry.keybind("Track Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.sackTrackerKeybind()),
             config::sackTrackerKeybind, config::setSackTrackerKeybind)
@@ -52,6 +50,6 @@ final class SackTrackerSettings implements Supplier<List<SettingEntry>> {
                     SettingEntry.button("Remove", "-", () -> config.removeSackTrackerItem(item))
                 )));
         }
-        return rows = List.copyOf(next);
+        return next;
     }
 }

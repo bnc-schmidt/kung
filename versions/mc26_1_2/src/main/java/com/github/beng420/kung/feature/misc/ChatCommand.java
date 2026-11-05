@@ -2,6 +2,8 @@ package com.github.beng420.kung.feature.misc;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.config.category.MiscConfig;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
 import com.github.beng420.kung.skyblock.SpecialMayors;
 import com.github.beng420.kung.skyblock.ZodiacEvents;
@@ -103,50 +105,29 @@ enum ChatCommand {
         // The two groups have a switch of their own above their commands.
         if (isMayorCommand() && !config.specialMayorsChatCommandsEnabled()) return false;
         if (zodiac() != null && !config.yearlyEventsChatCommandsEnabled()) return false;
-        return switch (this) {
-            case C -> config.c50ChatCommandEnabled() && pick(channel, config.c50PartyCommandsEnabled(),
-                config.c50GuildCommandsEnabled(), config.c50AllChatCommandsEnabled(),
-                config.c50PrivateCommandsEnabled(), config.c50CoopCommandsEnabled());
-            case CA, CA_ARCHER, CA_BERSERK, CA_HEALER, CA_MAGE, CA_TANK -> config.ca50ChatCommandEnabled()
-                && pick(channel, config.ca50PartyCommandsEnabled(), config.ca50GuildCommandsEnabled(),
-                config.ca50AllChatCommandsEnabled(), config.ca50PrivateCommandsEnabled(), config.ca50CoopCommandsEnabled());
-            case TPS -> config.tpsChatCommandEnabled() && pick(channel, config.tpsPartyCommandsEnabled(),
-                config.tpsGuildCommandsEnabled(), config.tpsAllChatCommandsEnabled(),
-                config.tpsPrivateCommandsEnabled(), config.tpsCoopCommandsEnabled());
-            case JERRY -> config.jerryChatCommandEnabled() && pick(channel, config.jerryPartyCommandsEnabled(),
-                config.jerryGuildCommandsEnabled(), config.jerryAllChatCommandsEnabled(),
-                config.jerryPrivateCommandsEnabled(), config.jerryCoopCommandsEnabled());
-            case SCORPIUS -> config.scorpChatCommandEnabled() && pick(channel, config.scorpPartyCommandsEnabled(),
-                config.scorpGuildCommandsEnabled(), config.scorpAllChatCommandsEnabled(),
-                config.scorpPrivateCommandsEnabled(), config.scorpCoopCommandsEnabled());
-            case DERPY -> config.derpyChatCommandEnabled() && pick(channel, config.derpyPartyCommandsEnabled(),
-                config.derpyGuildCommandsEnabled(), config.derpyAllChatCommandsEnabled(),
-                config.derpyPrivateCommandsEnabled(), config.derpyCoopCommandsEnabled());
-            case YOTP -> config.yotpChatCommandEnabled() && pick(channel, config.yotpPartyCommandsEnabled(),
-                config.yotpGuildCommandsEnabled(), config.yotpAllChatCommandsEnabled(),
-                config.yotpPrivateCommandsEnabled(), config.yotpCoopCommandsEnabled());
-            case YOTW -> config.yotwChatCommandEnabled() && pick(channel, config.yotwPartyCommandsEnabled(),
-                config.yotwGuildCommandsEnabled(), config.yotwAllChatCommandsEnabled(),
-                config.yotwPrivateCommandsEnabled(), config.yotwCoopCommandsEnabled());
-            case YOTS -> config.yotsChatCommandEnabled() && pick(channel, config.yotsPartyCommandsEnabled(),
-                config.yotsGuildCommandsEnabled(), config.yotsAllChatCommandsEnabled(),
-                config.yotsPrivateCommandsEnabled(), config.yotsCoopCommandsEnabled());
-            case A, B, H, M, T -> config.classLevelChatCommandEnabled() && pick(channel,
-                config.classLevelPartyCommandsEnabled(), config.classLevelGuildCommandsEnabled(),
-                config.classLevelAllChatCommandsEnabled(), config.classLevelPrivateCommandsEnabled(),
-                config.classLevelCoopCommandsEnabled());
-        };
+        ChatCommandSetting setting = setting();
+        return config.commandEnabled(setting) && config.channelEnabled(setting, switch (channel) {
+            case PARTY -> CommandChannel.PARTY;
+            case GUILD -> CommandChannel.GUILD;
+            case ALL -> CommandChannel.ALL_CHAT;
+            case PRIVATE -> CommandChannel.PRIVATE;
+            case COOP -> CommandChannel.COOP;
+        });
     }
 
-    /** The setting of the channel the command came from. */
-    private static boolean pick(ChatChannel channel, boolean party, boolean guild, boolean all, boolean priv,
-                                boolean coop) {
-        return switch (channel) {
-            case PARTY -> party;
-            case GUILD -> guild;
-            case ALL -> all;
-            case PRIVATE -> priv;
-            case COOP -> coop;
+    /** Which settings switch the command: the !ca variants share the !ca50 ones, the class commands their own. */
+    private ChatCommandSetting setting() {
+        return switch (this) {
+            case C -> ChatCommandSetting.C50;
+            case CA, CA_ARCHER, CA_BERSERK, CA_HEALER, CA_MAGE, CA_TANK -> ChatCommandSetting.CA50;
+            case TPS -> ChatCommandSetting.TPS;
+            case JERRY -> ChatCommandSetting.JERRY;
+            case SCORPIUS -> ChatCommandSetting.SCORP;
+            case DERPY -> ChatCommandSetting.DERPY;
+            case YOTP -> ChatCommandSetting.YOTP;
+            case YOTW -> ChatCommandSetting.YOTW;
+            case YOTS -> ChatCommandSetting.YOTS;
+            case A, B, H, M, T -> ChatCommandSetting.CLASS_LEVEL;
         };
     }
 

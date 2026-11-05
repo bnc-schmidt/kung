@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 
 import com.github.beng420.kung.feature.misc.ChatCommandAliasTest;
 import com.github.beng420.kung.skyblock.ZodiacEvents.Event;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import java.time.Instant;
 import java.time.ZoneId;
 import org.junit.Test;
@@ -71,9 +73,9 @@ public class ZodiacEventsTest {
         assertFalse(ChatCommandAliasTest.matches("!yots now", "YOTS"));
         assertFalse(ChatCommandAliasTest.matches("!yot", "YOTS"));
         // Party and guild on, public chat and DMs off, each command on its own.
-        assertTrue(config.yotpPartyCommandsEnabled() && config.yotwGuildCommandsEnabled() && config.yotsChatCommandEnabled());
-        assertFalse(config.yotpAllChatCommandsEnabled() || config.yotwPrivateCommandsEnabled());
-        config.setYotsChatCommandEnabled(false);
-        assertTrue(config.yotpChatCommandEnabled() && config.yotwChatCommandEnabled());
+        assertTrue(config.channelEnabled(ChatCommandSetting.YOTP, CommandChannel.PARTY) && config.channelEnabled(ChatCommandSetting.YOTW, CommandChannel.GUILD) && config.commandEnabled(ChatCommandSetting.YOTS));
+        assertFalse(config.channelEnabled(ChatCommandSetting.YOTP, CommandChannel.ALL_CHAT) || config.channelEnabled(ChatCommandSetting.YOTW, CommandChannel.PRIVATE));
+        config.setCommandEnabled(ChatCommandSetting.YOTS, false);
+        assertTrue(config.commandEnabled(ChatCommandSetting.YOTP) && config.commandEnabled(ChatCommandSetting.YOTW));
     }
 }

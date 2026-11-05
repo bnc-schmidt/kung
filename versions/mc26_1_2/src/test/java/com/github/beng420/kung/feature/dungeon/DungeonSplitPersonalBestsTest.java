@@ -28,7 +28,7 @@ public final class DungeonSplitPersonalBestsTest {
         names.configureKnownFloor(floor, master);
         Map<String, Long> bests = new HashMap<>();
         for (String phase : names.splitNames()) bests.put(phase, perPhase);
-        config.recordPersonalBests(floor, master, bests);
+        config.recordRun(floor, master, bests, Map.of());
     }
 
     @Test public void predictionUsesSettledRealTimeAndRemainingIndividualBests() {
@@ -53,7 +53,7 @@ public final class DungeonSplitPersonalBestsTest {
     }
 
     @Test public void missingRemainingBestIsUnknownButPastMissingBestsNoLongerBlockPrediction() {
-        config.recordPersonalBests(5, false, Map.of("Blood Clear", 20_000L, "Portal Entry", 5_000L, "Livid", 40_000L));
+        config.recordRun(5, false, Map.of("Blood Clear", 20_000L, "Portal Entry", 5_000L, "Livid", 40_000L), Map.of());
         tracker.startRun(0L, 5, false);
         assertEquals(-1L, tracker.predictedFinishMillis());
         event(30_000L, BLOOD);
@@ -84,7 +84,7 @@ public final class DungeonSplitPersonalBestsTest {
     }
 
     @Test public void liveModeNeedsLaterBestsButDoesNotNeedAnActivePhaseBest() {
-        config.recordPersonalBests(5, false, Map.of("Blood Clear", 20_000L, "Portal Entry", 5_000L, "Livid", 40_000L));
+        config.recordRun(5, false, Map.of("Blood Clear", 20_000L, "Portal Entry", 5_000L, "Livid", 40_000L), Map.of());
         config.setPredictionMode(SplitsConfig.PredictionMode.LIVE);
         tracker.startRun(0L, -1, false);
         assertEquals(-1L, tracker.predictedFinishMillis());
@@ -104,9 +104,9 @@ public final class DungeonSplitPersonalBestsTest {
     }
 
     @Test public void liveStormUsesOnlyTerminalsGoldorNecronAndTheAdditionalMasterSevenPhases() {
-        config.recordPersonalBests(7, false, Map.of("Terminals", 20_000L, "Goldor", 5_000L, "Necron", 10_000L));
-        config.recordPersonalBests(7, true, Map.of("Terminals", 30_000L, "Goldor", 6_000L, "Necron", 15_000L,
-            "Relics", 3_000L, "Wither King", 1_000L, "Dragons", 20_000L)); // Stale "Wither King" key is ignored.
+        config.recordRun(7, false, Map.of("Terminals", 20_000L, "Goldor", 5_000L, "Necron", 10_000L), Map.of());
+        config.recordRun(7, true, Map.of("Terminals", 30_000L, "Goldor", 6_000L, "Necron", 15_000L,
+            "Relics", 3_000L, "Wither King", 1_000L, "Dragons", 20_000L), Map.of()); // Stale "Wither King" key is ignored.
         config.setPredictionMode(SplitsConfig.PredictionMode.LIVE);
         tracker.startRun(0L, 7, false);
         event(150_000L, "[BOSS] Storm: Pathetic Maxor, just like expected.");

@@ -72,7 +72,7 @@ public final class KungOneConfigTreeTest {
         AtomicInteger writes = new AtomicInteger();
         AtomicInteger value = new AtomicInteger(14);
         var feature = feature("Feature", enabled, () -> { enabled.set(!enabled.get()); writes.incrementAndGet(); },
-            List.of(SettingEntry.stepper("Number", value::get, value::set, 0, 28, 2)));
+            List.of(SettingEntry.slider("Number", value::get, value::set, 0, 28, 2)));
         var bridge = create(feature, writesAllowed);
         Property<?> master = property(bridge.tree(), "Feature", "Enabled");
         master.setAs(true);

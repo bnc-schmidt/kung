@@ -30,5 +30,10 @@ public final class FeastConfig extends ConfigCategory {
     public int y() { return y; }
     public void setY(int value) { y = value; save(); }
     public int scale() { return scale; }
+    @Override
+    public void normalize() {
+        setScale(scale());
+        setKernelTimeoutSeconds(kernelTimeoutSeconds());
+    }
     public void setScale(int value) { scale = Math.clamp(value, 25, 300); save(); }
 }

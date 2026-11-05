@@ -23,11 +23,11 @@ public final class SplitPersonalBestsConfigTest {
         config.splits.setTimePrediction(false);
         config.splits.setRunEndChat(true);
         config.splits.setPredictionMode(SplitsConfig.PredictionMode.LIVE);
-        config.splits.recordPersonalBests(6, false, Map.of("Blood Open", 40_000L, "Blood Clear", 20_000L));
-        config.splits.recordPersonalBests(7, false, Map.of("Blood Open", 35_000L));
-        config.splits.recordPersonalBests(7, true, Map.of("Blood Open", 25_000L));
-        config.splits.recordPersonalBests(6, true, Map.of("Blood Open", 30_000L));
-        config.splits.recordPersonalBests(0, false, Map.of("Blood Open", 50_000L));
+        config.splits.recordRun(6, false, Map.of("Blood Open", 40_000L, "Blood Clear", 20_000L), Map.of());
+        config.splits.recordRun(7, false, Map.of("Blood Open", 35_000L), Map.of());
+        config.splits.recordRun(7, true, Map.of("Blood Open", 25_000L), Map.of());
+        config.splits.recordRun(6, true, Map.of("Blood Open", 30_000L), Map.of());
+        config.splits.recordRun(0, false, Map.of("Blood Open", 50_000L), Map.of());
         KungConfig restored = new KungConfig(path);
         restored.load();
         assertEquals(40_000L, restored.splits.personalBestMillis(6, false, "Blood Open"));
@@ -51,10 +51,10 @@ public final class SplitPersonalBestsConfigTest {
         SplitsConfig config = new SplitsConfig();
         AtomicInteger writes = new AtomicInteger();
         config.onChange(writes::incrementAndGet);
-        config.recordPersonalBests(6, false, Map.of("Blood Open", 30_000L, "Blood Clear", 20_000L));
-        config.recordPersonalBests(6, false, Map.of("Blood Open", 31_000L, "Blood Clear", 20_000L));
+        config.recordRun(6, false, Map.of("Blood Open", 30_000L, "Blood Clear", 20_000L), Map.of());
+        config.recordRun(6, false, Map.of("Blood Open", 31_000L, "Blood Clear", 20_000L), Map.of());
         assertEquals(1, writes.get());
-        config.recordPersonalBests(6, false, Map.of("Blood Open", 25_000L, "Blood Clear", 22_000L));
+        config.recordRun(6, false, Map.of("Blood Open", 25_000L, "Blood Clear", 22_000L), Map.of());
         assertEquals(2, writes.get());
         assertEquals(25_000L, config.personalBestMillis(6, false, "Blood Open"));
         assertEquals(20_000L, config.personalBestMillis(6, false, "Blood Clear"));
@@ -64,8 +64,8 @@ public final class SplitPersonalBestsConfigTest {
         var path = temporary.getRoot().toPath().resolve("edited-pbs.json");
         KungConfig config = new KungConfig(path);
         config.load();
-        config.splits.recordPersonalBests(7, false, Map.of("Blood Open", 1_234L, "Necron", 12_345L));
-        config.splits.recordPersonalBests(7, true, Map.of("Blood Open", 2_345L));
+        config.splits.recordRun(7, false, Map.of("Blood Open", 1_234L, "Necron", 12_345L), Map.of());
+        config.splits.recordRun(7, true, Map.of("Blood Open", 2_345L), Map.of());
         config.splits.setPersonalBestMillis(7, false, "Blood Open", 83_456L);
         KungConfig restored = new KungConfig(path);
         restored.load();
@@ -123,12 +123,12 @@ public final class SplitPersonalBestsConfigTest {
             var config = KungConfig.read(new StringReader(json)).splits;
             assertEquals(-1L, config.personalBestMillis(6, false, "Blood Open"));
             assertEquals(-1L, config.personalBestMillis(6, false, "Blood Clear"));
-            config.recordPersonalBests(-1, false, Map.of("Blood Open", 1L));
-            config.recordPersonalBests(8, true, Map.of("Blood Open", 1L));
-            config.recordPersonalBests(6, false, Map.of("Blood Open", -1L, "Blood Clear", 0L));
+            config.recordRun(-1, false, Map.of("Blood Open", 1L), Map.of());
+            config.recordRun(8, true, Map.of("Blood Open", 1L), Map.of());
+            config.recordRun(6, false, Map.of("Blood Open", -1L, "Blood Clear", 0L), Map.of());
             assertEquals(-1L, config.personalBestMillis(6, false, "Blood Open"));
             assertEquals(-1L, config.personalBestMillis(6, false, "Blood Clear"));
-            config.recordPersonalBests(6, false, Map.of("Blood Open", 40_000L));
+            config.recordRun(6, false, Map.of("Blood Open", 40_000L), Map.of());
             assertEquals(40_000L, config.personalBestMillis(6, false, "Blood Open"));
         }
     }

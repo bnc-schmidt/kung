@@ -3,15 +3,28 @@ package com.github.beng420.kung.config.category;
 import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.util.KeyCodes;
 import com.github.beng420.kung.util.KeyboardLayout;
+import com.google.gson.Gson;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import com.google.gson.TypeAdapter;
+import com.google.gson.TypeAdapterFactory;
+import com.google.gson.annotations.JsonAdapter;
+import com.google.gson.reflect.TypeToken;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonWriter;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.function.Predicate;
 import java.util.regex.Pattern;
 
+@JsonAdapter(MiscConfig.CommandKeys.class)
 public final class MiscConfig extends ConfigCategory {
     private static final Pattern SACK_KEY_SYMBOL = Pattern.compile("^[^\\p{L}\\p{N}]+");
     private static String layoutPeekChatKeybind;
@@ -88,84 +101,8 @@ public final class MiscConfig extends ConfigCategory {
     private boolean chatEmotesReplaceWords = false;
     private List<ChatEmote> customChatEmotes = new ArrayList<>();
 
-    private boolean c50ChatCommandEnabled = true;
-    private boolean c50PartyCommandsEnabled = true;
-    private boolean c50GuildCommandsEnabled = true;
-    private boolean c50AllChatCommandsEnabled = false;
-    private boolean c50PrivateCommandsEnabled = false;
-    private boolean c50CoopCommandsEnabled = true;
-    private boolean ca50ChatCommandEnabled = true;
-    private boolean ca50PartyCommandsEnabled = true;
-    private boolean ca50GuildCommandsEnabled = true;
-    private boolean ca50AllChatCommandsEnabled = false;
-    private boolean ca50PrivateCommandsEnabled = false;
-    private boolean ca50CoopCommandsEnabled = true;
-    private boolean tpsChatCommandEnabled = true;
-    private boolean tpsPartyCommandsEnabled = true;
-    private boolean tpsGuildCommandsEnabled = true;
-    private boolean tpsAllChatCommandsEnabled = false;
-    private boolean tpsPrivateCommandsEnabled = false;
-    private boolean tpsCoopCommandsEnabled = true;
-    private boolean jerryChatCommandEnabled = true;
-    private boolean jerryPartyCommandsEnabled = true;
-    private boolean jerryGuildCommandsEnabled = true;
-    private boolean jerryAllChatCommandsEnabled = false;
-    private boolean jerryPrivateCommandsEnabled = false;
-    private boolean jerryCoopCommandsEnabled = true;
-    private boolean scorpChatCommandEnabled = true;
-    private boolean scorpPartyCommandsEnabled = true;
-    private boolean scorpGuildCommandsEnabled = true;
-    private boolean scorpAllChatCommandsEnabled = false;
-    private boolean scorpPrivateCommandsEnabled = false;
-    private boolean scorpCoopCommandsEnabled = true;
-    private boolean derpyChatCommandEnabled = true;
-    private boolean derpyPartyCommandsEnabled = true;
-    private boolean derpyGuildCommandsEnabled = true;
-    private boolean derpyAllChatCommandsEnabled = false;
-    private boolean derpyPrivateCommandsEnabled = false;
-    private boolean derpyCoopCommandsEnabled = true;
-    private boolean yotpChatCommandEnabled = true;
-    private boolean yotpPartyCommandsEnabled = true;
-    private boolean yotpGuildCommandsEnabled = true;
-    private boolean yotpAllChatCommandsEnabled = false;
-    private boolean yotpPrivateCommandsEnabled = false;
-    private boolean yotpCoopCommandsEnabled = true;
-    private boolean yotwChatCommandEnabled = true;
-    private boolean yotwPartyCommandsEnabled = true;
-    private boolean yotwGuildCommandsEnabled = true;
-    private boolean yotwAllChatCommandsEnabled = false;
-    private boolean yotwPrivateCommandsEnabled = false;
-    private boolean yotwCoopCommandsEnabled = true;
-    private boolean yotsChatCommandEnabled = true;
-    private boolean yotsPartyCommandsEnabled = true;
-    private boolean yotsGuildCommandsEnabled = true;
-    private boolean yotsAllChatCommandsEnabled = false;
-    private boolean yotsPrivateCommandsEnabled = false;
-    private boolean yotsCoopCommandsEnabled = true;
-    private boolean classLevelChatCommandEnabled = true;
-    private boolean classLevelPartyCommandsEnabled = true;
-    private boolean classLevelGuildCommandsEnabled = true;
-    private boolean classLevelAllChatCommandsEnabled = false;
-    private boolean classLevelPrivateCommandsEnabled = false;
-    private boolean classLevelCoopCommandsEnabled = true;
-    private boolean specialMayorsChatCommandsEnabled = true;
-    private boolean yearlyEventsChatCommandsEnabled = true;
-    // The channels every command answers in, unless its own "UseDefaultChannels" is off.
-    private boolean defaultPartyCommandsEnabled = true;
-    private boolean defaultGuildCommandsEnabled = true;
-    private boolean defaultAllChatCommandsEnabled = false;
-    private boolean defaultPrivateCommandsEnabled = false;
-    private boolean defaultCoopCommandsEnabled = true;
-    private boolean c50UseDefaultChannels = true;
-    private boolean ca50UseDefaultChannels = true;
-    private boolean tpsUseDefaultChannels = true;
-    private boolean jerryUseDefaultChannels = true;
-    private boolean scorpUseDefaultChannels = true;
-    private boolean derpyUseDefaultChannels = true;
-    private boolean yotpUseDefaultChannels = true;
-    private boolean yotwUseDefaultChannels = true;
-    private boolean yotsUseDefaultChannels = true;
-    private boolean classLevelUseDefaultChannels = true;
+    /** Every chat command switch, by saved key: not Gson fields, {@link CommandKeys} writes them flat. */
+    private final transient Map<String, Boolean> commandFlags = new HashMap<>();
 
     // Loadouts & Superpairs
     private boolean loadoutsAutoCloseEnabled = false;
@@ -543,192 +480,154 @@ public final class MiscConfig extends ConfigCategory {
         public String shortcut() { return shortcut == null ? "" : shortcut.replaceAll("^:+|:+$", ""); }
         public String emote() { return emote == null ? "" : emote; }
     }
-    public boolean c50ChatCommandEnabled() { return c50ChatCommandEnabled; }
-    public void setC50ChatCommandEnabled(boolean value) { c50ChatCommandEnabled = value; save(); }
-    public boolean c50PartyCommandsEnabled() { return c50UseDefaultChannels ? defaultPartyCommandsEnabled : c50PartyCommandsEnabled; }
-    public void setC50PartyCommandsEnabled(boolean value) { c50PartyCommandsEnabled = value; save(); }
-    public boolean c50GuildCommandsEnabled() { return c50UseDefaultChannels ? defaultGuildCommandsEnabled : c50GuildCommandsEnabled; }
-    public void setC50GuildCommandsEnabled(boolean value) { c50GuildCommandsEnabled = value; save(); }
-    public boolean c50AllChatCommandsEnabled() { return c50UseDefaultChannels ? defaultAllChatCommandsEnabled : c50AllChatCommandsEnabled; }
-    public void setC50AllChatCommandsEnabled(boolean value) { c50AllChatCommandsEnabled = value; save(); }
-    public boolean c50PrivateCommandsEnabled() { return c50UseDefaultChannels ? defaultPrivateCommandsEnabled : c50PrivateCommandsEnabled; }
-    public void setC50PrivateCommandsEnabled(boolean value) { c50PrivateCommandsEnabled = value; save(); }
-    public boolean c50CoopCommandsEnabled() { return c50UseDefaultChannels ? defaultCoopCommandsEnabled : c50CoopCommandsEnabled; }
-    public void setC50CoopCommandsEnabled(boolean value) { c50CoopCommandsEnabled = value; save(); }
-    public boolean ca50ChatCommandEnabled() { return ca50ChatCommandEnabled; }
-    public void setCa50ChatCommandEnabled(boolean value) { ca50ChatCommandEnabled = value; save(); }
-    public boolean ca50PartyCommandsEnabled() { return ca50UseDefaultChannels ? defaultPartyCommandsEnabled : ca50PartyCommandsEnabled; }
-    public void setCa50PartyCommandsEnabled(boolean value) { ca50PartyCommandsEnabled = value; save(); }
-    public boolean ca50GuildCommandsEnabled() { return ca50UseDefaultChannels ? defaultGuildCommandsEnabled : ca50GuildCommandsEnabled; }
-    public void setCa50GuildCommandsEnabled(boolean value) { ca50GuildCommandsEnabled = value; save(); }
-    public boolean ca50AllChatCommandsEnabled() { return ca50UseDefaultChannels ? defaultAllChatCommandsEnabled : ca50AllChatCommandsEnabled; }
-    public void setCa50AllChatCommandsEnabled(boolean value) { ca50AllChatCommandsEnabled = value; save(); }
-    public boolean ca50PrivateCommandsEnabled() { return ca50UseDefaultChannels ? defaultPrivateCommandsEnabled : ca50PrivateCommandsEnabled; }
-    public void setCa50PrivateCommandsEnabled(boolean value) { ca50PrivateCommandsEnabled = value; save(); }
-    public boolean ca50CoopCommandsEnabled() { return ca50UseDefaultChannels ? defaultCoopCommandsEnabled : ca50CoopCommandsEnabled; }
-    public void setCa50CoopCommandsEnabled(boolean value) { ca50CoopCommandsEnabled = value; save(); }
-    public boolean tpsChatCommandEnabled() { return tpsChatCommandEnabled; }
-    public void setTpsChatCommandEnabled(boolean value) { tpsChatCommandEnabled = value; save(); }
-    public boolean tpsPartyCommandsEnabled() { return tpsUseDefaultChannels ? defaultPartyCommandsEnabled : tpsPartyCommandsEnabled; }
-    public void setTpsPartyCommandsEnabled(boolean value) { tpsPartyCommandsEnabled = value; save(); }
-    public boolean tpsGuildCommandsEnabled() { return tpsUseDefaultChannels ? defaultGuildCommandsEnabled : tpsGuildCommandsEnabled; }
-    public void setTpsGuildCommandsEnabled(boolean value) { tpsGuildCommandsEnabled = value; save(); }
-    public boolean tpsAllChatCommandsEnabled() { return tpsUseDefaultChannels ? defaultAllChatCommandsEnabled : tpsAllChatCommandsEnabled; }
-    public void setTpsAllChatCommandsEnabled(boolean value) { tpsAllChatCommandsEnabled = value; save(); }
-    public boolean tpsPrivateCommandsEnabled() { return tpsUseDefaultChannels ? defaultPrivateCommandsEnabled : tpsPrivateCommandsEnabled; }
-    public void setTpsPrivateCommandsEnabled(boolean value) { tpsPrivateCommandsEnabled = value; save(); }
-    public boolean tpsCoopCommandsEnabled() { return tpsUseDefaultChannels ? defaultCoopCommandsEnabled : tpsCoopCommandsEnabled; }
-    public void setTpsCoopCommandsEnabled(boolean value) { tpsCoopCommandsEnabled = value; save(); }
-    public boolean jerryChatCommandEnabled() { return jerryChatCommandEnabled; }
-    public void setJerryChatCommandEnabled(boolean value) { jerryChatCommandEnabled = value; save(); }
-    public boolean jerryPartyCommandsEnabled() { return jerryUseDefaultChannels ? defaultPartyCommandsEnabled : jerryPartyCommandsEnabled; }
-    public void setJerryPartyCommandsEnabled(boolean value) { jerryPartyCommandsEnabled = value; save(); }
-    public boolean jerryGuildCommandsEnabled() { return jerryUseDefaultChannels ? defaultGuildCommandsEnabled : jerryGuildCommandsEnabled; }
-    public void setJerryGuildCommandsEnabled(boolean value) { jerryGuildCommandsEnabled = value; save(); }
-    public boolean jerryAllChatCommandsEnabled() { return jerryUseDefaultChannels ? defaultAllChatCommandsEnabled : jerryAllChatCommandsEnabled; }
-    public void setJerryAllChatCommandsEnabled(boolean value) { jerryAllChatCommandsEnabled = value; save(); }
-    public boolean jerryPrivateCommandsEnabled() { return jerryUseDefaultChannels ? defaultPrivateCommandsEnabled : jerryPrivateCommandsEnabled; }
-    public void setJerryPrivateCommandsEnabled(boolean value) { jerryPrivateCommandsEnabled = value; save(); }
-    public boolean jerryCoopCommandsEnabled() { return jerryUseDefaultChannels ? defaultCoopCommandsEnabled : jerryCoopCommandsEnabled; }
-    public void setJerryCoopCommandsEnabled(boolean value) { jerryCoopCommandsEnabled = value; save(); }
-    public boolean scorpChatCommandEnabled() { return scorpChatCommandEnabled; }
-    public void setScorpChatCommandEnabled(boolean value) { scorpChatCommandEnabled = value; save(); }
-    public boolean scorpPartyCommandsEnabled() { return scorpUseDefaultChannels ? defaultPartyCommandsEnabled : scorpPartyCommandsEnabled; }
-    public void setScorpPartyCommandsEnabled(boolean value) { scorpPartyCommandsEnabled = value; save(); }
-    public boolean scorpGuildCommandsEnabled() { return scorpUseDefaultChannels ? defaultGuildCommandsEnabled : scorpGuildCommandsEnabled; }
-    public void setScorpGuildCommandsEnabled(boolean value) { scorpGuildCommandsEnabled = value; save(); }
-    public boolean scorpAllChatCommandsEnabled() { return scorpUseDefaultChannels ? defaultAllChatCommandsEnabled : scorpAllChatCommandsEnabled; }
-    public void setScorpAllChatCommandsEnabled(boolean value) { scorpAllChatCommandsEnabled = value; save(); }
-    public boolean scorpPrivateCommandsEnabled() { return scorpUseDefaultChannels ? defaultPrivateCommandsEnabled : scorpPrivateCommandsEnabled; }
-    public void setScorpPrivateCommandsEnabled(boolean value) { scorpPrivateCommandsEnabled = value; save(); }
-    public boolean scorpCoopCommandsEnabled() { return scorpUseDefaultChannels ? defaultCoopCommandsEnabled : scorpCoopCommandsEnabled; }
-    public void setScorpCoopCommandsEnabled(boolean value) { scorpCoopCommandsEnabled = value; save(); }
-    public boolean derpyChatCommandEnabled() { return derpyChatCommandEnabled; }
-    public void setDerpyChatCommandEnabled(boolean value) { derpyChatCommandEnabled = value; save(); }
-    public boolean derpyPartyCommandsEnabled() { return derpyUseDefaultChannels ? defaultPartyCommandsEnabled : derpyPartyCommandsEnabled; }
-    public void setDerpyPartyCommandsEnabled(boolean value) { derpyPartyCommandsEnabled = value; save(); }
-    public boolean derpyGuildCommandsEnabled() { return derpyUseDefaultChannels ? defaultGuildCommandsEnabled : derpyGuildCommandsEnabled; }
-    public void setDerpyGuildCommandsEnabled(boolean value) { derpyGuildCommandsEnabled = value; save(); }
-    public boolean derpyAllChatCommandsEnabled() { return derpyUseDefaultChannels ? defaultAllChatCommandsEnabled : derpyAllChatCommandsEnabled; }
-    public void setDerpyAllChatCommandsEnabled(boolean value) { derpyAllChatCommandsEnabled = value; save(); }
-    public boolean derpyPrivateCommandsEnabled() { return derpyUseDefaultChannels ? defaultPrivateCommandsEnabled : derpyPrivateCommandsEnabled; }
-    public void setDerpyPrivateCommandsEnabled(boolean value) { derpyPrivateCommandsEnabled = value; save(); }
-    public boolean derpyCoopCommandsEnabled() { return derpyUseDefaultChannels ? defaultCoopCommandsEnabled : derpyCoopCommandsEnabled; }
-    public void setDerpyCoopCommandsEnabled(boolean value) { derpyCoopCommandsEnabled = value; save(); }
-    public boolean classLevelChatCommandEnabled() { return classLevelChatCommandEnabled; }
-    public void setClassLevelChatCommandEnabled(boolean value) { classLevelChatCommandEnabled = value; save(); }
-    public boolean classLevelPartyCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPartyCommandsEnabled : classLevelPartyCommandsEnabled; }
-    public void setClassLevelPartyCommandsEnabled(boolean value) { classLevelPartyCommandsEnabled = value; save(); }
-    public boolean classLevelGuildCommandsEnabled() { return classLevelUseDefaultChannels ? defaultGuildCommandsEnabled : classLevelGuildCommandsEnabled; }
-    public void setClassLevelGuildCommandsEnabled(boolean value) { classLevelGuildCommandsEnabled = value; save(); }
-    public boolean classLevelAllChatCommandsEnabled() { return classLevelUseDefaultChannels ? defaultAllChatCommandsEnabled : classLevelAllChatCommandsEnabled; }
-    public void setClassLevelAllChatCommandsEnabled(boolean value) { classLevelAllChatCommandsEnabled = value; save(); }
-    public boolean classLevelPrivateCommandsEnabled() { return classLevelUseDefaultChannels ? defaultPrivateCommandsEnabled : classLevelPrivateCommandsEnabled; }
-    public void setClassLevelPrivateCommandsEnabled(boolean value) { classLevelPrivateCommandsEnabled = value; save(); }
-    public boolean classLevelCoopCommandsEnabled() { return classLevelUseDefaultChannels ? defaultCoopCommandsEnabled : classLevelCoopCommandsEnabled; }
-    public void setClassLevelCoopCommandsEnabled(boolean value) { classLevelCoopCommandsEnabled = value; save(); }
-    public boolean yotpChatCommandEnabled() { return yotpChatCommandEnabled; }
-    public void setYotpChatCommandEnabled(boolean value) { yotpChatCommandEnabled = value; save(); }
-    public boolean yotpPartyCommandsEnabled() { return yotpUseDefaultChannels ? defaultPartyCommandsEnabled : yotpPartyCommandsEnabled; }
-    public void setYotpPartyCommandsEnabled(boolean value) { yotpPartyCommandsEnabled = value; save(); }
-    public boolean yotpGuildCommandsEnabled() { return yotpUseDefaultChannels ? defaultGuildCommandsEnabled : yotpGuildCommandsEnabled; }
-    public void setYotpGuildCommandsEnabled(boolean value) { yotpGuildCommandsEnabled = value; save(); }
-    public boolean yotpAllChatCommandsEnabled() { return yotpUseDefaultChannels ? defaultAllChatCommandsEnabled : yotpAllChatCommandsEnabled; }
-    public void setYotpAllChatCommandsEnabled(boolean value) { yotpAllChatCommandsEnabled = value; save(); }
-    public boolean yotpPrivateCommandsEnabled() { return yotpUseDefaultChannels ? defaultPrivateCommandsEnabled : yotpPrivateCommandsEnabled; }
-    public void setYotpPrivateCommandsEnabled(boolean value) { yotpPrivateCommandsEnabled = value; save(); }
-    public boolean yotpCoopCommandsEnabled() { return yotpUseDefaultChannels ? defaultCoopCommandsEnabled : yotpCoopCommandsEnabled; }
-    public void setYotpCoopCommandsEnabled(boolean value) { yotpCoopCommandsEnabled = value; save(); }
-    public boolean yotwChatCommandEnabled() { return yotwChatCommandEnabled; }
-    public void setYotwChatCommandEnabled(boolean value) { yotwChatCommandEnabled = value; save(); }
-    public boolean yotwPartyCommandsEnabled() { return yotwUseDefaultChannels ? defaultPartyCommandsEnabled : yotwPartyCommandsEnabled; }
-    public void setYotwPartyCommandsEnabled(boolean value) { yotwPartyCommandsEnabled = value; save(); }
-    public boolean yotwGuildCommandsEnabled() { return yotwUseDefaultChannels ? defaultGuildCommandsEnabled : yotwGuildCommandsEnabled; }
-    public void setYotwGuildCommandsEnabled(boolean value) { yotwGuildCommandsEnabled = value; save(); }
-    public boolean yotwAllChatCommandsEnabled() { return yotwUseDefaultChannels ? defaultAllChatCommandsEnabled : yotwAllChatCommandsEnabled; }
-    public void setYotwAllChatCommandsEnabled(boolean value) { yotwAllChatCommandsEnabled = value; save(); }
-    public boolean yotwPrivateCommandsEnabled() { return yotwUseDefaultChannels ? defaultPrivateCommandsEnabled : yotwPrivateCommandsEnabled; }
-    public void setYotwPrivateCommandsEnabled(boolean value) { yotwPrivateCommandsEnabled = value; save(); }
-    public boolean yotwCoopCommandsEnabled() { return yotwUseDefaultChannels ? defaultCoopCommandsEnabled : yotwCoopCommandsEnabled; }
-    public void setYotwCoopCommandsEnabled(boolean value) { yotwCoopCommandsEnabled = value; save(); }
-    public boolean yotsChatCommandEnabled() { return yotsChatCommandEnabled; }
-    public void setYotsChatCommandEnabled(boolean value) { yotsChatCommandEnabled = value; save(); }
-    public boolean yotsPartyCommandsEnabled() { return yotsUseDefaultChannels ? defaultPartyCommandsEnabled : yotsPartyCommandsEnabled; }
-    public void setYotsPartyCommandsEnabled(boolean value) { yotsPartyCommandsEnabled = value; save(); }
-    public boolean yotsGuildCommandsEnabled() { return yotsUseDefaultChannels ? defaultGuildCommandsEnabled : yotsGuildCommandsEnabled; }
-    public void setYotsGuildCommandsEnabled(boolean value) { yotsGuildCommandsEnabled = value; save(); }
-    public boolean yotsAllChatCommandsEnabled() { return yotsUseDefaultChannels ? defaultAllChatCommandsEnabled : yotsAllChatCommandsEnabled; }
-    public void setYotsAllChatCommandsEnabled(boolean value) { yotsAllChatCommandsEnabled = value; save(); }
-    public boolean yotsPrivateCommandsEnabled() { return yotsUseDefaultChannels ? defaultPrivateCommandsEnabled : yotsPrivateCommandsEnabled; }
-    public void setYotsPrivateCommandsEnabled(boolean value) { yotsPrivateCommandsEnabled = value; save(); }
-    public boolean yotsCoopCommandsEnabled() { return yotsUseDefaultChannels ? defaultCoopCommandsEnabled : yotsCoopCommandsEnabled; }
-    public void setYotsCoopCommandsEnabled(boolean value) { yotsCoopCommandsEnabled = value; save(); }
-    public boolean cataChatCommandEnabled() { return c50ChatCommandEnabled && ca50ChatCommandEnabled; }
-    public boolean cataPartyCommandsEnabled() { return c50PartyCommandsEnabled() && ca50PartyCommandsEnabled(); }
-    public boolean cataGuildCommandsEnabled() { return c50GuildCommandsEnabled() && ca50GuildCommandsEnabled(); }
-    public boolean specialMayorsChatCommandsEnabled() { return specialMayorsChatCommandsEnabled; }
-    public void setSpecialMayorsChatCommandsEnabled(boolean value) { specialMayorsChatCommandsEnabled = value; save(); }
-    public boolean yearlyEventsChatCommandsEnabled() { return yearlyEventsChatCommandsEnabled; }
-    public void setYearlyEventsChatCommandsEnabled(boolean value) { yearlyEventsChatCommandsEnabled = value; save(); }
-    public boolean defaultPartyCommandsEnabled() { return defaultPartyCommandsEnabled; }
-    public void setDefaultPartyCommandsEnabled(boolean value) { defaultPartyCommandsEnabled = value; save(); }
-    public boolean defaultGuildCommandsEnabled() { return defaultGuildCommandsEnabled; }
-    public void setDefaultGuildCommandsEnabled(boolean value) { defaultGuildCommandsEnabled = value; save(); }
-    public boolean defaultAllChatCommandsEnabled() { return defaultAllChatCommandsEnabled; }
-    public void setDefaultAllChatCommandsEnabled(boolean value) { defaultAllChatCommandsEnabled = value; save(); }
-    public boolean defaultPrivateCommandsEnabled() { return defaultPrivateCommandsEnabled; }
-    public void setDefaultPrivateCommandsEnabled(boolean value) { defaultPrivateCommandsEnabled = value; save(); }
-    public boolean defaultCoopCommandsEnabled() { return defaultCoopCommandsEnabled; }
-    public void setDefaultCoopCommandsEnabled(boolean value) { defaultCoopCommandsEnabled = value; save(); }
-    public boolean c50UseDefaultChannels() { return c50UseDefaultChannels; }
-    public void setC50UseDefaultChannels(boolean value) { c50UseDefaultChannels = value; save(); }
-    public boolean ca50UseDefaultChannels() { return ca50UseDefaultChannels; }
-    public void setCa50UseDefaultChannels(boolean value) { ca50UseDefaultChannels = value; save(); }
-    public boolean tpsUseDefaultChannels() { return tpsUseDefaultChannels; }
-    public void setTpsUseDefaultChannels(boolean value) { tpsUseDefaultChannels = value; save(); }
-    public boolean jerryUseDefaultChannels() { return jerryUseDefaultChannels; }
-    public void setJerryUseDefaultChannels(boolean value) { jerryUseDefaultChannels = value; save(); }
-    public boolean scorpUseDefaultChannels() { return scorpUseDefaultChannels; }
-    public void setScorpUseDefaultChannels(boolean value) { scorpUseDefaultChannels = value; save(); }
-    public boolean derpyUseDefaultChannels() { return derpyUseDefaultChannels; }
-    public void setDerpyUseDefaultChannels(boolean value) { derpyUseDefaultChannels = value; save(); }
-    public boolean yotpUseDefaultChannels() { return yotpUseDefaultChannels; }
-    public void setYotpUseDefaultChannels(boolean value) { yotpUseDefaultChannels = value; save(); }
-    public boolean yotwUseDefaultChannels() { return yotwUseDefaultChannels; }
-    public void setYotwUseDefaultChannels(boolean value) { yotwUseDefaultChannels = value; save(); }
-    public boolean yotsUseDefaultChannels() { return yotsUseDefaultChannels; }
-    public void setYotsUseDefaultChannels(boolean value) { yotsUseDefaultChannels = value; save(); }
-    public boolean classLevelUseDefaultChannels() { return classLevelUseDefaultChannels; }
-    public void setClassLevelUseDefaultChannels(boolean value) { classLevelUseDefaultChannels = value; save(); }
+    public boolean specialMayorsChatCommandsEnabled() { return flag(SPECIAL_MAYORS); }
+    public void setSpecialMayorsChatCommandsEnabled(boolean value) { setFlag(SPECIAL_MAYORS, value); }
+    public boolean yearlyEventsChatCommandsEnabled() { return flag(YEARLY_EVENTS); }
+    public void setYearlyEventsChatCommandsEnabled(boolean value) { setFlag(YEARLY_EVENTS, value); }
+    public boolean defaultChannelEnabled(CommandChannel channel) { return flag(defaultKey(channel)); }
+    public void setDefaultChannelEnabled(CommandChannel channel, boolean value) { setFlag(defaultKey(channel), value); }
+    public boolean commandEnabled(ChatCommandSetting command) { return flag(command.prefix + "ChatCommandEnabled"); }
+    public void setCommandEnabled(ChatCommandSetting command, boolean value) {
+        setFlag(command.prefix + "ChatCommandEnabled", value);
+    }
+    public boolean useDefaultChannels(ChatCommandSetting command) { return flag(useDefaultKey(command)); }
+    public void setUseDefaultChannels(ChatCommandSetting command, boolean value) { setFlag(useDefaultKey(command), value); }
+
+    /** Whether the command answers in the channel: the default channel's switch while it follows the defaults. */
+    public boolean channelEnabled(ChatCommandSetting command, CommandChannel channel) {
+        return useDefaultChannels(command) ? defaultChannelEnabled(channel) : flag(channelKey(command, channel));
+    }
+
+    /** The command's own switch for the channel; it counts once the command stops following the defaults. */
+    public void setChannelEnabled(ChatCommandSetting command, CommandChannel channel, boolean value) {
+        setFlag(channelKey(command, channel), value);
+    }
 
     /** Every command follows the default channels again; the defaults and all switches stay as they are. */
     public void useDefaultChannelsEverywhere() {
-        c50UseDefaultChannels = ca50UseDefaultChannels = tpsUseDefaultChannels = true;
-        jerryUseDefaultChannels = scorpUseDefaultChannels = derpyUseDefaultChannels = true;
-        yotpUseDefaultChannels = yotwUseDefaultChannels = yotsUseDefaultChannels = classLevelUseDefaultChannels = true;
+        for (ChatCommandSetting command : ChatCommandSetting.values()) commandFlags.put(useDefaultKey(command), true);
         save();
     }
 
-    /**
-     * A file from before the shared defaults keeps what it changed: a command whose own channels differ from the
-     * shipped ones stays on them instead of silently following the defaults. {@code fileHasKey} says which
-     * settings the file stored.
-     */
-    public void keepOwnChannelsWhereChanged(Predicate<String> fileHasKey) {
-        if (!fileHasKey.test("c50UseDefaultChannels") && changed(c50PartyCommandsEnabled, c50GuildCommandsEnabled, c50AllChatCommandsEnabled, c50PrivateCommandsEnabled)) c50UseDefaultChannels = false;
-        if (!fileHasKey.test("ca50UseDefaultChannels") && changed(ca50PartyCommandsEnabled, ca50GuildCommandsEnabled, ca50AllChatCommandsEnabled, ca50PrivateCommandsEnabled)) ca50UseDefaultChannels = false;
-        if (!fileHasKey.test("tpsUseDefaultChannels") && changed(tpsPartyCommandsEnabled, tpsGuildCommandsEnabled, tpsAllChatCommandsEnabled, tpsPrivateCommandsEnabled)) tpsUseDefaultChannels = false;
-        if (!fileHasKey.test("jerryUseDefaultChannels") && changed(jerryPartyCommandsEnabled, jerryGuildCommandsEnabled, jerryAllChatCommandsEnabled, jerryPrivateCommandsEnabled)) jerryUseDefaultChannels = false;
-        if (!fileHasKey.test("scorpUseDefaultChannels") && changed(scorpPartyCommandsEnabled, scorpGuildCommandsEnabled, scorpAllChatCommandsEnabled, scorpPrivateCommandsEnabled)) scorpUseDefaultChannels = false;
-        if (!fileHasKey.test("derpyUseDefaultChannels") && changed(derpyPartyCommandsEnabled, derpyGuildCommandsEnabled, derpyAllChatCommandsEnabled, derpyPrivateCommandsEnabled)) derpyUseDefaultChannels = false;
-        if (!fileHasKey.test("yotpUseDefaultChannels") && changed(yotpPartyCommandsEnabled, yotpGuildCommandsEnabled, yotpAllChatCommandsEnabled, yotpPrivateCommandsEnabled)) yotpUseDefaultChannels = false;
-        if (!fileHasKey.test("yotwUseDefaultChannels") && changed(yotwPartyCommandsEnabled, yotwGuildCommandsEnabled, yotwAllChatCommandsEnabled, yotwPrivateCommandsEnabled)) yotwUseDefaultChannels = false;
-        if (!fileHasKey.test("yotsUseDefaultChannels") && changed(yotsPartyCommandsEnabled, yotsGuildCommandsEnabled, yotsAllChatCommandsEnabled, yotsPrivateCommandsEnabled)) yotsUseDefaultChannels = false;
-        if (!fileHasKey.test("classLevelUseDefaultChannels") && changed(classLevelPartyCommandsEnabled, classLevelGuildCommandsEnabled, classLevelAllChatCommandsEnabled, classLevelPrivateCommandsEnabled)) classLevelUseDefaultChannels = false;
+    /** The chat commands with settings of their own; {@code prefix} starts their saved keys, as in c50PartyCommandsEnabled. */
+    public enum ChatCommandSetting {
+        C50("c50"), CA50("ca50"), TPS("tps"), JERRY("jerry"), SCORP("scorp"), DERPY("derpy"),
+        YOTP("yotp"), YOTW("yotw"), YOTS("yots"), CLASS_LEVEL("classLevel");
+
+        private final String prefix;
+
+        ChatCommandSetting(String prefix) { this.prefix = prefix; }
     }
 
-    private static boolean changed(boolean party, boolean guild, boolean allChat, boolean direct) {
-        return !party || !guild || allChat || direct;
+    /** A channel a command answers in; {@code key} is part of the saved keys, {@code defaultOn} their default. */
+    public enum CommandChannel {
+        PARTY("Party", true), GUILD("Guild", true), ALL_CHAT("AllChat", false), PRIVATE("Private", false), COOP("Coop", true);
+
+        private final String key;
+        private final boolean defaultOn;
+
+        CommandChannel(String key, boolean defaultOn) {
+            this.key = key;
+            this.defaultOn = defaultOn;
+        }
+    }
+
+    private static final String SPECIAL_MAYORS = "specialMayorsChatCommandsEnabled";
+    private static final String YEARLY_EVENTS = "yearlyEventsChatCommandsEnabled";
+    /** Every chat command switch with its default, in the order the file lists them. */
+    private static final Map<String, Boolean> COMMAND_DEFAULTS = commandDefaults();
+
+    private static Map<String, Boolean> commandDefaults() {
+        Map<String, Boolean> defaults = new LinkedHashMap<>();
+        for (ChatCommandSetting command : ChatCommandSetting.values()) {
+            defaults.put(command.prefix + "ChatCommandEnabled", true);
+            for (CommandChannel channel : CommandChannel.values()) defaults.put(channelKey(command, channel), channel.defaultOn);
+        }
+        defaults.put(SPECIAL_MAYORS, true);
+        defaults.put(YEARLY_EVENTS, true);
+        for (CommandChannel channel : CommandChannel.values()) defaults.put(defaultKey(channel), channel.defaultOn);
+        for (ChatCommandSetting command : ChatCommandSetting.values()) defaults.put(useDefaultKey(command), true);
+        return defaults;
+    }
+
+    private static String channelKey(ChatCommandSetting command, CommandChannel channel) {
+        return command.prefix + channel.key + "CommandsEnabled";
+    }
+
+    private static String defaultKey(CommandChannel channel) { return "default" + channel.key + "CommandsEnabled"; }
+    private static String useDefaultKey(ChatCommandSetting command) { return command.prefix + "UseDefaultChannels"; }
+    private boolean flag(String key) { return commandFlags.getOrDefault(key, COMMAND_DEFAULTS.get(key)); }
+    private void setFlag(String key, boolean value) {
+        commandFlags.put(key, value);
+        save();
+    }
+
+    private void writeCommandFlags(JsonObject json) {
+        COMMAND_DEFAULTS.keySet().forEach(key -> json.addProperty(key, flag(key)));
+    }
+
+    /** Takes the flat keys from the file, then the older shared "cata" settings and the pre-default channels. */
+    private void readCommandFlags(JsonObject json) {
+        COMMAND_DEFAULTS.keySet().forEach(key -> {
+            if (has(json, key)) commandFlags.put(key, json.get(key).getAsBoolean());
+        });
+        // The old shared "cata"/"ca50" key fills whichever of the "c50"/"ca50" keys the file leaves unset.
+        for (String suffix : new String[] {"ChatCommandEnabled", "PartyCommandsEnabled", "GuildCommandsEnabled",
+            "AllChatCommandsEnabled", "PrivateCommandsEnabled"}) {
+            for (String legacy : new String[] {"cata" + suffix, "ca50" + suffix}) {
+                if (!has(json, legacy)) continue;
+                boolean value = json.get(legacy).getAsBoolean();
+                if (!has(json, "c50" + suffix)) commandFlags.put("c50" + suffix, value);
+                if (!has(json, "ca50" + suffix)) commandFlags.put("ca50" + suffix, value);
+            }
+        }
+        // A file from before the shared defaults keeps what it changed: a command whose own channels differ from the
+        // shipped ones stays on them instead of silently following the defaults. Co-op was never compared.
+        for (ChatCommandSetting command : ChatCommandSetting.values()) {
+            if (has(json, useDefaultKey(command))) continue;
+            for (CommandChannel channel : CommandChannel.values()) {
+                if (channel != CommandChannel.COOP && flag(channelKey(command, channel)) != channel.defaultOn) {
+                    commandFlags.put(useDefaultKey(command), false);
+                }
+            }
+        }
+    }
+
+    private static boolean has(JsonObject json, String key) { return json.has(key) && !json.get(key).isJsonNull(); }
+
+    /** Reads and writes the chat command switches flat in the "misc" object, under the names the fields had. */
+    public static final class CommandKeys implements TypeAdapterFactory {
+        @Override
+        @SuppressWarnings("unchecked")
+        public <T> TypeAdapter<T> create(Gson gson, TypeToken<T> type) {
+            if (type.getRawType() != MiscConfig.class) return null;
+            TypeAdapter<MiscConfig> fields = gson.getDelegateAdapter(this, (TypeToken<MiscConfig>) type);
+            TypeAdapter<JsonElement> tree = gson.getAdapter(JsonElement.class);
+            return (TypeAdapter<T>) new TypeAdapter<MiscConfig>() {
+                @Override
+                public void write(JsonWriter out, MiscConfig misc) throws IOException {
+                    JsonObject written = new JsonObject();
+                    boolean flagsWritten = false;
+                    for (var entry : fields.toJsonTree(misc).getAsJsonObject().entrySet()) {
+                        written.add(entry.getKey(), entry.getValue());
+                        if (entry.getKey().equals("customChatEmotes")) {
+                            misc.writeCommandFlags(written);
+                            flagsWritten = true;
+                        }
+                    }
+                    if (!flagsWritten) misc.writeCommandFlags(written);
+                    tree.write(out, written);
+                }
+
+                @Override
+                public MiscConfig read(JsonReader in) throws IOException {
+                    JsonElement json = tree.read(in);
+                    MiscConfig misc = fields.fromJsonTree(json);
+                    if (misc != null && json.isJsonObject()) misc.readCommandFlags(json.getAsJsonObject());
+                    return misc;
+                }
+            }.nullSafe();
+        }
     }
     public boolean loadoutsAutoCloseEnabled() { return loadoutsAutoCloseEnabled; }
     public void setLoadoutsAutoCloseEnabled(boolean value) { loadoutsAutoCloseEnabled = value; save(); }
@@ -814,7 +713,7 @@ public final class MiscConfig extends ConfigCategory {
         layoutPeekChatKeybind = null;
     }
 
-    public static String[] defaultLoadoutKeybinds() {
+    private static String[] defaultLoadoutKeybinds() {
         String[] defaults = new String[12];
         for (int i = 0; i < 9; i++) defaults[i] = "key:" + (49 + i) + ":0";
         defaults[9] = "key:48:0";
@@ -829,10 +728,6 @@ public final class MiscConfig extends ConfigCategory {
         return keybind == null ? "" : keybind;
     }
 
-    public int loadoutKeybindCount() {
-        return loadoutKeybinds.length;
-    }
-
     public void setLoadoutKeybind(int index, String keybind) {
         if (index < 0 || index >= loadoutKeybinds.length) return;
         loadoutKeybinds[index] = keybind == null ? "" : keybind;
@@ -844,7 +739,16 @@ public final class MiscConfig extends ConfigCategory {
         save();
     }
 
+    @Override
     public void normalize() {
+        setHypixelApiKey(hypixelApiKey());
+        setSuperpairsHelperScale(superpairsHelperScale());
+        setCustomArrowHitSounds(customArrowHitSounds());
+        setCustomWitherShieldExpireSounds(customWitherShieldExpireSounds());
+        setCustomArrowHitVolumeTenths(customArrowHitVolumeTenths());
+        setCustomArrowHitPitchHundredths(customArrowHitPitchHundredths());
+        setCustomWitherShieldExpireVolumeTenths(customWitherShieldExpireVolumeTenths());
+        setCustomWitherShieldExpirePitchHundredths(customWitherShieldExpirePitchHundredths());
         bowDrawIndicatorScale = Math.clamp(bowDrawIndicatorScale, 25, 300);
         frozenBlazeHudScale = Math.clamp(frozenBlazeHudScale, 25, 300);
         ragTimerScale = Math.clamp(ragTimerScale, 25, 300);

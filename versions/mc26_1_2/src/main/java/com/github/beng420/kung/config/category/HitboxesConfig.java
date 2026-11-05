@@ -75,6 +75,7 @@ public final class HitboxesConfig extends ConfigCategory {
         }
     }
 
+    @Override
     public void normalize() {
         if (entities == null) entities = new LinkedHashMap<>();
         Map<String, Integer> valid = new LinkedHashMap<>();

@@ -13,6 +13,8 @@ import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.MiningConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionMode;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionSource;
@@ -42,7 +44,6 @@ import java.util.function.IntConsumer;
 import java.util.function.Supplier;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.screens.ConfirmLinkScreen;
-import net.minecraft.client.gui.screens.Screen;
 
 /** Shared settings and callbacks; persistence remains owned by KungConfig. */
 public final class KungSettings {
@@ -552,121 +553,7 @@ public final class KungSettings {
                     )
                 ),
                 new FeatureEntry("Chat Commands", config.misc::chatCommandsEnabled,
-                    config.misc::setChatCommandsEnabled,
-                    List.of(
-                        SettingEntry.group("Default Channels")
-                            .withTooltip("Where every command answers, unless it has channels of its own.",
-                                "Each command follows these until you turn its \"Use Default\" off.")
-                            .withChildren(List.of(
-                            SettingEntry.toggle("Party", config.misc::defaultPartyCommandsEnabled,
-                                config.misc::setDefaultPartyCommandsEnabled),
-                            SettingEntry.toggle("Guild", config.misc::defaultGuildCommandsEnabled,
-                                config.misc::setDefaultGuildCommandsEnabled),
-                            SettingEntry.toggle("Co-op", config.misc::defaultCoopCommandsEnabled,
-                                config.misc::setDefaultCoopCommandsEnabled),
-                            SettingEntry.toggle("All Chat", config.misc::defaultAllChatCommandsEnabled,
-                                config.misc::setDefaultAllChatCommandsEnabled),
-                            SettingEntry.toggle("DMs", config.misc::defaultPrivateCommandsEnabled,
-                                config.misc::setDefaultPrivateCommandsEnabled)
-                        )),
-                        SettingEntry.button("Reset All", "Reset", config.misc::useDefaultChannelsEverywhere)
-                            .withTooltip("Turns \"Use Default\" back on for every command.",
-                                "The default channels and the command switches stay as they are."),
-                        chatCommand(config.misc, "!c50", new String[] {"Runs left for Catacombs 50. Add a player name to look up someone else.",
-                            "Any level from 1 to 200 works: !c67 for Catacombs 67."},
-                            config.misc::c50ChatCommandEnabled, config.misc::setC50ChatCommandEnabled,
-                            config.misc::c50UseDefaultChannels, config.misc::setC50UseDefaultChannels,
-                            config.misc::c50PartyCommandsEnabled, config.misc::setC50PartyCommandsEnabled,
-                            config.misc::c50GuildCommandsEnabled, config.misc::setC50GuildCommandsEnabled,
-                            config.misc::c50CoopCommandsEnabled, config.misc::setC50CoopCommandsEnabled,
-                            config.misc::c50AllChatCommandsEnabled, config.misc::setC50AllChatCommandsEnabled,
-                            config.misc::c50PrivateCommandsEnabled, config.misc::setC50PrivateCommandsEnabled),
-                        chatCommand(config.misc, "!ca50", new String[] {"Runs left for class average 50. Add a player name to look up someone else.",
-                            "Any level from 1 to 200 works: !ca60 for class average 60.",
-                            "Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,",
-                            "for example \"!ca50 Name -arch\". The other classes still earn their 25% team share."},
-                            config.misc::ca50ChatCommandEnabled, config.misc::setCa50ChatCommandEnabled,
-                            config.misc::ca50UseDefaultChannels, config.misc::setCa50UseDefaultChannels,
-                            config.misc::ca50PartyCommandsEnabled, config.misc::setCa50PartyCommandsEnabled,
-                            config.misc::ca50GuildCommandsEnabled, config.misc::setCa50GuildCommandsEnabled,
-                            config.misc::ca50CoopCommandsEnabled, config.misc::setCa50CoopCommandsEnabled,
-                            config.misc::ca50AllChatCommandsEnabled, config.misc::setCa50AllChatCommandsEnabled,
-                            config.misc::ca50PrivateCommandsEnabled, config.misc::setCa50PrivateCommandsEnabled),
-                        chatCommand(config.misc, "Class Level", new String[] {"!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50.",
-                            "Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else.",
-                            "Any level from 1 to 200 works: !a60 for Archer 60."},
-                            config.misc::classLevelChatCommandEnabled, config.misc::setClassLevelChatCommandEnabled,
-                            config.misc::classLevelUseDefaultChannels, config.misc::setClassLevelUseDefaultChannels,
-                            config.misc::classLevelPartyCommandsEnabled, config.misc::setClassLevelPartyCommandsEnabled,
-                            config.misc::classLevelGuildCommandsEnabled, config.misc::setClassLevelGuildCommandsEnabled,
-                            config.misc::classLevelCoopCommandsEnabled, config.misc::setClassLevelCoopCommandsEnabled,
-                            config.misc::classLevelAllChatCommandsEnabled, config.misc::setClassLevelAllChatCommandsEnabled,
-                            config.misc::classLevelPrivateCommandsEnabled, config.misc::setClassLevelPrivateCommandsEnabled),
-                        chatCommand(config.misc, "!tps", new String[0],
-                            config.misc::tpsChatCommandEnabled, config.misc::setTpsChatCommandEnabled,
-                            config.misc::tpsUseDefaultChannels, config.misc::setTpsUseDefaultChannels,
-                            config.misc::tpsPartyCommandsEnabled, config.misc::setTpsPartyCommandsEnabled,
-                            config.misc::tpsGuildCommandsEnabled, config.misc::setTpsGuildCommandsEnabled,
-                            config.misc::tpsCoopCommandsEnabled, config.misc::setTpsCoopCommandsEnabled,
-                            config.misc::tpsAllChatCommandsEnabled, config.misc::setTpsAllChatCommandsEnabled,
-                            config.misc::tpsPrivateCommandsEnabled, config.misc::setTpsPrivateCommandsEnabled),
-                        SettingEntry.toggle("Special Mayors", config.misc::specialMayorsChatCommandsEnabled, config.misc::setSpecialMayorsChatCommandsEnabled)
-                            .withTooltip("Switches !jerry, !scorp and !derpy on or off together.")
-                            .withChildren(List.of(
-                        chatCommand(config.misc, "!jerry", new String[] {"Not in office: when Jerry is elected next. In office: his mayor rotation."},
-                            config.misc::jerryChatCommandEnabled, config.misc::setJerryChatCommandEnabled,
-                            config.misc::jerryUseDefaultChannels, config.misc::setJerryUseDefaultChannels,
-                            config.misc::jerryPartyCommandsEnabled, config.misc::setJerryPartyCommandsEnabled,
-                            config.misc::jerryGuildCommandsEnabled, config.misc::setJerryGuildCommandsEnabled,
-                            config.misc::jerryCoopCommandsEnabled, config.misc::setJerryCoopCommandsEnabled,
-                            config.misc::jerryAllChatCommandsEnabled, config.misc::setJerryAllChatCommandsEnabled,
-                            config.misc::jerryPrivateCommandsEnabled, config.misc::setJerryPrivateCommandsEnabled),
-                        chatCommand(config.misc, "!scorp", new String[] {"Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves."},
-                            config.misc::scorpChatCommandEnabled, config.misc::setScorpChatCommandEnabled,
-                            config.misc::scorpUseDefaultChannels, config.misc::setScorpUseDefaultChannels,
-                            config.misc::scorpPartyCommandsEnabled, config.misc::setScorpPartyCommandsEnabled,
-                            config.misc::scorpGuildCommandsEnabled, config.misc::setScorpGuildCommandsEnabled,
-                            config.misc::scorpCoopCommandsEnabled, config.misc::setScorpCoopCommandsEnabled,
-                            config.misc::scorpAllChatCommandsEnabled, config.misc::setScorpAllChatCommandsEnabled,
-                            config.misc::scorpPrivateCommandsEnabled, config.misc::setScorpPrivateCommandsEnabled),
-                        chatCommand(config.misc, "!derpy", new String[] {"Not in office: when Derpy is elected next; in office: when he leaves."},
-                            config.misc::derpyChatCommandEnabled, config.misc::setDerpyChatCommandEnabled,
-                            config.misc::derpyUseDefaultChannels, config.misc::setDerpyUseDefaultChannels,
-                            config.misc::derpyPartyCommandsEnabled, config.misc::setDerpyPartyCommandsEnabled,
-                            config.misc::derpyGuildCommandsEnabled, config.misc::setDerpyGuildCommandsEnabled,
-                            config.misc::derpyCoopCommandsEnabled, config.misc::setDerpyCoopCommandsEnabled,
-                            config.misc::derpyAllChatCommandsEnabled, config.misc::setDerpyAllChatCommandsEnabled,
-                            config.misc::derpyPrivateCommandsEnabled, config.misc::setDerpyPrivateCommandsEnabled)
-                        )),
-                        SettingEntry.toggle("Yearly Events", config.misc::yearlyEventsChatCommandsEnabled, config.misc::setYearlyEventsChatCommandsEnabled)
-                            .withTooltip("Switches !yotp, !yotw and !yots on or off together.")
-                            .withChildren(List.of(
-                        chatCommand(config.misc, "!yotp", new String[] {"Year of the Pig: when it is active, or when it starts next."},
-                            config.misc::yotpChatCommandEnabled, config.misc::setYotpChatCommandEnabled,
-                            config.misc::yotpUseDefaultChannels, config.misc::setYotpUseDefaultChannels,
-                            config.misc::yotpPartyCommandsEnabled, config.misc::setYotpPartyCommandsEnabled,
-                            config.misc::yotpGuildCommandsEnabled, config.misc::setYotpGuildCommandsEnabled,
-                            config.misc::yotpCoopCommandsEnabled, config.misc::setYotpCoopCommandsEnabled,
-                            config.misc::yotpAllChatCommandsEnabled, config.misc::setYotpAllChatCommandsEnabled,
-                            config.misc::yotpPrivateCommandsEnabled, config.misc::setYotpPrivateCommandsEnabled),
-                        chatCommand(config.misc, "!yotw", new String[] {"Year of the Witch: when it is active, or when it starts next."},
-                            config.misc::yotwChatCommandEnabled, config.misc::setYotwChatCommandEnabled,
-                            config.misc::yotwUseDefaultChannels, config.misc::setYotwUseDefaultChannels,
-                            config.misc::yotwPartyCommandsEnabled, config.misc::setYotwPartyCommandsEnabled,
-                            config.misc::yotwGuildCommandsEnabled, config.misc::setYotwGuildCommandsEnabled,
-                            config.misc::yotwCoopCommandsEnabled, config.misc::setYotwCoopCommandsEnabled,
-                            config.misc::yotwAllChatCommandsEnabled, config.misc::setYotwAllChatCommandsEnabled,
-                            config.misc::yotwPrivateCommandsEnabled, config.misc::setYotwPrivateCommandsEnabled),
-                        chatCommand(config.misc, "!yots", new String[] {"Year of the Seal: when it is active, or when it starts next."},
-                            config.misc::yotsChatCommandEnabled, config.misc::setYotsChatCommandEnabled,
-                            config.misc::yotsUseDefaultChannels, config.misc::setYotsUseDefaultChannels,
-                            config.misc::yotsPartyCommandsEnabled, config.misc::setYotsPartyCommandsEnabled,
-                            config.misc::yotsGuildCommandsEnabled, config.misc::setYotsGuildCommandsEnabled,
-                            config.misc::yotsCoopCommandsEnabled, config.misc::setYotsCoopCommandsEnabled,
-                            config.misc::yotsAllChatCommandsEnabled, config.misc::setYotsAllChatCommandsEnabled,
-                            config.misc::yotsPrivateCommandsEnabled, config.misc::setYotsPrivateCommandsEnabled)
-                        ))
-                    )
+                    config.misc::setChatCommandsEnabled, chatCommandRows(config.misc)
                 ),
                 new FeatureEntry("Chat Emotes", config.misc::chatEmotesEnabled,
                     config.misc::setChatEmotesEnabled,
@@ -915,57 +802,104 @@ public final class KungSettings {
     }
 
     private static void editColor(String feature, String title, int current, IntConsumer save) {
-        Minecraft client = Minecraft.getInstance();
-        Screen parent = McCompat.screen(client);
         // The optional native menu delegates the color to the same popup the Kung menu uses.
-        if (!(parent instanceof KungConfigScreen)) {
-            parent = KungConfigScreen.fromParent(parent, feature);
-            McCompat.setScreen(client, parent);
-        }
-        McCompat.setScreen(client, new HitboxEditorScreen(parent, title, current, save));
+        KungConfigScreen.openOver(feature, parent -> new HitboxEditorScreen(parent, title, current, save));
     }
 
-    /** Fonts are built while the game runs, so the list and the switch both take effect at once. */
+    /** The channels in menu order. */
+    private static final List<CommandChannel> CHANNELS_IN_MENU = List.of(
+        CommandChannel.PARTY, CommandChannel.GUILD, CommandChannel.COOP, CommandChannel.ALL_CHAT, CommandChannel.PRIVATE);
+
+    private static String channelLabel(CommandChannel channel) {
+        return switch (channel) {
+            case PARTY -> "Party";
+            case GUILD -> "Guild";
+            case COOP -> "Co-op";
+            case ALL_CHAT -> "All Chat";
+            case PRIVATE -> "DMs";
+        };
+    }
+
+    private static List<SettingEntry> chatCommandRows(MiscConfig misc) {
+        List<SettingEntry> defaults = new ArrayList<>();
+        for (CommandChannel channel : CHANNELS_IN_MENU) {
+            defaults.add(SettingEntry.toggle(channelLabel(channel), () -> misc.defaultChannelEnabled(channel),
+                on -> misc.setDefaultChannelEnabled(channel, on)));
+        }
+        return List.of(
+            SettingEntry.group("Default Channels")
+                .withTooltip("Where every command answers, unless it has channels of its own.",
+                    "Each command follows these until you turn its \"Use Default\" off.")
+                .withChildren(defaults),
+            SettingEntry.button("Reset All", "Reset", misc::useDefaultChannelsEverywhere)
+                .withTooltip("Turns \"Use Default\" back on for every command.",
+                    "The default channels and the command switches stay as they are."),
+            chatCommand(misc, ChatCommandSetting.C50, "!c50",
+                "Runs left for Catacombs 50. Add a player name to look up someone else.",
+                "Any level from 1 to 200 works: !c67 for Catacombs 67."),
+            chatCommand(misc, ChatCommandSetting.CA50, "!ca50",
+                "Runs left for class average 50. Add a player name to look up someone else.",
+                "Any level from 1 to 200 works: !ca60 for class average 60.",
+                "Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,",
+                "for example \"!ca50 Name -arch\". The other classes still earn their 25% team share."),
+            chatCommand(misc, ChatCommandSetting.CLASS_LEVEL, "Class Level",
+                "!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50.",
+                "Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else.",
+                "Any level from 1 to 200 works: !a60 for Archer 60."),
+            chatCommand(misc, ChatCommandSetting.TPS, "!tps"),
+            SettingEntry.toggle("Special Mayors", misc::specialMayorsChatCommandsEnabled,
+                    misc::setSpecialMayorsChatCommandsEnabled)
+                .withTooltip("Switches !jerry, !scorp and !derpy on or off together.")
+                .withChildren(List.of(
+                    chatCommand(misc, ChatCommandSetting.JERRY, "!jerry",
+                        "Not in office: when Jerry is elected next. In office: his mayor rotation."),
+                    chatCommand(misc, ChatCommandSetting.SCORP, "!scorp",
+                        "Also !scorpius. Not in office: when Scorpius is elected next; in office: when he leaves."),
+                    chatCommand(misc, ChatCommandSetting.DERPY, "!derpy",
+                        "Not in office: when Derpy is elected next; in office: when he leaves."))),
+            SettingEntry.toggle("Yearly Events", misc::yearlyEventsChatCommandsEnabled,
+                    misc::setYearlyEventsChatCommandsEnabled)
+                .withTooltip("Switches !yotp, !yotw and !yots on or off together.")
+                .withChildren(List.of(
+                    chatCommand(misc, ChatCommandSetting.YOTP, "!yotp",
+                        "Year of the Pig: when it is active, or when it starts next."),
+                    chatCommand(misc, ChatCommandSetting.YOTW, "!yotw",
+                        "Year of the Witch: when it is active, or when it starts next."),
+                    chatCommand(misc, ChatCommandSetting.YOTS, "!yots",
+                        "Year of the Seal: when it is active, or when it starts next.")))
+        );
+    }
+
     /**
      * One chat command: its switch with the reset button, and below it either "Use Default" (while it follows
      * the defaults) or its own four channels (once it does not). Turning the default off copies today's defaults
      * into the own channels first, so nothing changes until the player edits one.
      */
-    private static SettingEntry chatCommand(
-        MiscConfig misc, String label, String[] help,
-        BooleanSupplier enabled, Consumer<Boolean> setEnabled,
-        BooleanSupplier useDefault, Consumer<Boolean> setUseDefault,
-        BooleanSupplier party, Consumer<Boolean> setParty,
-        BooleanSupplier guild, Consumer<Boolean> setGuild,
-        BooleanSupplier coop, Consumer<Boolean> setCoop,
-        BooleanSupplier allChat, Consumer<Boolean> setAllChat,
-        BooleanSupplier direct, Consumer<Boolean> setDirect
-    ) {
+    private static SettingEntry chatCommand(MiscConfig misc, ChatCommandSetting command, String label, String... help) {
+        BooleanSupplier useDefault = () -> misc.useDefaultChannels(command);
         BooleanSupplier ownChannels = () -> !useDefault.getAsBoolean();
-        return SettingEntry.toggle(label, enabled, setEnabled)
+        List<SettingEntry> children = new ArrayList<>();
+        children.add(SettingEntry.toggle("Use Default", useDefault, on -> {
+            if (!on) {
+                for (CommandChannel channel : CHANNELS_IN_MENU) {
+                    misc.setChannelEnabled(command, channel, misc.defaultChannelEnabled(channel));
+                }
+            }
+            misc.setUseDefaultChannels(command, on);
+        }).withTooltip("Answers in the channels of Default Channels.",
+            "Turn it off to pick this command's channels yourself.").withVisibleWhen(useDefault));
+        for (CommandChannel channel : CHANNELS_IN_MENU) {
+            children.add(SettingEntry.toggle(channelLabel(channel), () -> misc.channelEnabled(command, channel),
+                on -> misc.setChannelEnabled(command, channel, on)).withVisibleWhen(ownChannels));
+        }
+        return SettingEntry.toggle(label, () -> misc.commandEnabled(command), on -> misc.setCommandEnabled(command, on))
             .withTooltip(help)
             .withReset(ownChannels, "Has its own channels. Click to use the default channels again.",
-                () -> setUseDefault.accept(true))
-            .withChildren(List.of(
-                SettingEntry.toggle("Use Default", useDefault, on -> {
-                    if (!on) {
-                        setParty.accept(misc.defaultPartyCommandsEnabled());
-                        setGuild.accept(misc.defaultGuildCommandsEnabled());
-                        setCoop.accept(misc.defaultCoopCommandsEnabled());
-                        setAllChat.accept(misc.defaultAllChatCommandsEnabled());
-                        setDirect.accept(misc.defaultPrivateCommandsEnabled());
-                    }
-                    setUseDefault.accept(on);
-                }).withTooltip("Answers in the channels of Default Channels.",
-                    "Turn it off to pick this command's channels yourself.").withVisibleWhen(useDefault),
-                SettingEntry.toggle("Party", party, setParty).withVisibleWhen(ownChannels),
-                SettingEntry.toggle("Guild", guild, setGuild).withVisibleWhen(ownChannels),
-                SettingEntry.toggle("Co-op", coop, setCoop).withVisibleWhen(ownChannels),
-                SettingEntry.toggle("All Chat", allChat, setAllChat).withVisibleWhen(ownChannels),
-                SettingEntry.toggle("DMs", direct, setDirect).withVisibleWhen(ownChannels)
-            ));
+                () -> misc.setUseDefaultChannels(command, true))
+            .withChildren(children);
     }
 
+    /** Fonts are built while the game runs, so the list and the switch both take effect at once. */
     private static FeatureEntry menuFontEntry(KungConfig config) {
         return new FeatureEntry("Menu Font", () -> false, (Runnable) null, List.of(
             SettingEntry.choice("Font", KungFonts::available, config.misc::menuFont, config.misc::setMenuFont)

@@ -1,0 +1,21 @@
+{
+  "misc": {
+    "chatCommandsEnabled": true,
+    "cataChatCommandEnabled": false,
+    "cataGuildCommandsEnabled": false,
+    "ca50PartyCommandsEnabled": false,
+    "ca50AllChatCommandsEnabled": true,
+    "c50ChatCommandEnabled": true,
+    "tpsPartyCommandsEnabled": false,
+    "jerryAllChatCommandsEnabled": true,
+    "scorpPrivateCommandsEnabled": true,
+    "derpyCoopCommandsEnabled": false,
+    "yotpGuildCommandsEnabled": false,
+    "yotwUseDefaultChannels": true,
+    "yotwPrivateCommandsEnabled": true,
+    "yotsUseDefaultChannels": false,
+    "yotsGuildCommandsEnabled": false,
+    "classLevelPartyCommandsEnabled": true,
+    "defaultPartyCommandsEnabled": false
+  }
+}

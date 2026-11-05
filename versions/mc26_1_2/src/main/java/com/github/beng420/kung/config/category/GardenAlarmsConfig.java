@@ -19,6 +19,7 @@ public final class GardenAlarmsConfig extends ConfigCategory {
     public String muteKeybind() { return muteKeybind == null ? "" : muteKeybind; }
     public void setMuteKeybind(String value) { muteKeybind = value == null ? "" : value; save(); }
     public int volume() { return Math.clamp(volume, 1, 100); }
+    @Override public void normalize() { setVolume(volume()); }
     public void setVolume(int value) { volume = Math.clamp(value, 1, 100); save(); }
 
     /** The old "6th Visitor Alarm" feature became the Max Visitor Alarm child setting of this feature. */

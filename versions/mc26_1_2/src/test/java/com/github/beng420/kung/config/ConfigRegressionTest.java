@@ -6,6 +6,8 @@ import com.github.beng420.kung.config.category.SplitsConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.runtime.AppServices;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -31,10 +33,10 @@ public final class ConfigRegressionTest {
         equal(false, defaults.splits.enabled(), "splits master stays disabled by default");
         equal(SplitsConfig.TimeFormat.MINUTES, defaults.splits.format(), "existing splits retain minute format");
         equal(true, defaults.splits.timeLost(), "existing splits retain time loss display");
-        equal(true, defaults.misc.cataPartyCommandsEnabled(), "missing command channels use defaults");
-        equal(true, defaults.misc.c50ChatCommandEnabled(), "c50 command defaults on");
-        equal(true, defaults.misc.ca50ChatCommandEnabled(), "ca50 command defaults on");
-        equal(true, defaults.misc.tpsChatCommandEnabled(), "tps command defaults on");
+        equal(true, defaults.misc.channelEnabled(ChatCommandSetting.C50, CommandChannel.PARTY), "missing command channels use defaults");
+        equal(true, defaults.misc.commandEnabled(ChatCommandSetting.C50), "c50 command defaults on");
+        equal(true, defaults.misc.commandEnabled(ChatCommandSetting.CA50), "ca50 command defaults on");
+        equal(true, defaults.misc.commandEnabled(ChatCommandSetting.TPS), "tps command defaults on");
         equal(false, defaults.misc.chatEmotesEnabled(), "chat emotes default off for existing configs too");
         equal(false, defaults.misc.loadoutsCloseOnlyOnChange(), "loadouts change-only close defaults off");
         equal(true, read("{\"misc\":{\"sackTrackerEnabled\":true}}").misc.sackTrackerInMenus(),
@@ -56,12 +58,10 @@ public final class ConfigRegressionTest {
         equal(false, legacy.debug.dungeonMessages(), "legacy dungeon debug migrated");
         equal(false, legacy.debug.tarantulaMessages(), "legacy slayer debug precedence retained");
         equal(true, legacy.slayer.eggSacPredictionEnabled(), "prediction retained");
-        equal(false, legacy.misc.cataChatCommandEnabled(), "ca50 alias migrated");
-        equal(false, legacy.misc.c50ChatCommandEnabled(), "legacy ca50 command master also migrates to c50");
-        equal(false, legacy.misc.ca50ChatCommandEnabled(), "legacy ca50 command master migrates to ca50");
-        equal(false, legacy.misc.cataGuildCommandsEnabled(), "ca50 channel migrated");
-        equal(false, legacy.misc.c50GuildCommandsEnabled(), "legacy ca50 guild channel also migrates to c50");
-        equal(false, legacy.misc.ca50GuildCommandsEnabled(), "legacy ca50 guild channel migrates to ca50");
+        equal(false, legacy.misc.commandEnabled(ChatCommandSetting.C50), "legacy ca50 command master also migrates to c50");
+        equal(false, legacy.misc.commandEnabled(ChatCommandSetting.CA50), "legacy ca50 command master migrates to ca50");
+        equal(false, legacy.misc.channelEnabled(ChatCommandSetting.C50, CommandChannel.GUILD), "legacy ca50 guild channel also migrates to c50");
+        equal(false, legacy.misc.channelEnabled(ChatCommandSetting.CA50, CommandChannel.GUILD), "legacy ca50 guild channel migrates to ca50");
         equal(9, legacy.bloodRush.titleDurationTenths(), "blood rush timing retained");
         equal(99, legacy.splits.x(), "splits position retained");
         equal(false, legacy.chatFilter.necron(), "boss filter retained");
@@ -72,9 +72,8 @@ public final class ConfigRegressionTest {
             """);
         equal(true, modern.debug.dungeonMessages(), "modern dungeon debug takes precedence");
         equal(false, modern.debug.tarantulaMessages(), "modern tarantula debug retained");
-        equal(false, modern.misc.cataChatCommandEnabled(), "modern command name retained");
-        equal(false, modern.misc.c50ChatCommandEnabled(), "modern cata alias migrates to c50");
-        equal(false, modern.misc.ca50ChatCommandEnabled(), "modern cata alias migrates to ca50");
+        equal(false, modern.misc.commandEnabled(ChatCommandSetting.C50), "modern cata alias migrates to c50");
+        equal(false, modern.misc.commandEnabled(ChatCommandSetting.CA50), "modern cata alias migrates to ca50");
     }
 
     @Test
@@ -170,14 +169,14 @@ public final class ConfigRegressionTest {
         equal(50, config.bloodRush.titleDurationTenths(), "title duration clamped");
         equal(300, config.splits.scale(), "splits scale clamped");
         equal(false, config.misc.directHypixelApiEnabled(), "null API key handled");
-        equal(12, config.misc.loadoutKeybindCount(), "partial keybind array expanded");
+        equal("key:61:0", config.misc.loadoutKeybind(11), "partial keybind array expanded");
         equal("key:49:0", config.misc.loadoutKeybind(0), "null keybind uses default");
         equal("mouse:4", config.misc.loadoutKeybind(1), "custom keybind retained");
         equal(true, config.misc.loadoutsCloseOnlyOnChange(), "loadouts change-only close retained");
         equal(10, config.misc.customArrowHitVolumeTenths(), "old per-sound volumes are ignored");
         equal(false, config.debug.enabled(), "null category defaulted");
         equal(true, config.chatFilter.blessings(), "null filter defaulted");
-        equal(12, read("{\"misc\":{\"loadoutKeybinds\":null}}").misc.loadoutKeybindCount(), "null keybind array handled");
+        equal("key:61:0", read("{\"misc\":{\"loadoutKeybinds\":null}}").misc.loadoutKeybind(11), "null keybind array handled");
     }
 
     @Test
@@ -185,12 +184,12 @@ public final class ConfigRegressionTest {
         for (String value : new String[] {"null", "\"unknown\""}) {
             KungConfig config = read("{\"splitsOverlay\":{\"format\":" + value + "}}");
             equal(SplitsConfig.TimeFormat.MINUTES, config.splits.format(), "invalid format falls back to Minutes");
-            equal("Minutes", config.splits.formatLabel(), "invalid format has a safe UI label");
+            equal("Minutes", config.splits.format().label(), "invalid format has a safe UI label");
         }
         SplitsConfig splits = new SplitsConfig();
-        splits.cycleFormat();
+        splits.setFormat(SplitsConfig.TimeFormat.SECONDS);
         equal(SplitsConfig.TimeFormat.SECONDS, splits.format(), "choice selects Seconds");
-        splits.cycleFormat();
+        splits.setFormat(SplitsConfig.TimeFormat.MINUTES);
         equal(SplitsConfig.TimeFormat.MINUTES, splits.format(), "choice returns to Minutes");
         splits.setFormat(null);
         equal(SplitsConfig.TimeFormat.MINUTES, splits.format(), "null setter uses Minutes");

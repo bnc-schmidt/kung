@@ -4,20 +4,18 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.MiscConfig.ChatEmote;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.function.Supplier;
 
 /** One collapsible row per custom emote; rows keep their identity until the list itself changes. */
-final class ChatEmoteSettings implements Supplier<List<SettingEntry>> {
+final class ChatEmoteSettings extends LiveRows<List<ChatEmote>> {
     private final MiscConfig config;
-    private List<ChatEmote> entries = List.of();
-    private List<SettingEntry> rows = List.of();
 
     ChatEmoteSettings(MiscConfig config) { this.config = config; }
 
     @Override
-    public List<SettingEntry> get() {
-        if (!rows.isEmpty() && entries.equals(config.customChatEmotes())) return rows;
-        entries = List.copyOf(config.customChatEmotes());
+    protected List<ChatEmote> key() { return List.copyOf(config.customChatEmotes()); }
+
+    @Override
+    protected List<SettingEntry> build(List<ChatEmote> entries) {
         var next = new ArrayList<SettingEntry>();
         next.add(SettingEntry.toggle("Replace In Text", config::chatEmotesReplaceWords,
             config::setChatEmotesReplaceWords)
@@ -37,6 +35,6 @@ final class ChatEmoteSettings implements Supplier<List<SettingEntry>> {
                     SettingEntry.button("Remove", "-", () -> config.removeCustomChatEmote(emote))
                 )));
         }
-        return rows = List.copyOf(next);
+        return next;
     }
 }

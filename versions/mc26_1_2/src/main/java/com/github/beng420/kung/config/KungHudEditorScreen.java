@@ -5,11 +5,11 @@ import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.KungHudLayout.Bounds;
 import com.github.beng420.kung.config.KungHudLayout.Entry;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
-import com.github.beng420.kung.feature.garden.FeastOverlayFeature;
-import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
+import com.github.beng420.kung.ui.UiBounds;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.util.KeyCodes;
 import java.util.List;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
@@ -30,6 +30,9 @@ public final class KungHudEditorScreen extends Screen {
     private static final int MAP_CONTROLS_HEIGHT = 70;
     private static final int SLIDER_WIDTH = 100;
     private static final int SLIDER_HEIGHT = 18;
+    /** HUDs drawn with sample data in the box; every other box shows its name. */
+    private static final Set<String> PREVIEWED =
+        Set.of("safari_uniques", "feast_progress", "dragon_debuff", "bow_draw_indicator", "frozen_blaze_hud");
 
     private final DungeonStateTracker dungeonStateTracker;
     private Entry dragging;
@@ -185,12 +188,8 @@ public final class KungHudEditorScreen extends Screen {
         graphics.fill(bounds.x(), bounds.y() + bounds.height() - 1, bounds.x() + bounds.width(), bounds.y() + bounds.height(), BORDER);
         graphics.fill(bounds.x(), bounds.y(), bounds.x() + 1, bounds.y() + bounds.height(), BORDER);
         graphics.fill(bounds.x() + bounds.width() - 1, bounds.y(), bounds.x() + bounds.width(), bounds.y() + bounds.height(), BORDER);
-        if (entry.id().equals("safari_uniques")) {
-            SafariOverlayFeature.drawPreview(graphics, KungConfig.get().safari);
-        } else if (entry.id().equals("feast_progress")) {
-            FeastOverlayFeature.drawPreview(graphics, KungConfig.get().feast);
-        } else if (entry.id().equals("dragon_debuff") || entry.id().equals("bow_draw_indicator") || entry.id().equals("frozen_blaze_hud")) {
-            KungHudPreviews.draw(graphics, entry, dungeonStateTracker);
+        if (PREVIEWED.contains(entry.id())) {
+            entry.drawPreview(graphics);
         } else {
             drawCentered(graphics, entry.name(), bounds.x() + bounds.width() / 2, bounds.y() + bounds.height() / 2 - 4);
         }
@@ -261,9 +260,6 @@ public final class KungHudEditorScreen extends Screen {
     }
 
     private static boolean contains(Bounds bounds, int mouseX, int mouseY) {
-        return mouseX >= bounds.x()
-            && mouseX < bounds.x() + bounds.width()
-            && mouseY >= bounds.y()
-            && mouseY < bounds.y() + bounds.height();
+        return UiBounds.inside(mouseX, mouseY, bounds.x(), bounds.y(), bounds.width(), bounds.height());
     }
 }

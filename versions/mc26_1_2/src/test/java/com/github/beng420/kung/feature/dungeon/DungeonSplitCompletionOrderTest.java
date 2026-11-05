@@ -138,7 +138,7 @@ public final class DungeonSplitCompletionOrderTest {
     @Test public void scoreOnlyWipesAndUnrelatedMessagesCannotConfirmAFinalBest() {
         var config = new SplitsConfig();
         config.setEnabled(true);
-        config.recordPersonalBests(1, false, Map.of("Bonzo Phase 2", 20_000L));
+        config.recordRun(1, false, Map.of("Bonzo Phase 2", 20_000L), Map.of());
         AtomicLong clock = new AtomicLong();
         var tracker = new DungeonSplitTracker(clock::get, ignored -> { }, config);
         tracker.startRun(0L, 1, false);

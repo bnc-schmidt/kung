@@ -18,5 +18,10 @@ public final class MiningConfig extends ConfigCategory {
         save();
     }
     public int gourmandVolume() { return Math.clamp(gourmandVolume, 1, 100); }
+    @Override
+    public void normalize() {
+        setGourmandCountdownSeconds(gourmandCountdownSeconds());
+        setGourmandVolume(gourmandVolume());
+    }
     public void setGourmandVolume(int value) { gourmandVolume = Math.clamp(value, 1, 100); save(); }
 }

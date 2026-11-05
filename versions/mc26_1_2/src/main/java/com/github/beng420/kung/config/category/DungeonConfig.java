@@ -17,7 +17,6 @@ public final class DungeonConfig extends ConfigCategory {
     private int scale = 100;
     private int textScale = 100;
     private int unopenedRoomAlpha = 12;
-    private boolean showHeader = true;
     private boolean showInBoss = true;
     private boolean princeIconsEnabled = true;
     private Map<String, Boolean> princeRoomOverrides = new HashMap<>();
@@ -114,10 +113,16 @@ public final class DungeonConfig extends ConfigCategory {
     public int y() { return y; }
     public void setY(int value) { y = value; save(); }
     public int scale() { return scale; }
+    @Override
+    public void normalize() {
+        setScale(scale());
+        setTextScale(textScale());
+        setUnopenedRoomAlpha(unopenedRoomAlpha());
+        setFiveCryptPartyMessage(fiveCryptPartyMessage());
+        setRoomSyncServerUrl(roomSyncServerUrl());
+    }
     public int textScale() { return textScale; }
     public int unopenedRoomAlpha() { return unopenedRoomAlpha; }
-    public boolean showHeader() { return showHeader; }
-    public void setShowHeader(boolean value) { showHeader = value; save(); }
     public boolean showInBoss() { return showInBoss; }
     public void setShowInBoss(boolean value) { showInBoss = value; save(); }
     public boolean princeIconsEnabled() { return princeIconsEnabled; }

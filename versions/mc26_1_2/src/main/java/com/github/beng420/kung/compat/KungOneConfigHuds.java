@@ -3,7 +3,6 @@ package com.github.beng420.kung.compat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
-import com.github.beng420.kung.config.KungHudPreviews;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import java.util.ArrayList;
 import kotlin.Unit;
@@ -42,7 +41,7 @@ final class KungOneConfigHuds {
         }
         CompatOverlayRenderer.register(graphics -> {
             if (HudManager.INSTANCE.isEditing()) {
-                for (var layout : layouts) if (layout.enabled()) KungHudPreviews.draw(graphics, layout, tracker);
+                for (var layout : layouts) if (layout.enabled()) layout.drawPreview(graphics);
             }
             return Unit.INSTANCE;
         });

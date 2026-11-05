@@ -16,7 +16,6 @@ public final class SlayerConfig extends ConfigCategory {
     private boolean tarantulaDebugSlayerDead = true;
     private boolean tarantulaDebugEggSacPhaseStart = true;
     private boolean tarantulaDebugEggSacPhaseDone = true;
-    private boolean tarantulaDebugEggSacLearning = true;
 
     public boolean tarantulaHelperEnabled() { return tarantulaHelperEnabled; }
     public void setTarantulaHelperEnabled(boolean value) { tarantulaHelperEnabled = value; save(); }
@@ -48,6 +47,4 @@ public final class SlayerConfig extends ConfigCategory {
     public void setTarantulaDebugEggSacPhaseStart(boolean value) { tarantulaDebugEggSacPhaseStart = value; save(); }
     public boolean tarantulaDebugEggSacPhaseDone() { return tarantulaDebugEggSacPhaseDone; }
     public void setTarantulaDebugEggSacPhaseDone(boolean value) { tarantulaDebugEggSacPhaseDone = value; save(); }
-    public boolean tarantulaDebugEggSacLearning() { return tarantulaDebugEggSacLearning; }
-    public void setTarantulaDebugEggSacLearning(boolean value) { tarantulaDebugEggSacLearning = value; save(); }
 }

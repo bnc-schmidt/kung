@@ -27,74 +27,27 @@ public final class SplitsConfig extends ConfigCategory {
     private boolean floorRecordsSeeded = false;
     private transient long predictionRevision;
 
-    public boolean enabled() {
-        return enabled;
+    public boolean enabled() { return enabled; }
+    public void setEnabled(boolean value) { enabled = value; save(); }
+    public int x() { return x; }
+    public void setX(int value) { x = value; save(); }
+    public int y() { return y; }
+    public void setY(int value) { y = value; save(); }
+    public int scale() { return scale; }
+    @Override
+    public void normalize() {
+        setScale(scale());
+        setFormat(format());
     }
-
-    public void setEnabled(boolean enabled) {
-        this.enabled = enabled;
-        save();
-    }
-
-    public int x() {
-        return x;
-    }
-
-    public void setX(int x) {
-        this.x = x;
-        save();
-    }
-
-    public int y() {
-        return y;
-    }
-
-    public void setY(int y) {
-        this.y = y;
-        save();
-    }
-
-    public int scale() {
-        return scale;
-    }
-
-    public void setScale(int scale) {
-        this.scale = Math.clamp(scale, 25, 300);
-        save();
-    }
-
-    public TimeFormat format() {
-        return format == null ? TimeFormat.MINUTES : format;
-    }
-
-    public void setFormat(TimeFormat format) {
-        this.format = format == null ? TimeFormat.MINUTES : format;
-        save();
-    }
-
-    public String formatLabel() { return format().label(); }
-    public void cycleFormat() { setFormat(format().next()); }
-
+    public void setScale(int value) { scale = Math.clamp(value, 25, 300); save(); }
+    public TimeFormat format() { return format == null ? TimeFormat.MINUTES : format; }
+    public void setFormat(TimeFormat value) { format = value == null ? TimeFormat.MINUTES : value; save(); }
     public boolean timeLost() { return timeLost; }
-
-    public void setTimeLost(boolean timeLost) {
-        this.timeLost = timeLost;
-        save();
-    }
-
+    public void setTimeLost(boolean value) { timeLost = value; save(); }
     public boolean runEndChat() { return runEndChat; }
-
-    public void setRunEndChat(boolean runEndChat) {
-        this.runEndChat = runEndChat;
-        save();
-    }
-
+    public void setRunEndChat(boolean value) { runEndChat = value; save(); }
     public boolean pbTitle() { return pbTitle; }
-
-    public void setPbTitle(boolean pbTitle) {
-        this.pbTitle = pbTitle;
-        save();
-    }
+    public void setPbTitle(boolean value) { pbTitle = value; save(); }
 
     /** The floor's record time in milliseconds, -1 when unknown. */
     public long floorRecordMillis(int floor, boolean masterMode) {
@@ -115,34 +68,17 @@ public final class SplitsConfig extends ConfigCategory {
     }
 
     public boolean floorRecordsSeeded() { return floorRecordsSeeded; }
-
-    public void setFloorRecordsSeeded(boolean seeded) {
-        this.floorRecordsSeeded = seeded;
-        save();
-    }
-
+    public void setFloorRecordsSeeded(boolean value) { floorRecordsSeeded = value; save(); }
     public boolean timePrediction() { return timePrediction; }
-
-    public void setTimePrediction(boolean timePrediction) {
-        this.timePrediction = timePrediction;
+    public void setTimePrediction(boolean value) { timePrediction = value; save(); }
+    public PredictionMode predictionMode() { return predictionMode == null ? PredictionMode.PHASE_END : predictionMode; }
+    public void setPredictionMode(PredictionMode value) {
+        predictionMode = value == null ? PredictionMode.PHASE_END : value;
         save();
     }
-
-    public PredictionMode predictionMode() {
-        return predictionMode == null ? PredictionMode.PHASE_END : predictionMode;
-    }
-
-    public void setPredictionMode(PredictionMode predictionMode) {
-        this.predictionMode = predictionMode == null ? PredictionMode.PHASE_END : predictionMode;
-        save();
-    }
-
-    public PredictionSource predictionSource() {
-        return predictionSource == null ? PredictionSource.PB : predictionSource;
-    }
-
-    public void setPredictionSource(PredictionSource source) {
-        predictionSource = source == null ? PredictionSource.PB : source;
+    public PredictionSource predictionSource() { return predictionSource == null ? PredictionSource.PB : predictionSource; }
+    public void setPredictionSource(PredictionSource value) {
+        predictionSource = value == null ? PredictionSource.PB : value;
         predictionRevision++;
         save();
     }
@@ -214,11 +150,6 @@ public final class SplitsConfig extends ConfigCategory {
         save();
     }
 
-    /** Coalesce a batch of measured phases into one save, only when a best improves. */
-    public void recordPersonalBests(int floor, boolean masterMode, Map<String, Long> measurements) {
-        recordRun(floor, masterMode, measurements, Map.of());
-    }
-
     /** Flush PB candidates and, only for a confirmed finish, the run's AVG samples in one save. */
     public void recordRun(int floor, boolean masterMode, Map<String, Long> measurements, Map<String, Long> completedRun) {
         String key = floorKey(floor, masterMode);
@@ -279,6 +210,5 @@ public final class SplitsConfig extends ConfigCategory {
 
         TimeFormat(String label) { this.label = label; }
         public String label() { return label; }
-        public TimeFormat next() { return this == MINUTES ? SECONDS : MINUTES; }
     }
 }

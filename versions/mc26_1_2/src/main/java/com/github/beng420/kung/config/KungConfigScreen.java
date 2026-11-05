@@ -31,7 +31,9 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Function;
 import net.minecraft.ChatFormatting;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.screens.Screen;
@@ -136,6 +138,28 @@ public final class KungConfigScreen extends Screen {
         KungConfigScreen screen = new KungConfigScreen(parent, expandedFeature);
         screen.searchField.setValue(expandedFeature);
         return screen;
+    }
+
+    /**
+     * Opens a popup over the Kung menu on {@code feature}. The optional native menu has none, so one goes under
+     * the popup first.
+     */
+    static void openOver(String feature, Function<Screen, Screen> popup) {
+        Minecraft client = Minecraft.getInstance();
+        Screen parent = McCompat.screen(client);
+        if (!(parent instanceof KungConfigScreen)) {
+            parent = fromParent(parent, feature);
+            McCompat.setScreen(client, parent);
+        }
+        McCompat.setScreen(client, popup.apply(parent));
+    }
+
+    /** Shows the Kung menu on {@code feature} unless it is on screen already. */
+    static void showMenu(String feature) {
+        Minecraft client = Minecraft.getInstance();
+        if (client != null && !(McCompat.screen(client) instanceof KungConfigScreen)) {
+            McCompat.setScreen(client, fromParent(McCompat.screen(client), feature));
+        }
     }
 
     public static KungConfigScreen updates() {
@@ -309,13 +333,10 @@ public final class KungConfigScreen extends Screen {
             return true;
         }
 
-        CategoryScrollArea categoryScrollArea = categoryScrollAreaAt(toMenuCoordinate(mouseX), toMenuCoordinate(mouseY));
-        if (categoryScrollArea != null) {
+        CategoryEntry scrolled = categoryAt(toMenuCoordinate(mouseX), toMenuCoordinate(mouseY));
+        if (scrolled != null) {
             int direction = scrollY < 0 ? 1 : -1;
-            setCategoryScroll(
-                categoryScrollArea.category(),
-                categoryScroll(categoryScrollArea.category()) + direction * CATEGORY_SCROLL_STEP
-            );
+            setCategoryScroll(scrolled, categoryScroll(scrolled) + direction * CATEGORY_SCROLL_STEP);
             return true;
         }
 
@@ -343,12 +364,8 @@ public final class KungConfigScreen extends Screen {
             return textEditor.keyPressed(event);
         }
         if (capturingSetting != null) {
-            if (McInput.key(event) == KeyCodes.ESCAPE) {
-                capturingSetting.setText("");
-                capturingSetting = null;
-                return true;
-            }
-            if (McInput.key(event) == KeyCodes.BACKSPACE || McInput.key(event) == KeyCodes.DELETE) {
+            int key = McInput.key(event);
+            if (key == KeyCodes.ESCAPE || key == KeyCodes.BACKSPACE || key == KeyCodes.DELETE) {
                 capturingSetting.setText("");
                 capturingSetting = null;
                 return true;
@@ -494,7 +511,7 @@ public final class KungConfigScreen extends Screen {
             drawSettingRow(graphics, setting, x, rowY, panelBottom, mouseX, mouseY, depth * SETTING_INDENT);
         }
         rowY += rowHeight(setting);
-        if (isExpanded(setting, depth)) {
+        if (expanded.isExpanded(setting, depth)) {
             for (SettingEntry child : setting.children()) {
                 rowY = drawSettingTree(graphics, child, x, rowY, viewportTop, panelBottom, mouseX, mouseY, depth + 1);
             }
@@ -505,14 +522,10 @@ public final class KungConfigScreen extends Screen {
     private int settingTreeHeight(SettingEntry setting, int depth) {
         if (!setting.visible()) return 0;
         int total = rowHeight(setting);
-        if (isExpanded(setting, depth)) {
+        if (expanded.isExpanded(setting, depth)) {
             for (SettingEntry child : setting.children()) total += settingTreeHeight(child, depth + 1);
         }
         return total;
-    }
-
-    private boolean isExpanded(SettingEntry setting, int depth) {
-        return expanded.isExpanded(setting, depth);
     }
 
     private void drawSettingRow(
@@ -530,7 +543,7 @@ public final class KungConfigScreen extends Screen {
         UiShapes.rounded(graphics, x, rowY, COLUMN_WIDTH, height, 0,
             rowY + height == panelBottom ? PANEL_RADIUS : 0, hovered ? THEME.panelSoft() : THEME.control());
         if (setting.expandable()) {
-            graphics.text(menuFont, isExpanded(setting, indent / SETTING_INDENT) ? "v" : ">", x + 5 + indent, rowY + 4, THEME.text(), true);
+            graphics.text(menuFont, expanded.isExpanded(setting, indent / SETTING_INDENT) ? "v" : ">", x + 5 + indent, rowY + 4, THEME.text(), true);
         }
         int labelX = x + 5 + indent + (setting.expandable() ? 11 : 0);
         if (setting.kind() == SettingKind.LABEL) {
@@ -595,7 +608,7 @@ public final class KungConfigScreen extends Screen {
         if (setting.expandable()) {
             addClickRegion(x + 2 + indent, rowY, SETTING_ARROW_HITBOX_WIDTH, height, (clickX, clickY, button) -> {
                 if (button == 0) {
-                    toggleSettingExpansion(setting, depth);
+                    expanded.toggle(setting, depth);
                     return true;
                 }
                 return clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth);
@@ -746,25 +759,26 @@ public final class KungConfigScreen extends Screen {
         return suffix;
     }
 
-    private void drawSearchBox(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+    private UiBounds searchBox() {
         int boxWidth = Math.min(220, Math.max(120, menuWidth() - 24));
-        int boxHeight = 20;
-        int x = menuWidth() / 2 - boxWidth / 2;
-        int y = menuHeight() - SEARCH_BOTTOM;
-        UiShapes.shadow(graphics, x, y, boxWidth, boxHeight, 5);
-        UiShapes.rounded(graphics, x - 1, y - 1, boxWidth + 2, boxHeight + 2, 6,
+        return new UiBounds(menuWidth() / 2 - boxWidth / 2, menuHeight() - SEARCH_BOTTOM, boxWidth, 20);
+    }
+
+    private void drawSearchBox(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
+        UiBounds box = searchBox();
+        int x = box.x();
+        int y = box.y();
+        UiShapes.shadow(graphics, x, y, box.width(), box.height(), 5);
+        UiShapes.rounded(graphics, x - 1, y - 1, box.width() + 2, box.height() + 2, 6,
             searchField.isFocused() ? THEME.text() : THEME.accent());
-        UiShapes.rounded(graphics, x, y, boxWidth, boxHeight, 5, THEME.control());
-        searchField.setBounds(x + 6, y + 6, boxWidth - 12, boxHeight - 8);
+        UiShapes.rounded(graphics, x, y, box.width(), box.height(), 5, THEME.control());
+        searchField.setBounds(x + 6, y + 6, box.width() - 12, box.height() - 8);
         searchField.extractRenderState(graphics, mouseX, mouseY, partialTick);
     }
 
     private boolean clickSearchBox(MouseButtonEvent event, int mouseX, int mouseY, boolean doubleClick) {
-        int boxWidth = Math.min(220, Math.max(120, menuWidth() - 24));
-        int boxHeight = 20;
-        int x = menuWidth() / 2 - boxWidth / 2;
-        int y = menuHeight() - SEARCH_BOTTOM;
-        if (!inside(mouseX, mouseY, x - 2, y - 2, boxWidth + 4, boxHeight + 4)) return false;
+        UiBounds box = searchBox();
+        if (!inside(mouseX, mouseY, box.x() - 2, box.y() - 2, box.width() + 4, box.height() + 4)) return false;
         // Clicks on the frame land in the field too, so the whole box places the cursor or clears it.
         int fieldX = Math.clamp(mouseX, searchField.x(), searchField.x() + searchField.width() - 1);
         int fieldY = searchField.bounds().y() + 1;
@@ -785,22 +799,19 @@ public final class KungConfigScreen extends Screen {
             }
             return true;
         }
-        if (button == 0 && feature.clickable() && feature.toggle() != null) {
-            feature.toggle().run();
-            return true;
-        }
+        if (button == 0 && feature.clickable() && feature.toggle() != null) feature.toggle().run();
         return true;
     }
 
     private boolean clickSetting(SettingEntry setting, int mouseX, int button, int controlX, int controlY,
                                  int controlWidth, int depth) {
         if (button == 1 && setting.expandable()) {
-            toggleSettingExpansion(setting, depth);
+            expanded.toggle(setting, depth);
             return true;
         }
         if (button == 0) {
             if (setting.kind() == SettingKind.GROUP && setting.expandable()) {
-                toggleSettingExpansion(setting, depth);
+                expanded.toggle(setting, depth);
                 return true;
             }
             if (setting.kind() == SettingKind.TEXT) {
@@ -824,13 +835,8 @@ public final class KungConfigScreen extends Screen {
                 draggingSliderControlX = controlX;
                 draggingSliderControlWidth = controlWidth;
             }
-            return true;
         }
         return true;
-    }
-
-    private void toggleSettingExpansion(SettingEntry setting, int depth) {
-        expanded.toggle(setting, depth);
     }
 
     private void openTextEditor(SettingEntry setting) {
@@ -886,7 +892,7 @@ public final class KungConfigScreen extends Screen {
         return Math.max(0, categoryContentHeight(category) - viewportHeight);
     }
 
-    private CategoryScrollArea categoryScrollAreaAt(int mouseX, int mouseY) {
+    private CategoryEntry categoryAt(int mouseX, int mouseY) {
         int startX = LEFT - horizontalScroll.offset();
         int visibleIndex = 0;
         for (CategoryEntry category : categories) {
@@ -894,11 +900,10 @@ public final class KungConfigScreen extends Screen {
                 continue;
             }
             int x = startX + visibleIndex * (COLUMN_WIDTH + GAP);
-            int panelHeight = panelHeight(category);
             if (x + COLUMN_WIDTH >= 0
                 && x <= menuWidth()
-                && inside(mouseX, mouseY, x, TOP, COLUMN_WIDTH, panelHeight)) {
-                return new CategoryScrollArea(category, maxCategoryScroll(category, panelHeight));
+                && inside(mouseX, mouseY, x, TOP, COLUMN_WIDTH, panelHeight(category))) {
+                return category;
             }
             visibleIndex++;
         }
@@ -1069,13 +1074,11 @@ public final class KungConfigScreen extends Screen {
         }
 
         private boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
-            MouseButtonEvent guiEvent = new MouseButtonEvent(toMenuCoordinate(event.x()), toMenuCoordinate(event.y()), event.buttonInfo());
-            return editBox.mouseDragged(guiEvent, dragX / menuScale(), dragY / menuScale());
+            return editBox.mouseDragged(menuEvent(event), dragX / menuScale(), dragY / menuScale());
         }
 
         private boolean mouseReleased(MouseButtonEvent event) {
-            MouseButtonEvent guiEvent = new MouseButtonEvent(toMenuCoordinate(event.x()), toMenuCoordinate(event.y()), event.buttonInfo());
-            return editBox.mouseReleased(guiEvent);
+            return editBox.mouseReleased(menuEvent(event));
         }
 
         private boolean keyPressed(KeyEvent event) {
@@ -1124,9 +1127,6 @@ public final class KungConfigScreen extends Screen {
     }
 
     private record TooltipRequest(Object owner, List<String> lines, int x, int y) {
-    }
-
-    private record CategoryScrollArea(CategoryEntry category, int maxScroll) {
     }
 
 }

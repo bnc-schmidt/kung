@@ -213,7 +213,7 @@ public final class KungOneConfigHudTest {
             }, () -> placement[0], () -> placement[1], value -> { placement[0] = value; writes++; },
                 value -> { placement[1] = value; writes++; }, () -> placement[2],
                 value -> { placement[2] = value; writes++; }, () -> enabled[0],
-                value -> { enabled[0] = value; writes++; });
+                value -> { enabled[0] = value; writes++; }, null);
             return new KungOneConfigHud(entry, properties, () -> writesAllowed[0]);
         }
     }

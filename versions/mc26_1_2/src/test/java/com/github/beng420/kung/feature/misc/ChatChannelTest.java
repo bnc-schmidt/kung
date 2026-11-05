@@ -8,6 +8,8 @@ import static org.junit.Assert.assertTrue;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatContext;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import org.junit.Test;
 
 public final class ChatChannelTest {
@@ -39,12 +41,12 @@ public final class ChatChannelTest {
         MiscConfig config = new MiscConfig();
         config.setChatCommandsEnabled(true);
         assertTrue("on by default, like party and guild", ChatCommand.CA.isEnabled(config, ChatChannel.COOP));
-        config.setDefaultCoopCommandsEnabled(false);
+        config.setDefaultChannelEnabled(CommandChannel.COOP, false);
         assertFalse(ChatCommand.CA.isEnabled(config, ChatChannel.COOP));
         assertFalse(ChatCommand.C.isEnabled(config, ChatChannel.COOP));
         assertTrue(ChatCommand.CA.isEnabled(config, ChatChannel.PARTY));
         // Its own channels win once the command stops following the defaults.
-        config.setCa50UseDefaultChannels(false);
+        config.setUseDefaultChannels(ChatCommandSetting.CA50, false);
         assertTrue(ChatCommand.CA.isEnabled(config, ChatChannel.COOP));
         assertFalse(ChatCommand.C.isEnabled(config, ChatChannel.COOP));
     }

@@ -69,17 +69,6 @@ public record SettingEntry(
         return toggle(label, supplier, () -> set.accept(!supplier.getAsBoolean()));
     }
 
-    public static SettingEntry stepper(
-        String label,
-        IntSupplier supplier,
-        IntConsumer consumer,
-        int min,
-        int max,
-        int step
-    ) {
-        return create(label, SettingKind.STEPPER, null, null, supplier, consumer, min, max, step, null, null, null, null);
-    }
-
     public static SettingEntry slider(
         String label,
         IntSupplier supplier,
@@ -225,7 +214,6 @@ public record SettingEntry(
                 booleanSupplier.getAsBoolean(),
                 theme
             );
-            case STEPPER -> drawStepper(graphics, font, theme, x, y, width, height);
             case SLIDER -> drawSlider(graphics, font, theme, x, y, width, height);
             case CHOICE, BUTTON -> drawButton(graphics, font, theme, x, y, width, height, choiceSupplier.get());
             case COLOR_REMOVE -> {
@@ -264,12 +252,6 @@ public record SettingEntry(
                 if (mouseX >= x + width - 16) cycleChoice.run();
                 else if (mouseX >= x) toggle.run();
             }
-            case STEPPER -> {
-                UiNumberField number = numberField();
-                intConsumer.accept(mouseX < x + width / 2
-                    ? number.decrement(intSupplier.getAsInt())
-                    : number.increment(intSupplier.getAsInt()));
-            }
             case SLIDER -> {
                 int trackLeft = x + 2;
                 int trackRight = x + width - 2;
@@ -290,31 +272,10 @@ public record SettingEntry(
         return "*".repeat(Math.min(12, value.length() - 4)) + value.substring(value.length() - 4);
     }
 
-    public void appendText(String text) {
-        if (kind != SettingKind.TEXT || textConsumer == null || text == null) return;
-        String current = textSupplier.get();
-        if (current.length() + text.length() <= 120) textConsumer.accept(current + text);
-    }
-
-    public void backspaceText() {
-        if (kind != SettingKind.TEXT || textConsumer == null) return;
-        String current = textSupplier.get();
-        if (!current.isEmpty()) textConsumer.accept(current.substring(0, current.length() - 1));
-    }
-
     public void setText(String text) {
         if ((kind == SettingKind.TEXT || kind == SettingKind.KEYBIND) && textConsumer != null) {
             textConsumer.accept(text);
         }
-    }
-
-    private void drawStepper(GuiGraphicsExtractor graphics, Font font, UiTheme theme, int x, int y, int width, int height) {
-        graphics.fill(x + 1, y + 3, x + 13, y + height - 3, theme.accentDark());
-        graphics.fill(x + width - 13, y + 3, x + width - 1, y + height - 3, theme.accentDark());
-        graphics.text(font, "-", x + 5, y + 4, theme.text(), true);
-        graphics.text(font, "+", x + width - 10, y + 4, theme.text(), true);
-        String suffix = label().toLowerCase(Locale.ROOT).matches(".*(scale|alpha).*") ? "%" : "";
-        centered(graphics, font, intSupplier.getAsInt() + suffix, x, y, width, theme.warning());
     }
 
     private static void drawRemoveButton(GuiGraphicsExtractor graphics, Font font, UiTheme theme,

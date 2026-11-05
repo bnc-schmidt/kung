@@ -4,6 +4,8 @@ import static org.junit.Assert.*;
 
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import org.junit.Test;
 
 public class ChatCommandAliasTest {
@@ -74,23 +76,23 @@ public class ChatCommandAliasTest {
         var config = new MiscConfig();
         config.setChatCommandsEnabled(true);
 
-        config.setDerpyUseDefaultChannels(false);
-        config.setJerryUseDefaultChannels(false);
-        config.setScorpChatCommandEnabled(false);
+        config.setUseDefaultChannels(ChatCommandSetting.DERPY, false);
+        config.setUseDefaultChannels(ChatCommandSetting.JERRY, false);
+        config.setCommandEnabled(ChatCommandSetting.SCORP, false);
         assertFalse(ChatCommand.SCORPIUS.isEnabled(config, ChatChannel.PARTY));
         assertTrue(ChatCommand.JERRY.isEnabled(config, ChatChannel.PARTY));
         assertTrue(ChatCommand.DERPY.isEnabled(config, ChatChannel.PARTY));
 
-        config.setDerpyAllChatCommandsEnabled(true);
+        config.setChannelEnabled(ChatCommandSetting.DERPY, CommandChannel.ALL_CHAT, true);
         assertTrue(ChatCommand.DERPY.isEnabled(config, ChatChannel.ALL));
         assertFalse(ChatCommand.JERRY.isEnabled(config, ChatChannel.ALL));
         assertFalse(ChatCommand.SCORPIUS.isEnabled(config, ChatChannel.ALL));
 
-        config.setJerryGuildCommandsEnabled(false);
+        config.setChannelEnabled(ChatCommandSetting.JERRY, CommandChannel.GUILD, false);
         assertFalse(ChatCommand.JERRY.isEnabled(config, ChatChannel.GUILD));
         assertTrue(ChatCommand.DERPY.isEnabled(config, ChatChannel.GUILD));
 
-        config.setJerryPrivateCommandsEnabled(true);
+        config.setChannelEnabled(ChatCommandSetting.JERRY, CommandChannel.PRIVATE, true);
         assertTrue(ChatCommand.JERRY.isEnabled(config, ChatChannel.PRIVATE));
         assertFalse(ChatCommand.DERPY.isEnabled(config, ChatChannel.PRIVATE));
 

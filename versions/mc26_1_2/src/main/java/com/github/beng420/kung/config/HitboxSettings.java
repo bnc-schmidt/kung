@@ -1,6 +1,5 @@
 package com.github.beng420.kung.config;
 
-import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.feature.misc.HitboxesFeature;
 import java.util.ArrayList;
@@ -9,24 +8,19 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
-import java.util.function.Supplier;
-import net.minecraft.client.Minecraft;
-import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.registries.BuiltInRegistries;
 
 /** Stable row objects until membership changes preserve hover and click ownership. */
-final class HitboxSettings implements Supplier<List<SettingEntry>> {
+final class HitboxSettings extends LiveRows<List<String>> {
     private final HitboxesConfig config;
-    private List<String> ids = List.of();
-    private List<SettingEntry> rows = List.of();
 
     HitboxSettings(HitboxesConfig config) { this.config = config; }
 
     @Override
-    public List<SettingEntry> get() {
-        List<String> selected = List.copyOf(config.entities().keySet());
-        if (!rows.isEmpty() && selected.equals(ids)) return rows;
-        ids = selected;
+    protected List<String> key() { return List.copyOf(config.entities().keySet()); }
+
+    @Override
+    protected List<SettingEntry> build(List<String> ids) {
         List<SettingEntry> next = new ArrayList<>();
         next.add(SettingEntry.button("Add Hitbox", "+", () -> open(null)));
         for (String id : ids) {
@@ -55,7 +49,7 @@ final class HitboxSettings implements Supplier<List<SettingEntry>> {
                     .withTooltip("Turn this hitbox off without deleting it.", "A switched-off hitbox shows a dimmed color."))
                 .withChildren(children).withTooltip(id, expand, "Click the color to edit; click - to remove."));
         }
-        return rows = List.copyOf(next);
+        return next;
     }
 
     /** The row's color, a quarter as bright while the hitbox is switched off. */
@@ -64,14 +58,8 @@ final class HitboxSettings implements Supplier<List<SettingEntry>> {
     }
 
     private void open(String id) {
-        Minecraft client = Minecraft.getInstance();
-        Screen parent = McCompat.screen(client);
         // The optional native menu delegates these compound controls to the same complete editor.
-        if (!(parent instanceof KungConfigScreen)) {
-            parent = KungConfigScreen.fromParent(parent, "Hitboxes");
-            McCompat.setScreen(client, parent);
-        }
-        McCompat.setScreen(client, new HitboxEditorScreen(parent, config, id));
+        KungConfigScreen.openOver("Hitboxes", parent -> new HitboxEditorScreen(parent, config, id));
     }
 
     /** What was around the player in the last minute first, then every vanilla entity type. */

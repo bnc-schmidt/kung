@@ -101,6 +101,7 @@ public final class GreenhouseConfig extends ConfigCategory {
         }
     }
 
+    @Override
     public void normalize() {
         hologramOpacity = clampOpacity(hologramOpacity);
         colorToPlace &= RGB;

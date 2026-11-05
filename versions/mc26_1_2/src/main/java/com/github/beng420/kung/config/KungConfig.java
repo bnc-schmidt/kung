@@ -2,6 +2,7 @@ package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.config.category.BRHelperConfig;
+import com.github.beng420.kung.config.category.ConfigCategory;
 import com.github.beng420.kung.config.category.DebugConfig;
 import com.github.beng420.kung.config.category.DungeonChatFilterConfig;
 import com.github.beng420.kung.config.category.DungeonConfig;
@@ -29,6 +30,7 @@ import java.io.Writer;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 import net.fabricmc.loader.api.FabricLoader;
 
 public final class KungConfig {
@@ -129,21 +131,19 @@ public final class KungConfig {
     static KungConfig read(Reader reader) {
         JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
         GreenhouseConfig.sanitize(json);
+        json.entrySet().removeIf(entry -> entry.getValue().isJsonNull()); // a null section keeps its defaults
         KungConfig loaded = GSON.fromJson(json, KungConfig.class);
         loaded.loading = true;
-        loaded.ensureCategories();
         // Older releases stored these switches in both the feature and debug sections.
         JsonObject dungeonJson = object(json, "dungeonMap");
         JsonObject slayerJson = object(json, "slayer");
         JsonObject debugJson = object(json, "debug");
-        JsonObject miscJson = object(json, "misc");
         if (!hasValue(debugJson, "dungeonMessages") && hasValue(dungeonJson, "debugMessages")) {
             loaded.debug.setDungeonMessages(dungeonJson.get("debugMessages").getAsBoolean());
         }
         if (hasValue(slayerJson, "tarantulaHelperDebugMessages")) {
             loaded.debug.setTarantulaMessages(slayerJson.get("tarantulaHelperDebugMessages").getAsBoolean());
         }
-        migrateLegacyChatCommandSettings(loaded, miscJson);
         // "6th Visitor Alarm" became the Max Visitor Alarm inside Garden Alarms.
         JsonObject visitorAlarmJson = object(json, "visitorAlarm");
         if (!hasValue(json, "gardenAlarms") && !visitorAlarmJson.isEmpty()) {
@@ -152,7 +152,6 @@ public final class KungConfig {
                 hasValue(visitorAlarmJson, "volume") ? visitorAlarmJson.get("volume").getAsInt() : null);
             loaded.pendingSave = true;
         }
-        loaded.misc.keepOwnChannelsWhereChanged(name -> hasValue(miscJson, name));
         loaded.normalize();
         loaded.loading = false;
         return loaded;
@@ -171,75 +170,18 @@ public final class KungConfig {
         }
     }
 
-    private void ensureCategories() {
-        if (dungeon == null) dungeon = new DungeonConfig();
-        if (bloodRush == null) bloodRush = new BRHelperConfig();
-        if (chatFilter == null) chatFilter = new DungeonChatFilterConfig();
-        if (splits == null) splits = new SplitsConfig();
-        if (debug == null) debug = new DebugConfig();
-        if (misc == null) misc = new MiscConfig();
-        if (slayer == null) slayer = new SlayerConfig();
-        if (safari == null) safari = new SafariConfig();
-        if (feast == null) feast = new FeastConfig();
-        if (gardenAlarms == null) gardenAlarms = new GardenAlarmsConfig();
-        if (hitboxes == null) hitboxes = new HitboxesConfig();
-        if (greenhouse == null) greenhouse = new GreenhouseConfig();
-        if (invisibug == null) invisibug = new InvisibugConfig();
-        if (plotCleaning == null) plotCleaning = new PlotCleaningConfig();
-        if (mining == null) mining = new MiningConfig();
-        if (foraging == null) foraging = new ForagingConfig();
-        if (waypoints == null) waypoints = new WaypointsConfig();
+    private List<ConfigCategory> categories() {
+        return List.of(dungeon, bloodRush, chatFilter, splits, debug, misc, slayer, safari, feast, gardenAlarms,
+            hitboxes, greenhouse, invisibug, plotCleaning, mining, foraging, waypoints);
     }
 
     private void bindCategories() {
-        dungeon.onChange(this::save);
-        bloodRush.onChange(this::save);
-        chatFilter.onChange(this::save);
-        splits.onChange(this::save);
-        debug.onChange(this::save);
-        misc.onChange(this::save);
-        slayer.onChange(this::save);
-        safari.onChange(this::save);
-        feast.onChange(this::save);
-        gardenAlarms.onChange(this::save);
-        hitboxes.onChange(this::save);
-        greenhouse.onChange(this::save);
-        invisibug.onChange(this::save);
-        plotCleaning.onChange(this::save);
-        mining.onChange(this::save);
-        foraging.onChange(this::save);
-        waypoints.onChange(this::save);
+        categories().forEach(category -> category.onChange(this::save));
     }
 
     private void normalize() {
-        ensureCategories();
         if (dungeon.migrateJerrySyncDefault()) pendingSave = true;
-        dungeon.setScale(dungeon.scale());
-        dungeon.setTextScale(dungeon.textScale());
-        dungeon.setUnopenedRoomAlpha(dungeon.unopenedRoomAlpha());
-        dungeon.setFiveCryptPartyMessage(dungeon.fiveCryptPartyMessage());
-        dungeon.setRoomSyncServerUrl(dungeon.roomSyncServerUrl());
-        bloodRush.setTitleDurationTenths(bloodRush.titleDurationTenths());
-        splits.setScale(splits.scale());
-        safari.setScale(safari.scale());
-        feast.setScale(feast.scale());
-        feast.setKernelTimeoutSeconds(feast.kernelTimeoutSeconds());
-        gardenAlarms.setVolume(gardenAlarms.volume());
-        splits.setFormat(splits.format());
-        misc.setHypixelApiKey(misc.hypixelApiKey());
-        misc.setSuperpairsHelperScale(misc.superpairsHelperScale());
-        misc.setCustomArrowHitSounds(misc.customArrowHitSounds());
-        misc.setCustomWitherShieldExpireSounds(misc.customWitherShieldExpireSounds());
-        misc.setCustomArrowHitVolumeTenths(misc.customArrowHitVolumeTenths());
-        misc.setCustomArrowHitPitchHundredths(misc.customArrowHitPitchHundredths());
-        misc.setCustomWitherShieldExpireVolumeTenths(misc.customWitherShieldExpireVolumeTenths());
-        misc.setCustomWitherShieldExpirePitchHundredths(misc.customWitherShieldExpirePitchHundredths());
-        misc.normalize();
-        hitboxes.normalize();
-        greenhouse.normalize();
-        invisibug.setThickness(invisibug.thickness());
-        mining.setGourmandCountdownSeconds(mining.gourmandCountdownSeconds());
-        mining.setGourmandVolume(mining.gourmandVolume());
+        categories().forEach(ConfigCategory::normalize);
     }
 
     private static JsonObject object(JsonObject parent, String name) {
@@ -249,40 +191,6 @@ public final class KungConfig {
 
     private static boolean hasValue(JsonObject object, String name) {
         return object.has(name) && !object.get(name).isJsonNull();
-    }
-
-    private static void migrateLegacyChatCommandSettings(KungConfig loaded, JsonObject miscJson) {
-        migrateLegacySharedCommandSetting(miscJson, "ChatCommandEnabled",
-            loaded.misc::setC50ChatCommandEnabled, loaded.misc::setCa50ChatCommandEnabled);
-        migrateLegacySharedCommandSetting(miscJson, "PartyCommandsEnabled",
-            loaded.misc::setC50PartyCommandsEnabled, loaded.misc::setCa50PartyCommandsEnabled);
-        migrateLegacySharedCommandSetting(miscJson, "GuildCommandsEnabled",
-            loaded.misc::setC50GuildCommandsEnabled, loaded.misc::setCa50GuildCommandsEnabled);
-        migrateLegacySharedCommandSetting(miscJson, "AllChatCommandsEnabled",
-            loaded.misc::setC50AllChatCommandsEnabled, loaded.misc::setCa50AllChatCommandsEnabled);
-        migrateLegacySharedCommandSetting(miscJson, "PrivateCommandsEnabled",
-            loaded.misc::setC50PrivateCommandsEnabled, loaded.misc::setCa50PrivateCommandsEnabled);
-    }
-
-    /** The old shared "cata"/"ca50" key fills whichever of the "c50"/"ca50" keys the file leaves unset. */
-    private static void migrateLegacySharedCommandSetting(
-        JsonObject miscJson,
-        String suffix,
-        java.util.function.Consumer<Boolean> c50Setter,
-        java.util.function.Consumer<Boolean> ca50Setter
-    ) {
-        for (String legacyName : new String[] {"cata" + suffix, "ca50" + suffix}) {
-            if (!hasValue(miscJson, legacyName)) {
-                continue;
-            }
-            boolean legacyValue = miscJson.get(legacyName).getAsBoolean();
-            if (!hasValue(miscJson, "c50" + suffix)) {
-                c50Setter.accept(legacyValue);
-            }
-            if (!hasValue(miscJson, "ca50" + suffix)) {
-                ca50Setter.accept(legacyValue);
-            }
-        }
     }
 
     public static Path configDirectory() {

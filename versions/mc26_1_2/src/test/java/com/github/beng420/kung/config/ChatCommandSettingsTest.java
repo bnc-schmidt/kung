@@ -6,6 +6,8 @@ import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.config.KungSettings.FeatureEntry;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -40,12 +42,12 @@ public final class ChatCommandSettingsTest {
         assertEquals(List.of("Use Default"), visible(command));
         assertTrue(command.children().getFirst().booleanSupplier().getAsBoolean());
 
-        config.misc.setDefaultPartyCommandsEnabled(false);
-        config.misc.setDefaultPrivateCommandsEnabled(true);
+        config.misc.setDefaultChannelEnabled(CommandChannel.PARTY, false);
+        config.misc.setDefaultChannelEnabled(CommandChannel.PRIVATE, true);
         command.children().getFirst().toggle().run();
 
         // The own channels start as a copy of the defaults, and the switch makes room for them.
-        assertFalse(config.misc.c50UseDefaultChannels());
+        assertFalse(config.misc.useDefaultChannels(ChatCommandSetting.C50));
         assertTrue(command.resettable());
         assertEquals(List.of("Party", "Guild", "Co-op", "All Chat", "DMs"), visible(command));
         assertEquals(List.of(false, true, true, false, true), channels(command));
@@ -53,14 +55,14 @@ public final class ChatCommandSettingsTest {
         // Editing an own channel leaves the defaults alone.
         command.children().get(1).toggle().run();
         assertEquals(List.of(true, true, true, false, true), channels(command));
-        assertFalse(config.misc.defaultPartyCommandsEnabled());
+        assertFalse(config.misc.defaultChannelEnabled(CommandChannel.PARTY));
 
         // The reset button hands the command back to the defaults; the other commands never moved.
         command.reset().action().run();
-        assertTrue(config.misc.c50UseDefaultChannels());
+        assertTrue(config.misc.useDefaultChannels(ChatCommandSetting.C50));
         assertFalse(command.resettable());
         assertEquals(List.of("Use Default"), visible(command));
-        assertFalse(config.misc.c50PartyCommandsEnabled());
+        assertFalse(config.misc.channelEnabled(ChatCommandSetting.C50, CommandChannel.PARTY));
         assertFalse(setting(chat(config), "!tps").resettable());
     }
 
@@ -87,20 +89,20 @@ public final class ChatCommandSettingsTest {
     public void resetAllRowOnlyTurnsUseDefaultBackOnForEveryCommand() {
         KungConfig config = new KungConfig(file());
         FeatureEntry chat = chat(config);
-        config.misc.setDefaultGuildCommandsEnabled(false);
+        config.misc.setDefaultChannelEnabled(CommandChannel.GUILD, false);
         config.misc.setSpecialMayorsChatCommandsEnabled(false);
-        config.misc.setYotwUseDefaultChannels(false);
-        config.misc.setCa50UseDefaultChannels(false);
-        config.misc.setCa50ChatCommandEnabled(false);
+        config.misc.setUseDefaultChannels(ChatCommandSetting.YOTW, false);
+        config.misc.setUseDefaultChannels(ChatCommandSetting.CA50, false);
+        config.misc.setCommandEnabled(ChatCommandSetting.CA50, false);
         config.misc.setChatCommandsEnabled(true);
 
         setting(chat, "Reset All").toggle().run();
 
-        assertTrue(config.misc.yotwUseDefaultChannels());
-        assertTrue(config.misc.ca50UseDefaultChannels());
-        assertFalse("the default channels stay", config.misc.defaultGuildCommandsEnabled());
+        assertTrue(config.misc.useDefaultChannels(ChatCommandSetting.YOTW));
+        assertTrue(config.misc.useDefaultChannels(ChatCommandSetting.CA50));
+        assertFalse("the default channels stay", config.misc.defaultChannelEnabled(CommandChannel.GUILD));
         assertFalse("the group switch stays", config.misc.specialMayorsChatCommandsEnabled());
-        assertFalse("the command switch stays", config.misc.ca50ChatCommandEnabled());
+        assertFalse("the command switch stays", config.misc.commandEnabled(ChatCommandSetting.CA50));
         assertTrue(config.misc.chatCommandsEnabled());
     }
 
@@ -112,15 +114,15 @@ public final class ChatCommandSettingsTest {
         KungConfig config = new KungConfig(file);
         config.load();
 
-        assertFalse("changed all chat", config.misc.c50UseDefaultChannels());
-        assertTrue(config.misc.c50AllChatCommandsEnabled());
-        assertFalse("changed party", config.misc.tpsUseDefaultChannels());
-        assertFalse(config.misc.tpsPartyCommandsEnabled());
-        assertTrue("untouched", config.misc.ca50UseDefaultChannels());
-        assertFalse(config.misc.ca50AllChatCommandsEnabled());
+        assertFalse("changed all chat", config.misc.useDefaultChannels(ChatCommandSetting.C50));
+        assertTrue(config.misc.channelEnabled(ChatCommandSetting.C50, CommandChannel.ALL_CHAT));
+        assertFalse("changed party", config.misc.useDefaultChannels(ChatCommandSetting.TPS));
+        assertFalse(config.misc.channelEnabled(ChatCommandSetting.TPS, CommandChannel.PARTY));
+        assertTrue("untouched", config.misc.useDefaultChannels(ChatCommandSetting.CA50));
+        assertFalse(config.misc.channelEnabled(ChatCommandSetting.CA50, CommandChannel.ALL_CHAT));
         // A file that already knows the setting is taken at its word.
-        assertTrue(config.misc.jerryUseDefaultChannels());
-        assertFalse(config.misc.jerryAllChatCommandsEnabled());
+        assertTrue(config.misc.useDefaultChannels(ChatCommandSetting.JERRY));
+        assertFalse(config.misc.channelEnabled(ChatCommandSetting.JERRY, CommandChannel.ALL_CHAT));
     }
 
     private Path file() {

@@ -25,7 +25,7 @@ public final class DungeonSplitMessagesTest {
     @Test public void september19RejoinWithoutModeDoesNotClaimNormalSevenRecords() {
         config.setEnabled(true);
         config.setRunEndChat(true);
-        config.recordPersonalBests(7, false, Map.of("Portal Entry", 30_000L, "Maxor", 30_000L));
+        config.recordRun(7, false, Map.of("Portal Entry", 30_000L, "Maxor", 30_000L), Map.of());
         tracker.startRun(0L, -1, false);
         clock.set(36_519L);
         tracker.observeMessage(BLOOD, 0L);
@@ -125,9 +125,9 @@ public final class DungeonSplitMessagesTest {
 
     @Test public void recordsAndMessagesUseOnlyTheMatchingFloorAndMode() {
         config.setEnabled(true);
-        config.recordPersonalBests(6, false, Map.of("Blood Open", 20_000L));
-        config.recordPersonalBests(7, false, Map.of("Blood Open", 25_000L));
-        config.recordPersonalBests(7, true, Map.of("Blood Open", 40_000L));
+        config.recordRun(6, false, Map.of("Blood Open", 20_000L), Map.of());
+        config.recordRun(7, false, Map.of("Blood Open", 25_000L), Map.of());
+        config.recordRun(7, true, Map.of("Blood Open", 40_000L), Map.of());
         for (int run = 0; run < 3; run++) {
             tracker.startRun(0L, run == 0 ? 6 : 7, run == 2);
             clock.addAndGet(30_000L);
@@ -145,7 +145,7 @@ public final class DungeonSplitMessagesTest {
 
     @Test public void finalPhaseWaitsForVictoryAfterScoreAndAnnouncesOnceUsingTheFrozenTime() {
         config.setEnabled(true);
-        config.recordPersonalBests(1, false, Map.of("Bonzo Phase 2", 4_000L));
+        config.recordRun(1, false, Map.of("Bonzo Phase 2", 4_000L), Map.of());
         tracker.startRun(0L, 1, false);
         clock.set(5_000L);
         tracker.observeMessage("[BOSS] Bonzo: Oh I'm dead!", 0L);

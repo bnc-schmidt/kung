@@ -4,6 +4,8 @@ import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
 import com.github.beng420.kung.util.ServerTpsTracker;
+import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
+import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import java.util.ArrayList;
 import java.util.List;
 import org.junit.Test;
@@ -35,33 +37,33 @@ public final class ChatCommandTest {
         config.setChatCommandsEnabled(true);
         for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, true, true, false, false);
 
-        config.setC50UseDefaultChannels(false);
-        config.setCa50UseDefaultChannels(false);
-        config.setTpsUseDefaultChannels(false);
-        config.setC50PartyCommandsEnabled(false);
-        config.setC50PrivateCommandsEnabled(true);
-        config.setCa50GuildCommandsEnabled(false);
-        config.setCa50AllChatCommandsEnabled(true);
-        config.setTpsPartyCommandsEnabled(false);
-        config.setTpsGuildCommandsEnabled(false);
-        config.setTpsAllChatCommandsEnabled(true);
-        config.setTpsPrivateCommandsEnabled(true);
+        config.setUseDefaultChannels(ChatCommandSetting.C50, false);
+        config.setUseDefaultChannels(ChatCommandSetting.CA50, false);
+        config.setUseDefaultChannels(ChatCommandSetting.TPS, false);
+        config.setChannelEnabled(ChatCommandSetting.C50, CommandChannel.PARTY, false);
+        config.setChannelEnabled(ChatCommandSetting.C50, CommandChannel.PRIVATE, true);
+        config.setChannelEnabled(ChatCommandSetting.CA50, CommandChannel.GUILD, false);
+        config.setChannelEnabled(ChatCommandSetting.CA50, CommandChannel.ALL_CHAT, true);
+        config.setChannelEnabled(ChatCommandSetting.TPS, CommandChannel.PARTY, false);
+        config.setChannelEnabled(ChatCommandSetting.TPS, CommandChannel.GUILD, false);
+        config.setChannelEnabled(ChatCommandSetting.TPS, CommandChannel.ALL_CHAT, true);
+        config.setChannelEnabled(ChatCommandSetting.TPS, CommandChannel.PRIVATE, true);
         assertChannels(config, ChatCommand.C, false, true, false, true);
         assertChannels(config, ChatCommand.CA, true, false, true, false);
         assertChannels(config, ChatCommand.TPS, false, false, true, true);
 
-        config.setC50ChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.C50, false);
         assertChannels(config, ChatCommand.C, false, false, false, false);
         assertChannels(config, ChatCommand.CA, true, false, true, false);
-        config.setCa50ChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.CA50, false);
         assertChannels(config, ChatCommand.CA, false, false, false, false);
         assertChannels(config, ChatCommand.TPS, false, false, true, true);
-        config.setTpsChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.TPS, false);
         assertChannels(config, ChatCommand.TPS, false, false, false, false);
 
-        config.setC50ChatCommandEnabled(true);
-        config.setCa50ChatCommandEnabled(true);
-        config.setTpsChatCommandEnabled(true);
+        config.setCommandEnabled(ChatCommandSetting.C50, true);
+        config.setCommandEnabled(ChatCommandSetting.CA50, true);
+        config.setCommandEnabled(ChatCommandSetting.TPS, true);
         config.setChatCommandsEnabled(false);
         for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, false, false, false, false);
     }
@@ -144,23 +146,23 @@ public final class ChatCommandTest {
         for (ChatCommand command : solo) assertChannels(config, command, true, true, false, false);
         for (ChatCommand command : level) assertChannels(config, command, true, true, false, false);
 
-        config.setCa50UseDefaultChannels(false);
-        config.setCa50PartyCommandsEnabled(false);
-        config.setCa50AllChatCommandsEnabled(true);
+        config.setUseDefaultChannels(ChatCommandSetting.CA50, false);
+        config.setChannelEnabled(ChatCommandSetting.CA50, CommandChannel.PARTY, false);
+        config.setChannelEnabled(ChatCommandSetting.CA50, CommandChannel.ALL_CHAT, true);
         for (ChatCommand command : solo) assertChannels(config, command, false, true, true, false);
         for (ChatCommand command : level) assertChannels(config, command, true, true, false, false);
         assertChannels(config, ChatCommand.C, true, true, false, false);
 
-        config.setClassLevelUseDefaultChannels(false);
-        config.setClassLevelGuildCommandsEnabled(false);
-        config.setClassLevelPrivateCommandsEnabled(true);
+        config.setUseDefaultChannels(ChatCommandSetting.CLASS_LEVEL, false);
+        config.setChannelEnabled(ChatCommandSetting.CLASS_LEVEL, CommandChannel.GUILD, false);
+        config.setChannelEnabled(ChatCommandSetting.CLASS_LEVEL, CommandChannel.PRIVATE, true);
         for (ChatCommand command : level) assertChannels(config, command, true, false, false, true);
         for (ChatCommand command : solo) assertChannels(config, command, false, true, true, false);
 
-        config.setClassLevelChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.CLASS_LEVEL, false);
         for (ChatCommand command : level) assertChannels(config, command, false, false, false, false);
         for (ChatCommand command : solo) assertChannels(config, command, false, true, true, false);
-        config.setCa50ChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.CA50, false);
         for (ChatCommand command : solo) assertChannels(config, command, false, false, false, false);
     }
 
@@ -168,22 +170,22 @@ public final class ChatCommandTest {
     public void commandsFollowTheSharedDefaultChannelsUntilTheyHaveTheirOwn() {
         MiscConfig config = new MiscConfig();
         config.setChatCommandsEnabled(true);
-        config.setDefaultPartyCommandsEnabled(false);
-        config.setDefaultAllChatCommandsEnabled(true);
+        config.setDefaultChannelEnabled(CommandChannel.PARTY, false);
+        config.setDefaultChannelEnabled(CommandChannel.ALL_CHAT, true);
         for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, false, true, true, false);
 
         // A command that takes its own channels starts from the shipped ones, whatever the defaults say.
-        config.setTpsUseDefaultChannels(false);
+        config.setUseDefaultChannels(ChatCommandSetting.TPS, false);
         assertChannels(config, ChatCommand.TPS, true, true, false, false);
-        config.setTpsPrivateCommandsEnabled(true);
+        config.setChannelEnabled(ChatCommandSetting.TPS, CommandChannel.PRIVATE, true);
         assertChannels(config, ChatCommand.TPS, true, true, false, true);
         assertChannels(config, ChatCommand.C, false, true, true, false);
-        config.setDefaultGuildCommandsEnabled(false);
+        config.setDefaultChannelEnabled(CommandChannel.GUILD, false);
         assertChannels(config, ChatCommand.TPS, true, true, false, true);
         assertChannels(config, ChatCommand.C, false, false, true, false);
 
         // Back on the defaults: the own channels are ignored again.
-        config.setTpsUseDefaultChannels(true);
+        config.setUseDefaultChannels(ChatCommandSetting.TPS, true);
         assertChannels(config, ChatCommand.TPS, false, false, true, false);
     }
 
@@ -199,7 +201,7 @@ public final class ChatCommandTest {
         assertChannels(config, ChatCommand.TPS, true, true, false, false);
         // The group switch only gates: the commands keep their own switches.
         config.setSpecialMayorsChatCommandsEnabled(true);
-        config.setScorpChatCommandEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.SCORP, false);
         assertChannels(config, ChatCommand.SCORPIUS, false, false, false, false);
         assertChannels(config, ChatCommand.JERRY, true, true, false, false);
 
@@ -214,24 +216,24 @@ public final class ChatCommandTest {
     public void useDefaultEverywhereTouchesOnlyTheOverrides() {
         MiscConfig config = new MiscConfig();
         config.setChatCommandsEnabled(true);
-        config.setDefaultPartyCommandsEnabled(false);
-        config.setDefaultPrivateCommandsEnabled(true);
+        config.setDefaultChannelEnabled(CommandChannel.PARTY, false);
+        config.setDefaultChannelEnabled(CommandChannel.PRIVATE, true);
         config.setSpecialMayorsChatCommandsEnabled(false);
-        config.setC50ChatCommandEnabled(false);
-        config.setDerpyUseDefaultChannels(false);
-        config.setDerpyAllChatCommandsEnabled(true);
-        config.setCa50UseDefaultChannels(false);
-        config.setCa50GuildCommandsEnabled(false);
+        config.setCommandEnabled(ChatCommandSetting.C50, false);
+        config.setUseDefaultChannels(ChatCommandSetting.DERPY, false);
+        config.setChannelEnabled(ChatCommandSetting.DERPY, CommandChannel.ALL_CHAT, true);
+        config.setUseDefaultChannels(ChatCommandSetting.CA50, false);
+        config.setChannelEnabled(ChatCommandSetting.CA50, CommandChannel.GUILD, false);
 
         config.useDefaultChannelsEverywhere();
 
-        assertTrue(config.derpyUseDefaultChannels());
-        assertTrue(config.ca50UseDefaultChannels());
+        assertTrue(config.useDefaultChannels(ChatCommandSetting.DERPY));
+        assertTrue(config.useDefaultChannels(ChatCommandSetting.CA50));
         // The defaults and the switches are what they were.
-        assertFalse(config.defaultPartyCommandsEnabled());
-        assertTrue(config.defaultPrivateCommandsEnabled());
+        assertFalse(config.defaultChannelEnabled(CommandChannel.PARTY));
+        assertTrue(config.defaultChannelEnabled(CommandChannel.PRIVATE));
         assertFalse(config.specialMayorsChatCommandsEnabled());
-        assertFalse(config.c50ChatCommandEnabled());
+        assertFalse(config.commandEnabled(ChatCommandSetting.C50));
         assertTrue(config.chatCommandsEnabled());
         assertChannels(config, ChatCommand.CA, false, true, false, true);
         assertChannels(config, ChatCommand.DERPY, false, false, false, false);

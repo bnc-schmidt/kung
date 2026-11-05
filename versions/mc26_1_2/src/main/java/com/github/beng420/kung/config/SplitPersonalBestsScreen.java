@@ -4,6 +4,7 @@ import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.config.category.SplitsConfig;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitTracker;
 import com.github.beng420.kung.ui.UiBounds;
+import com.github.beng420.kung.ui.UiButton;
 import com.github.beng420.kung.ui.UiMenuFont;
 import com.github.beng420.kung.ui.UiScale;
 import com.github.beng420.kung.ui.UiShapes;
@@ -106,9 +107,9 @@ public final class SplitPersonalBestsScreen extends Screen {
             int runs = config.recentRunCount(floor(), masterMode());
             graphics.text(menuFont, "AVG: " + runs + "/" + SplitsConfig.RECENT_RUN_LIMIT + " runs",
                 x + 270, y + 12, THEME.muted(), false);
-            button(graphics, resetAverageBounds(), "Reset AVG", mouseX, mouseY, runs > 0, THEME.error());
+            UiButton.draw(graphics, menuFont, THEME, resetAverageBounds(), "Reset AVG", mouseX, mouseY, runs > 0, THEME.error());
             for (int i = 0; i < 15; i++) {
-                button(graphics, floorBounds(i), floorLabel(i), mouseX, mouseY, true,
+                UiButton.draw(graphics, menuFont, THEME, floorBounds(i), floorLabel(i), mouseX, mouseY, true,
                     i == selectedFloor ? THEME.accent() : THEME.text());
             }
             graphics.text(menuFont, "Split", x + 14, y + 88, THEME.muted(), false);
@@ -122,8 +123,8 @@ public final class SplitPersonalBestsScreen extends Screen {
                 graphics.text(menuFont, menuFont.plainSubstrByWidth(formatTime(best), 84),
                     x + 174, top + 6, THEME.warning(), false);
                 row.input().extractRenderState(graphics, mouseX, mouseY, partialTick);
-                button(graphics, saveBounds(i), "Save", mouseX, mouseY, parseTime(row.input().value()) > 0L, THEME.success());
-                button(graphics, clearBounds(i), "Clear", mouseX, mouseY, best > 0L, THEME.error());
+                UiButton.draw(graphics, menuFont, THEME, saveBounds(i), "Save", mouseX, mouseY, parseTime(row.input().value()) > 0L, THEME.success());
+                UiButton.draw(graphics, menuFont, THEME, clearBounds(i), "Clear", mouseX, mouseY, best > 0L, THEME.error());
             }
             graphics.text(menuFont, "Format: mm:ss.mmm (e.g. 01:23.456). Time must be above zero.",
                 x + 14, y + 378, THEME.muted(), false);
@@ -131,13 +132,6 @@ public final class SplitPersonalBestsScreen extends Screen {
         } finally {
             graphics.pose().popMatrix();
         }
-    }
-
-    private void button(GuiGraphicsExtractor graphics, UiBounds bounds, String label, int mx, int my, boolean enabled, int color) {
-        UiShapes.rounded(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(), 3,
-            enabled && bounds.contains(mx, my) ? THEME.controlHover() : THEME.control());
-        graphics.text(menuFont, label, bounds.x() + (bounds.width() - menuFont.width(label)) / 2,
-            bounds.y() + 6, enabled ? color : THEME.muted(), false);
     }
 
     @Override

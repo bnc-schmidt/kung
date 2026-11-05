@@ -114,7 +114,7 @@ public final class KungHudLayoutTest {
                     Math.round(100 * scale), Math.round(50 * scale));
             }, () -> x, () -> y, value -> { x = value; writes++; }, value -> { y = value; writes++; },
                 () -> percent, value -> { percent = value; writes++; }, () -> enabled,
-                value -> { enabled = value; writes++; });
+                value -> { enabled = value; writes++; }, null);
         }
     }
 }

@@ -1,0 +1,10 @@
+{
+  "misc": {
+    "ca50ChatCommandEnabled": false,
+    "ca50PartyCommandsEnabled": true,
+    "ca50GuildCommandsEnabled": false,
+    "ca50AllChatCommandsEnabled": true,
+    "ca50PrivateCommandsEnabled": true,
+    "c50GuildCommandsEnabled": true
+  }
+}

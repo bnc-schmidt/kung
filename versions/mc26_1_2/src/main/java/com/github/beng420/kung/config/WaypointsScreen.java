@@ -10,6 +10,7 @@ import com.github.beng420.kung.feature.waypoints.WaypointStore;
 import com.github.beng420.kung.feature.waypoints.WaypointType;
 import com.github.beng420.kung.feature.waypoints.WaypointsFeature;
 import com.github.beng420.kung.ui.UiBounds;
+import com.github.beng420.kung.ui.UiButton;
 import com.github.beng420.kung.ui.UiMenuFont;
 import com.github.beng420.kung.ui.UiScale;
 import com.github.beng420.kung.ui.UiScrollList;
@@ -346,7 +347,7 @@ public final class WaypointsScreen extends Screen {
             UiShapes.rounded(graphics, x - 1, y - 1, PANEL_WIDTH + 2, PANEL_HEIGHT + 2, 6, THEME.accent());
             UiShapes.rounded(graphics, x, y, PANEL_WIDTH, PANEL_HEIGHT, 5, THEME.panel());
             graphics.text(menuFont, sharing ? "Share Waypoints" : "Waypoints", x + 14, y + 14, THEME.accent(), false);
-            if (!sharing) button(graphics, settingsBounds(), "Settings", mx, my, true, THEME.text());
+            if (!sharing) UiButton.draw(graphics, menuFont, THEME, settingsBounds(), "Settings", mx, my, true, THEME.text());
             drawDropdownButton(graphics, mx, my);
             drawWarning(graphics, mx, my);
             drawRows(graphics, mx, my, partialTick);
@@ -424,7 +425,7 @@ public final class WaypointsScreen extends Screen {
     private void drawGroup(GuiGraphicsExtractor graphics, GroupRow row, int top, int mx, int my, float partialTick) {
         WaypointGroup group = row.group();
         graphics.fill(left(), top + 1, right(), top + ROW_HEIGHT - 1, THEME.panelSoft());
-        button(graphics, arrowBounds(top), collapsed.contains(group) ? ">" : "v", mx, my, true, THEME.text());
+        UiButton.draw(graphics, menuFont, THEME, arrowBounds(top), collapsed.contains(group) ? ">" : "v", mx, my, true, THEME.text());
         checkbox(graphics, group.fullyEnabled() && !sharing || sharing && allSelected(group), groupCheckBounds(top));
         if (sharing) {
             graphics.text(menuFont, group.name(), left() + 38, top + 8, THEME.text(), false);
@@ -433,11 +434,11 @@ public final class WaypointsScreen extends Screen {
             return;
         }
         row.name().extractRenderState(graphics, mx, my, partialTick);
-        button(graphics, routeBounds(top), "Route", mx, my, true, group.ordered() ? THEME.accent() : THEME.muted());
-        button(graphics, wallsBounds(top), "Walls", mx, my, true, group.throughWalls() ? THEME.accent() : THEME.muted());
-        button(graphics, typeBounds(top), group.type().label(), mx, my, true, THEME.text());
-        button(graphics, addBounds(top), "+ Waypoint", mx, my, true, THEME.success());
-        button(graphics, deleteBounds(top), "X", mx, my, true, THEME.error());
+        UiButton.draw(graphics, menuFont, THEME, routeBounds(top), "Route", mx, my, true, group.ordered() ? THEME.accent() : THEME.muted());
+        UiButton.draw(graphics, menuFont, THEME, wallsBounds(top), "Walls", mx, my, true, group.throughWalls() ? THEME.accent() : THEME.muted());
+        UiButton.draw(graphics, menuFont, THEME, typeBounds(top), group.type().label(), mx, my, true, THEME.text());
+        UiButton.draw(graphics, menuFont, THEME, addBounds(top), "+ Waypoint", mx, my, true, THEME.success());
+        UiButton.draw(graphics, menuFont, THEME, deleteBounds(top), "X", mx, my, true, THEME.error());
     }
 
     private void drawWaypoint(GuiGraphicsExtractor graphics, WaypointRow row, int top, boolean hovered, int mx, int my,
@@ -453,8 +454,8 @@ public final class WaypointsScreen extends Screen {
             return;
         }
         if (hovered) {
-            button(graphics, upBounds(top), "^", mx, my, row.index() > 0, THEME.text());
-            button(graphics, downBounds(top), "v", mx, my, row.index() < group.waypoints().size() - 1, THEME.text());
+            UiButton.draw(graphics, menuFont, THEME, upBounds(top), "^", mx, my, row.index() > 0, THEME.text());
+            UiButton.draw(graphics, menuFont, THEME, downBounds(top), "v", mx, my, row.index() < group.waypoints().size() - 1, THEME.text());
         }
         row.name().extractRenderState(graphics, mx, my, partialTick);
         row.x().extractRenderState(graphics, mx, my, partialTick);
@@ -465,7 +466,7 @@ public final class WaypointsScreen extends Screen {
         graphics.fill(swatch.x() + 1, swatch.y() + 1, swatch.right() - 1, swatch.bottom() - 1, 0xFF000000 | waypoint.rgb());
         row.hex().extractRenderState(graphics, mx, my, partialTick);
         row.alpha().extractRenderState(graphics, mx, my, partialTick);
-        button(graphics, deleteBounds(top), "X", mx, my, true, THEME.error());
+        UiButton.draw(graphics, menuFont, THEME, deleteBounds(top), "X", mx, my, true, THEME.error());
     }
 
     private void drawFooter(GuiGraphicsExtractor graphics, int mx, int my) {
@@ -479,13 +480,13 @@ public final class WaypointsScreen extends Screen {
             graphics.text(menuFont, "Sort imported waypoints", left() + 218, optionBounds(1).y() + 4, THEME.text(), false);
             String[] labels = {"Import Skyblocker", "Export Skyblocker", "Import Skytils", "Import Coleweight", "Done"};
             for (int i = 0; i < labels.length; i++) {
-                button(graphics, footerButton(i, labels.length), labels[i], mx, my, true,
+                UiButton.draw(graphics, menuFont, THEME, footerButton(i, labels.length), labels[i], mx, my, true,
                     i == labels.length - 1 ? THEME.accent() : THEME.text());
             }
         } else {
             String[] labels = {"Share", "New Group", "Cancel", "Done"};
             for (int i = 0; i < labels.length; i++) {
-                button(graphics, footerButton(i, labels.length), labels[i], mx, my, true,
+                UiButton.draw(graphics, menuFont, THEME, footerButton(i, labels.length), labels[i], mx, my, true,
                     i == labels.length - 1 ? THEME.accent() : THEME.text());
             }
         }
@@ -506,13 +507,6 @@ public final class WaypointsScreen extends Screen {
             return "Opens the color picker.";
         }
         return "";
-    }
-
-    private void button(GuiGraphicsExtractor graphics, UiBounds bounds, String label, int mx, int my, boolean enabled, int color) {
-        UiShapes.rounded(graphics, bounds.x(), bounds.y(), bounds.width(), bounds.height(), 3,
-            enabled && bounds.contains(mx, my) ? THEME.controlHover() : THEME.control());
-        graphics.text(menuFont, label, bounds.x() + (bounds.width() - menuFont.width(label)) / 2,
-            bounds.y() + (bounds.height() - 8) / 2, enabled ? color : THEME.muted(), false);
     }
 
     private void checkbox(GuiGraphicsExtractor graphics, boolean checked, UiBounds bounds) {
