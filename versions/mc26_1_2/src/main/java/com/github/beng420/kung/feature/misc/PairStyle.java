@@ -30,11 +30,4 @@ public final class PairStyle {
     public static String letter(int index) {
         return String.valueOf(LETTERS.charAt(Math.floorMod(index, LETTERS.length())));
     }
-
-    /** Black or white, whichever reads better on {@link #color(int)}. */
-    public static int textColor(int index) {
-        int color = color(index);
-        double luminance = 0.299 * (color >> 16 & 0xFF) + 0.587 * (color >> 8 & 0xFF) + 0.114 * (color & 0xFF);
-        return luminance > 140 ? 0xFF000000 : 0xFFFFFFFF;
-    }
 }

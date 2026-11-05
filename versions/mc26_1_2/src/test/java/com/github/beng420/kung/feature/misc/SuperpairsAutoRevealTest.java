@@ -34,10 +34,10 @@ public final class SuperpairsAutoRevealTest {
     public void onlyTheClickPromptsAreAccepted() {
         for (String prompt : new String[] {"Click any button!", "§aClick a second button!", "Next button is instantly rewarded!",
             "click any button"}) {
-            assertTrue(prompt, SuperpairsBoard.acceptsClick(prompt));
+            assertTrue(prompt, SuperpairsAutoReveal.ready(prompt, SuperpairsAutoReveal.SETTLE_MILLIS));
         }
         for (String prompt : new String[] {"?", "", null, "Instant Find", "Click any button now"}) {
-            assertFalse(String.valueOf(prompt), SuperpairsBoard.acceptsClick(prompt));
+            assertFalse(String.valueOf(prompt), SuperpairsAutoReveal.ready(prompt, SuperpairsAutoReveal.SETTLE_MILLIS));
         }
     }
 

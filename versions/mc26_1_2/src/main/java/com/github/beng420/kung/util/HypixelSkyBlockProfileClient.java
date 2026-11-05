@@ -132,8 +132,8 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     /**
-     * The Sack counts of one player's selected profile, from {@link #sackSource()}. The {@code /kung dev sackapi}
-     * probe uses it to measure how far the API trails the game. A limited lookup (429) is not retried.
+     * The Sack counts of one player's selected profile, from {@link #sackSource()}. The Sack Tracker resync and the
+     * {@code /kung dev sackapi} probe use it. A limited lookup (429) is not retried.
      */
     public CompletableFuture<SackCounts> loadSackCounts(String uuid) {
         String source = sackSource();

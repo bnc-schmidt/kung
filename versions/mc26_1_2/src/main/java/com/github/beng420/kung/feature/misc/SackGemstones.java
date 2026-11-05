@@ -15,7 +15,8 @@ import java.util.regex.Pattern;
 final class SackGemstones {
     static final String SACK_TITLE = "Gemstones Sack";
     static final String DEFAULT_QUALITY = "Rough";
-    private static final List<String> QUALITIES = List.of("Rough", "Flawed", "Fine");
+    /** How many Rough gems one gem of each quality is worth. */
+    private static final Map<String, Long> MULTIPLIERS = Map.of("Rough", 1L, "Flawed", 80L, "Fine", 6_400L);
     /** "Onyx Gemstones", "Flawed Onyx Gemstone", with the gem's symbol in front: "☠ Flawed Onyx Gemstone". */
     private static final Pattern NAME = Pattern.compile("^(?:(\\S) )?(?:(Rough|Flawed|Fine) )?([A-Za-z]+) Gemstones?$");
     private static final Pattern FILTER = Pattern.compile("^\\s*▶ (No filter|Rough|Flawed|Fine)\\s*$");
@@ -43,7 +44,7 @@ final class SackGemstones {
     static String filterQuality(List<String> lore) {
         for (String line : lore) {
             Matcher matcher = FILTER.matcher(line);
-            if (matcher.matches()) return QUALITIES.contains(matcher.group(1)) ? matcher.group(1) : null;
+            if (matcher.matches()) return MULTIPLIERS.containsKey(matcher.group(1)) ? matcher.group(1) : null;
         }
         return null;
     }
@@ -56,18 +57,14 @@ final class SackGemstones {
             if (!matcher.matches()) continue;
             String quality = matcher.group(1).equals("Amount") ? filter == null ? DEFAULT_QUALITY : filter : matcher.group(1);
             Long amount = SackTrackerFeature.parseAmount(matcher.group(2));
-            if (QUALITIES.contains(quality) && amount != null) amounts.putIfAbsent(quality, amount);
+            if (MULTIPLIERS.containsKey(quality) && amount != null) amounts.putIfAbsent(quality, amount);
         }
         return amounts;
     }
 
     /** How many Rough gems one gem of this quality is worth. */
     static long multiplier(String quality) {
-        return switch (quality) {
-            case "Flawed" -> 80L;
-            case "Fine" -> 6_400L;
-            default -> 1L;
-        };
+        return MULTIPLIERS.getOrDefault(quality, 1L);
     }
 
     /** The total of an item's listed qualities in Rough gems, for an item without a "Stored:" line. */

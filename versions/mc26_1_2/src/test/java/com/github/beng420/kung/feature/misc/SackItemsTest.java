@@ -29,7 +29,7 @@ public class SackItemsTest {
             new com.github.beng420.kung.config.category.MiscConfig.SackItem("Wheat", 0xFFFFFF, -1, 1000),
             new com.github.beng420.kung.config.category.MiscConfig.SackItem("Carrot", 0xFFFFFF, 5, 1000),
             new com.github.beng420.kung.config.category.MiscConfig.SackItem("Cactus", 0xFFFFFF, -1, 0));
-        var lines = SackTrackerFeature.lines(items, false).stream().map(line -> line.getString()).toList();
+        var lines = SackTrackerFeature.lines(items, false, java.util.Set.of(), "").stream().map(line -> line.getString()).toList();
         assertEquals(java.util.List.of("Sack Tracker", "Wheat: ?/1,000", "Carrot: 5/1,000", "Cactus: ?"), lines);
         assertEquals("?", SackTrackerFeature.amountText(-1));
         assertEquals("1,234", SackTrackerFeature.amountText(1234));
@@ -102,11 +102,11 @@ public class SackItemsTest {
         var cactus = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Cactus", 0xFFFFFF, 50, 100);
         var unread = new com.github.beng420.kung.config.category.MiscConfig.SackItem("Carrot", 0xFFFFFF, -1, 0);
         var items = List.of(wheat, cactus, unread);
-        var text = SackTrackerFeature.lines(items, false, java.util.Set.of(wheat, unread)).stream().map(l -> l.getString()).toList();
+        var text = SackTrackerFeature.lines(items, false, java.util.Set.of(wheat, unread), "").stream().map(l -> l.getString()).toList();
         // An unread row stays "?", never "~?".
         assertEquals(List.of("Sack Tracker", "Wheat: ~1,234", "Cactus: 50/100", "Carrot: ?"), text);
         assertEquals(List.of("Sack Tracker", "Wheat: 1,234", "Cactus: 50/100", "Carrot: ?"),
-            SackTrackerFeature.lines(items, false).stream().map(l -> l.getString()).toList());
+            SackTrackerFeature.lines(items, false, java.util.Set.of(), "").stream().map(l -> l.getString()).toList());
     }
 
     @Test

@@ -70,21 +70,21 @@ public final class SackTrackerFeatureTest {
         assertEquals(List.of(0xFF5555, 0xFFFFFF), amountAndGoalColors(new SackItem("Wheat", 0xFFFFFF, 14, 15)));
         assertEquals(List.of(0x55FF55, 0xFFFFFF), amountAndGoalColors(new SackItem("Wheat", 0xFFFFFF, 15, 15)));
         assertEquals(List.of(0x55FF55, 0xFFFFFF), amountAndGoalColors(new SackItem("Wheat", 0xFFFFFF, 20, 15)));
-        assertEquals("Wheat: 1,234/15,000", SackTrackerFeature.lines(List.of(new SackItem("Wheat", 0xFFFFFF, 1234, 15000)), false).get(1).getString());
-        assertEquals("Wheat: 1,234", SackTrackerFeature.lines(List.of(new SackItem("Wheat", 0xFFFFFF, 1234, 0)), false).get(1).getString());
+        assertEquals("Wheat: 1,234/15,000", SackTrackerFeature.lines(List.of(new SackItem("Wheat", 0xFFFFFF, 1234, 15000)), false, java.util.Set.of(), "").get(1).getString());
+        assertEquals("Wheat: 1,234", SackTrackerFeature.lines(List.of(new SackItem("Wheat", 0xFFFFFF, 1234, 0)), false, java.util.Set.of(), "").get(1).getString());
     }
 
     @Test
     public void aKnownProfileIsNamedInTheTitleOnly() {
         List<SackItem> items = List.of(new SackItem("Wheat", 0xFFFFFF, 5, 0));
-        assertEquals("Sack Tracker", SackTrackerFeature.lines(items, false).get(0).getString());
+        assertEquals("Sack Tracker", SackTrackerFeature.lines(items, false, java.util.Set.of(), "").get(0).getString());
         assertEquals("Sack Tracker Coconut", SackTrackerFeature.lines(items, false, java.util.Set.of(), "Coconut").get(0).getString());
         assertEquals("Wheat: 5", SackTrackerFeature.lines(items, false, java.util.Set.of(), "Coconut").get(1).getString());
     }
 
     /** Colors of the amount and, when there is a goal, the "/goal" part (the name and ": " come first). */
     private static List<Integer> amountAndGoalColors(SackItem item) {
-        Component line = SackTrackerFeature.lines(List.of(item), false).get(1);
+        Component line = SackTrackerFeature.lines(List.of(item), false, java.util.Set.of(), "").get(1);
         return line.getSiblings().stream().skip(1).map(part -> part.getStyle().getColor().getValue()).toList();
     }
 

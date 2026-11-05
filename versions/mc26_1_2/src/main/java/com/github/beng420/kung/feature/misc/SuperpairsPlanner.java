@@ -25,7 +25,7 @@ public final class SuperpairsPlanner {
         UNKNOWN, ANY, SECOND, INSTANT;
 
         public static Prompt of(String label) {
-            String name = HypixelLocation.stripFormatting(label).trim().toLowerCase(java.util.Locale.ROOT);
+            String name = HypixelLocation.clean(label).toLowerCase(java.util.Locale.ROOT);
             name = name.endsWith("!") ? name.substring(0, name.length() - 1) : name;
             return switch (name) {
                 case "click any button" -> ANY;

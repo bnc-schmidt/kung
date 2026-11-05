@@ -212,11 +212,15 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (SackGemstones.isGemstoneSack(plain(screen.getTitle()))) return toggleGemstone(screen, stack);
         Long stored = stored(lore(stack));
         if (stored == null) return false;
-        String name = plain(stack.getHoverName());
-        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), stored);
-        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
-            (tracked ? "Tracking " : "Stopped tracking ") + name);
+        toggleItem(plain(stack.getHoverName()), stack, stored, "", "");
         return true;
+    }
+
+    /** Tracks the row, or stops tracking it when it is tracked, and tells the player which. */
+    private void toggleItem(String name, ItemStack stack, long amount, String startedTail, String stoppedTail) {
+        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), amount);
+        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
+            tracked ? "Tracking " + name + startedTail : "Stopped tracking " + name + stoppedTail);
     }
 
     /**
@@ -230,10 +234,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (gem.quality() == null && filter == null) {
             Long total = wholeGemTotal(stack);
             if (total == null) return false;
-            String name = plain(stack.getHoverName());
-            boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), total);
-            KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
-                (tracked ? "Tracking " : "Stopped tracking ") + name + " (all qualities, in Rough gems)");
+            String all = " (all qualities, in Rough gems)";
+            toggleItem(plain(stack.getHoverName()), stack, total, all, all);
             return true;
         }
         String quality = SackGemstones.trackedQuality(gem, filter);
@@ -243,10 +245,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
                 + " filter=" + filter + " lore=" + KungDebugRecorder.compact(String.join(" | ", lore(stack))));
             return false;
         }
-        String name = gem.trackedName(quality);
-        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), amount);
-        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
-            (tracked ? "Tracking " : "Stopped tracking ") + name);
+        toggleItem(gem.trackedName(quality), stack, amount, "", "");
         return true;
     }
 
@@ -287,9 +286,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         if (stack == null || stack.isEmpty()) return false;
         String name = plain(stack.getHoverName());
         if (config().sackTrackerItem(name) == null && !SackItems.contains(SkyblockItemId.of(stack))) return false;
-        boolean tracked = config().toggleSackTrackerItem(name, color(stack.getHoverName()), UNKNOWN_AMOUNT);
-        KungMessages.send(Minecraft.getInstance(), KungMessages.Type.SUCCESS, "Sack Tracker",
-            tracked ? "Tracking " + name + ", open its sack once to read the amount" : "Stopped tracking " + name);
+        toggleItem(name, stack, UNKNOWN_AMOUNT, ", open its sack once to read the amount", "");
         return true;
     }
 
@@ -487,11 +484,16 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             Long stored = item == null ? null : stored(lore(stack));
             if (stored == null) continue;
             config().setSackTrackerId(item, SkyblockItemId.of(stack));
-            if (item.amount() != stored) KungDebugRecorder.event("sack-tracker",
-                "sack shows " + item.name() + " " + stored + " (tracked " + item.amount() + ")");
-            setAmount(item, stored);
-            markSynced(item);
+            readFromSack(item, stored);
         }
+    }
+
+    /** Takes the count a sack shows for a row and marks the row as read. */
+    private void readFromSack(SackItem item, long shown) {
+        if (item.amount() != shown) KungDebugRecorder.event("sack-tracker",
+            "sack shows " + item.name() + " " + shown + " (tracked " + item.amount() + ")");
+        setAmount(item, shown);
+        markSynced(item);
     }
 
     /** A tracked whole gem takes the item's total; a tracked quality takes the count its line lists. */
@@ -503,21 +505,12 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             if (gem == null) continue;
             SackItem whole = filter == null && gem.quality() == null ? config().sackTrackerItem(plain(stack.getHoverName())) : null;
             Long total = whole == null ? null : wholeGemTotal(stack);
-            if (whole != null && total != null) {
-                if (whole.amount() != total) KungDebugRecorder.event("sack-tracker",
-                    "sack shows " + whole.name() + " " + total + " (tracked " + whole.amount() + ")");
-                setAmount(whole, total);
-                markSynced(whole);
-            }
+            if (whole != null && total != null) readFromSack(whole, total);
             SackGemstones.amounts(lore(stack), filter).forEach((quality, amount) -> {
                 // A filtered item names its quality itself; the amount line then belongs to that quality.
                 String shown = gem.quality() != null ? gem.quality() : quality;
                 SackItem item = config().sackTrackerItem(gem.trackedName(shown));
-                if (item == null) return;
-                markSynced(item);
-                if (item.amount() == amount) return;
-                KungDebugRecorder.event("sack-tracker", "sack shows " + item.name() + " " + amount + " (tracked " + item.amount() + ")");
-                setAmount(item, amount);
+                if (item != null) readFromSack(item, amount);
             });
         }
     }
@@ -728,7 +721,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     /** Which drawn line the cursor is on: 1..items is an item, one past them is Reset Display, -1 is none. */
     private int lineAt(double mouseX, double mouseY) {
         var font = Minecraft.getInstance().font;
-        List<Component> lines = lines(config().sackTrackerItems(), true, approximate);
+        List<Component> lines = lines(config().sackTrackerItems(), true, approximate, "");
         float scale = config().sackTrackerScale() / 100F;
         for (int index = 1; index < lines.size(); index++) {
             float left = config().sackTrackerX() + 8 * scale;
@@ -749,16 +742,10 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         return true;
     }
 
-    /** "Enchanted Wheat: 1,234/10,000" - red until the goal, green from it; no goal shows the count alone. */
-    static List<Component> lines(List<SackItem> items, boolean interactive) {
-        return lines(items, interactive, Set.of());
-    }
-
-    static List<Component> lines(List<SackItem> items, boolean interactive, Set<SackItem> approximate) {
-        return lines(items, interactive, approximate, "");
-    }
-
-    /** Rows in {@code approximate} get a "~" in front of the count; a known profile is named in the title. */
+    /**
+     * "Enchanted Wheat: 1,234/10,000" - red until the goal, green from it; no goal shows the count alone. Rows in
+     * {@code approximate} get a "~" in front of the count; a known profile is named in the title.
+     */
     static List<Component> lines(List<SackItem> items, boolean interactive, Set<SackItem> approximate, String profile) {
         List<Component> lines = new ArrayList<>();
         MutableComponent title = Component.literal("Sack Tracker").withColor(0xFFFF55).withStyle(ChatFormatting.BOLD);

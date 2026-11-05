@@ -78,11 +78,6 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
         KungDebugRecorder.event("bow-draw", "start hand=" + hand + " slot=" + slot);
     }
 
-    /** Server ticks of the draw in progress, or of the one released under 200 ms ago; -1 otherwise. */
-    public int drawTicks() {
-        return isEnabled() && progress.visible(System.nanoTime()) ? progress.ticks() : -1;
-    }
-
     public void observeStop(Player player) {
         if (player != owner) return;
         validateDraw(Minecraft.getInstance());
@@ -101,7 +96,7 @@ public final class BowDrawIndicatorFeature extends ConfigurableFeature<MiscConfi
 
     /**
      * Ticks of the last released draw, if it ended under half a second ago. When spamming, the next
-     * draw is already running by the time the server's arrow comes back, so drawTicks would read that one.
+     * draw is already running by the time the server's arrow comes back, so the running draw's ticks would be read.
      */
     public int releasedTicks() {
         return isEnabled() && System.nanoTime() - releasedAtNanos < 500_000_000L ? releasedTicks : -1;

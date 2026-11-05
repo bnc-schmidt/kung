@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.misc;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -11,8 +12,6 @@ import java.util.regex.Pattern;
 
 /** Remembers revealed fields without mistaking the server's changing button prompts for cards. */
 public final class SuperpairsBoard {
-    private static final Pattern FORMATTING = Pattern.compile("§[0-9a-fk-or]", Pattern.CASE_INSENSITIVE);
-    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
     private static final Pattern ENCHANTMENT = Pattern.compile("[A-Za-z][A-Za-z '\\-]* [IVXLCDM]+");
     private static final Pattern ENCHANTING_XP = Pattern.compile("[\\d,.]+[kKmM]? Enchanting Exp(?: x\\d+)?");
     private final Set<Integer> boardSlots = new HashSet<>();
@@ -23,7 +22,7 @@ public final class SuperpairsBoard {
     private long revision;
     private long cachedRevision = -1;
     private List<CardCount> cachedCards = List.of();
-    private PairStats cachedSummary = new PairStats(0, 0, 0, 0, -1);
+    private PairStats cachedSummary = new PairStats(0, 0, 0, 0);
 
     public enum Kind { IGNORED, MARKER, REWARD, BONUS }
 
@@ -50,13 +49,12 @@ public final class SuperpairsBoard {
             || item.equals("bookshelf")) {
             return Kind.IGNORED;
         }
-        String name = clean(label).toLowerCase(Locale.ROOT);
+        String name = HypixelLocation.clean(label).toLowerCase(Locale.ROOT);
         if (name.isBlank()) {
             return Kind.IGNORED;
         }
         String prompt = name.endsWith("!") ? name.substring(0, name.length() - 1) : name;
-        if (prompt.equals("?") || prompt.equals("click any button")
-            || prompt.equals("click a second button") || prompt.equals("next button is instantly rewarded")) {
+        if (prompt.equals("?") || SuperpairsPlanner.Prompt.of(label) != SuperpairsPlanner.Prompt.UNKNOWN) {
             return Kind.MARKER;
         }
         if (item.equals("diamond") || prompt.equals("instant find") || prompt.equals("extra clicks")
@@ -134,24 +132,12 @@ public final class SuperpairsBoard {
         return boardSlots.stream().filter(slot -> !rewards.containsKey(slot) && !bonuses.contains(slot)).sorted().toList();
     }
 
-    /** True for the prompts a hidden card carries while the server takes a click. */
-    public static boolean acceptsClick(String prompt) {
-        String name = clean(prompt).toLowerCase(Locale.ROOT);
-        name = name.endsWith("!") ? name.substring(0, name.length() - 1) : name;
-        return name.equals("click any button") || name.equals("click a second button")
-            || name.equals("next button is instantly rewarded");
-    }
-
     public int boardSlotCount() {
         return boardSlots.size();
     }
 
     public int bonusSlotCount() {
         return bonuses.size();
-    }
-
-    public int rewardSlotCount() {
-        return rewards.size();
     }
 
     public long revision() {
@@ -198,14 +184,12 @@ public final class SuperpairsBoard {
         }
         int unknown = Math.max(0, boardSlots.size() - rewards.size() - bonuses.size());
         int maximumPairs = Math.max(0, (boardSlots.size() - bonuses.size()) / 2);
-        int exactPairs = !boardSlots.isEmpty() && unknown == 0 && rewards.size() % 2 == 0
-            ? rewards.size() / 2 : -1;
-        cachedSummary = new PairStats(pairs, singles, unknown, maximumPairs, exactPairs);
+        cachedSummary = new PairStats(pairs, singles, unknown, maximumPairs);
         cachedRevision = revision;
     }
 
     private static Card card(String itemId, String label, int count) {
-        String name = clean(label);
+        String name = HypixelLocation.clean(label);
         String amount = count > 1 ? " x" + count : "";
         return new Card(itemPath(itemId) + "|" + name.toLowerCase(Locale.ROOT) + "|" + count, name + amount);
     }
@@ -219,16 +203,12 @@ public final class SuperpairsBoard {
         return colon < 0 ? normalized : normalized.substring(colon + 1);
     }
 
-    private static String clean(String value) {
-        return value == null ? "" : WHITESPACE.matcher(FORMATTING.matcher(value).replaceAll("")).replaceAll(" ").trim();
-    }
-
     static String rewardLabel(String itemId, String displayName, List<String> lore) {
-        String name = clean(displayName);
+        String name = HypixelLocation.clean(displayName);
         // Hypixel also renders enchanted books as swords, bows and other equipment.
         if (itemPath(itemId).equals("enchanted_book") || name.equalsIgnoreCase("Enchanted Book")) {
             for (String line : lore) {
-                String enchantment = clean(line);
+                String enchantment = HypixelLocation.clean(line);
                 if (ENCHANTMENT.matcher(enchantment).matches()) return enchantment;
             }
         }
@@ -249,7 +229,7 @@ public final class SuperpairsBoard {
     }
 
     /** Known pairs are identities seen twice, not a claim that Hypixel awarded their rewards. */
-    public record PairStats(int knownPairs, int singleCards, int unknownFields, int maximumTotalPairs, int exactTotalPairs) {
+    public record PairStats(int knownPairs, int singleCards, int unknownFields, int maximumTotalPairs) {
         /** Each known single needs one hidden partner; remaining fields may still be bonuses. */
         public int maximumUnseenPairs() { return Math.max(0, (unknownFields - singleCards) / 2); }
     }

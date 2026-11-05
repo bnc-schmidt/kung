@@ -10,9 +10,7 @@ import java.util.List;
 import java.util.SplittableRandom;
 import java.util.function.IntFunction;
 import net.minecraft.client.Minecraft;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
-import net.minecraft.world.item.ItemStack;
 
 /**
  * Clicks a hidden Superpairs card at a time until no completely unseen pair is left (every click reveals one
@@ -76,12 +74,12 @@ public final class SuperpairsAutoReveal {
             }
             awaiting = -1;
         }
-        List<Integer> targets = targets(board, slot -> hiddenLabel(menu, slot));
+        List<Integer> targets = targets(board, slot -> SuperpairsHelperFeature.hiddenLabel(menu.slots.get(slot).getItem()));
         if (targets.isEmpty()) {
             PACER.idle();
             return;
         }
-        String prompt = hiddenLabel(menu, targets.getFirst());
+        String prompt = SuperpairsHelperFeature.hiddenLabel(menu.slots.get(targets.getFirst()).getItem());
         if (!ready(prompt, now - lastBoardPacketMillis)) {
             PACER.idle();
             return;
@@ -120,7 +118,7 @@ public final class SuperpairsAutoReveal {
             }
         }
         int slot = pick.slots().getFirst();
-        String prompt = hiddenLabel(menu, slot);
+        String prompt = SuperpairsHelperFeature.hiddenLabel(menu.slots.get(slot).getItem());
         if (prompt == null || !ready(prompt, now - lastBoardPacketMillis)) {
             PACER.idle();
             return;
@@ -147,7 +145,7 @@ public final class SuperpairsAutoReveal {
 
     /** Whether to click now: still long enough, and the prompt says the server takes a click (or nothing does). */
     static boolean ready(String prompt, long quietMillis) {
-        return quietMillis >= SETTLE_MILLIS && (SuperpairsBoard.acceptsClick(prompt) || quietMillis >= STALL_MILLIS);
+        return quietMillis >= SETTLE_MILLIS && (SuperpairsPlanner.Prompt.of(prompt) != SuperpairsPlanner.Prompt.UNKNOWN || quietMillis >= STALL_MILLIS);
     }
 
     /** Unseen slots whose card is still hidden; {@code hiddenLabel} is null for a slot showing anything else. */
@@ -159,16 +157,5 @@ public final class SuperpairsAutoReveal {
             }
         }
         return targets;
-    }
-
-    /** The button prompt of a hidden card, or null when the slot shows a card face up or nothing. */
-    private static String hiddenLabel(AbstractContainerMenu menu, int slot) {
-        ItemStack stack = menu.slots.get(slot).getItem();
-        if (stack.isEmpty()) {
-            return null;
-        }
-        String label = stack.getHoverName().getString();
-        String itemId = BuiltInRegistries.ITEM.getKey(stack.getItem()).toString();
-        return SuperpairsBoard.classify(itemId, label) == SuperpairsBoard.Kind.MARKER ? label : null;
     }
 }

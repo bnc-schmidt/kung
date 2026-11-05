@@ -20,7 +20,6 @@ public final class SuperpairsBoardTest {
         assertEquals(28, board.boardSlotCount());
         assertEquals(0, board.bonusSlotCount());
         assertEquals(28, board.summary().unknownFields());
-        assertEquals(-1, board.summary().exactTotalPairs());
     }
 
     @Test
@@ -36,12 +35,11 @@ public final class SuperpairsBoardTest {
         board.observe(54, 15, "bone_meal", "133k Enchanting Exp", 1);
         board.observe(54, 28, "bone_meal", "133k Enchanting Exp", 1);
         assertEquals(1, board.bonusSlotCount());
-        assertEquals(5, board.rewardSlotCount());
+        assertEquals(5, rewardCount(board));
         assertEquals(1, board.summary().knownPairs());
         assertEquals(3, board.summary().singleCards());
         assertEquals(22, board.summary().unknownFields());
         assertEquals(13, board.summary().maximumTotalPairs());
-        assertEquals(-1, board.summary().exactTotalPairs());
     }
 
     @Test
@@ -128,18 +126,15 @@ public final class SuperpairsBoardTest {
         board.observe(54, 13, "cyan_stained_glass", "?", 1);
         board.observe(54, 10, "pink_dye", "147k Enchanting Exp", 1);
         board.observe(54, 11, "pink_dye", "147k Enchanting Exp", 1);
-        assertEquals(-1, board.summary().exactTotalPairs());
         assertEquals(2, board.summary().maximumTotalPairs());
         board.observe(54, 12, "diamond", "Instant Find", 1);
         board.observe(54, 13, "diamond", "Extra Clicks", 1);
-        assertEquals(1, board.summary().exactTotalPairs());
         assertEquals(1, board.summary().maximumTotalPairs());
         board.reset();
         assertEquals(0, board.boardSlotCount());
         assertEquals(0, board.bonusSlotCount());
         assertTrue(board.cards().isEmpty());
         assertEquals(0, board.summary().knownPairs());
-        assertEquals(-1, board.summary().exactTotalPairs());
     }
 
     @Test
@@ -284,7 +279,7 @@ public final class SuperpairsBoardTest {
             if (slot == 41) assertEquals(0, board.summary().maximumUnseenPairs());
         }
         assertEquals(2, board.bonusSlotCount());
-        assertEquals(26, board.rewardSlotCount());
+        assertEquals(26, rewardCount(board));
         assertEquals(13, board.summary().knownPairs());
         assertEquals(0, board.summary().singleCards());
         assertEquals(0, board.summary().unknownFields());
@@ -300,6 +295,10 @@ public final class SuperpairsBoardTest {
         }
         assertEquals(SuperpairsBoard.Kind.REWARD, SuperpairsBoard.classify("feather", "Feather"));
         assertEquals(SuperpairsBoard.Kind.IGNORED, SuperpairsBoard.classify("bookshelf", "Remaining Clicks: 3"));
+    }
+
+    private static int rewardCount(SuperpairsBoard board) {
+        return board.cards().stream().mapToInt(SuperpairsBoard.CardCount::count).sum();
     }
 
     private static SuperpairsBoard fullBoard() {

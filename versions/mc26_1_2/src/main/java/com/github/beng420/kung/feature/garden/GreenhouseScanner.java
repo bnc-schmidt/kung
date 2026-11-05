@@ -10,19 +10,17 @@ import com.github.beng420.kung.feature.garden.GreenhouseSoilCheck.Ghost;
 import com.github.beng420.kung.feature.garden.GreenhouseScanNames.Resolution;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import com.github.beng420.kung.util.MenuItems;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.ResolvableProfile;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
@@ -272,7 +270,7 @@ final class GreenhouseScanner {
             double z = stand.getZ() - cornerZ;
             if (x < -GRID_MARGIN || x > GreenhouseGrid.SIZE + GRID_MARGIN
                 || z < -GRID_MARGIN || z > GreenhouseGrid.SIZE + GRID_MARGIN) continue;
-            Resolution resolution = GreenhouseScanNames.resolve(head.getHoverName().getString(), textureHash(head));
+            Resolution resolution = GreenhouseScanNames.resolve(head.getHoverName().getString(), MenuItems.skinHash(head));
             if (resolution.kind() == GreenhouseScanNames.Kind.IGNORED) continue;
             found.add(new Found(resolution.crop(), x, z));
             int dx = (int) Math.floor(x);
@@ -292,21 +290,6 @@ final class GreenhouseScanner {
             }
         }
         return found;
-    }
-
-    /** The skin hash of a player head: the last segment of the url in its first readable "textures" property. */
-    private static String textureHash(ItemStack head) {
-        try {
-            ResolvableProfile profile = head.get(DataComponents.PROFILE);
-            if (profile == null) return null;
-            for (var property : profile.partialProfile().properties().get("textures")) {
-                Optional<GreenhouseDumpFormat.Texture> texture = GreenhouseDumpFormat.texture(property.value());
-                if (texture.isPresent()) return texture.get().hash();
-            }
-        } catch (RuntimeException failure) {
-            return null;
-        }
-        return null;
     }
 
     /**

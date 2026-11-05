@@ -6,10 +6,10 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
-import com.github.beng420.kung.feature.garden.GreenhouseDumpFormat;
 import com.github.beng420.kung.feature.misc.SuperpairsBoard.CardCount;
 import com.github.beng420.kung.feature.misc.SuperpairsBoard.PairStats;
 import com.github.beng420.kung.feature.misc.SuperpairsPlanner.Pick;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.regex.Matcher;
@@ -30,12 +31,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
-import net.minecraft.core.component.DataComponents;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.component.ResolvableProfile;
 
 public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfig> {
     public static final SuperpairsHelperFeature INSTANCE = new SuperpairsHelperFeature();
@@ -53,8 +52,6 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     private static final int BEST_FRAME = 0xFF55FF55;
     private static final int PAIR_FRAME = 0xFFFFFFFF;
     private static final Pattern REMAINING_CLICKS = Pattern.compile("Remaining Clicks: (\\d+)");
-    private static final Pattern FORMATTING = Pattern.compile("§[0-9A-FK-ORa-fk-or]");
-    private static final Pattern WHITESPACE = Pattern.compile("\\s+");
 
     // Observations and rendering run on the client thread after vanilla applies packets.
     private static final SuperpairsBoard board = new SuperpairsBoard();
@@ -181,7 +178,7 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     }
 
     static boolean isGameTitle(String title) {
-        String normalized = cleanText(title).toLowerCase(Locale.ROOT);
+        String normalized = HypixelLocation.clean(title).toLowerCase(Locale.ROOT);
         return normalized.equals("superpairs")
             || (normalized.startsWith("superpairs (") && normalized.endsWith(")"));
     }
@@ -206,26 +203,8 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         if (board.revision() != previousRevision && kind != SuperpairsBoard.Kind.MARKER) {
             KungDebugRecorder.event("superpairs", "reveal container=" + activeMenu.containerId
                 + " slot=" + slot + " kind=" + kind + " item=" + itemId
-                + " name=\"" + label + "\" count=" + stack.getCount() + " texture=" + textureHash(stack));
+                + " name=\"" + label + "\" count=" + stack.getCount() + " texture=" + Objects.requireNonNullElse(MenuItems.skinHash(stack), "-"));
         }
-    }
-
-    /** The skin hash of a player head, so a trace can tell look-alike heads apart; "-" when there is none. */
-    private static String textureHash(ItemStack stack) {
-        try {
-            ResolvableProfile profile = stack.get(DataComponents.PROFILE);
-            if (profile != null) {
-                for (var property : profile.partialProfile().properties().get("textures")) {
-                    var texture = GreenhouseDumpFormat.texture(property.value());
-                    if (texture.isPresent()) {
-                        return texture.get().hash();
-                    }
-                }
-            }
-        } catch (RuntimeException ignored) {
-            // a trace line is never worth a crash
-        }
-        return "-";
     }
 
     /**
@@ -272,7 +251,7 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     }
 
     /** The hidden button's name when the stack is one, else null. */
-    private static String hiddenLabel(ItemStack stack) {
+    static String hiddenLabel(ItemStack stack) {
         if (stack.isEmpty()) {
             return null;
         }
@@ -350,11 +329,6 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
     private static String cleanName(ItemStack stack) {
         return SuperpairsBoard.rewardLabel(BuiltInRegistries.ITEM.getKey(stack.getItem()).getPath(),
             stack.getHoverName().getString(), MenuItems.lore(stack));
-    }
-
-    private static String cleanText(String value) {
-        return value == null ? "" : WHITESPACE.matcher(FORMATTING.matcher(value).replaceAll(""))
-            .replaceAll(" ").trim();
     }
 
     private static void recordProgress() {

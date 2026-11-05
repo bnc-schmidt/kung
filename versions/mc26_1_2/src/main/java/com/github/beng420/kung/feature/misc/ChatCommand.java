@@ -104,76 +104,49 @@ enum ChatCommand {
         if (isMayorCommand() && !config.specialMayorsChatCommandsEnabled()) return false;
         if (zodiac() != null && !config.yearlyEventsChatCommandsEnabled()) return false;
         return switch (this) {
-            case C -> config.c50ChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.c50PartyCommandsEnabled();
-                case GUILD -> config.c50GuildCommandsEnabled();
-                case ALL -> config.c50AllChatCommandsEnabled();
-                case PRIVATE -> config.c50PrivateCommandsEnabled();
-                case COOP -> config.c50CoopCommandsEnabled();
-            };
-            case CA, CA_ARCHER, CA_BERSERK, CA_HEALER, CA_MAGE, CA_TANK -> config.ca50ChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.ca50PartyCommandsEnabled();
-                case GUILD -> config.ca50GuildCommandsEnabled();
-                case ALL -> config.ca50AllChatCommandsEnabled();
-                case PRIVATE -> config.ca50PrivateCommandsEnabled();
-                case COOP -> config.ca50CoopCommandsEnabled();
-            };
-            case TPS -> config.tpsChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.tpsPartyCommandsEnabled();
-                case GUILD -> config.tpsGuildCommandsEnabled();
-                case ALL -> config.tpsAllChatCommandsEnabled();
-                case PRIVATE -> config.tpsPrivateCommandsEnabled();
-                case COOP -> config.tpsCoopCommandsEnabled();
-            };
-            case JERRY -> config.jerryChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.jerryPartyCommandsEnabled();
-                case GUILD -> config.jerryGuildCommandsEnabled();
-                case ALL -> config.jerryAllChatCommandsEnabled();
-                case PRIVATE -> config.jerryPrivateCommandsEnabled();
-                case COOP -> config.jerryCoopCommandsEnabled();
-            };
-            case SCORPIUS -> config.scorpChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.scorpPartyCommandsEnabled();
-                case GUILD -> config.scorpGuildCommandsEnabled();
-                case ALL -> config.scorpAllChatCommandsEnabled();
-                case PRIVATE -> config.scorpPrivateCommandsEnabled();
-                case COOP -> config.scorpCoopCommandsEnabled();
-            };
-            case DERPY -> config.derpyChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.derpyPartyCommandsEnabled();
-                case GUILD -> config.derpyGuildCommandsEnabled();
-                case ALL -> config.derpyAllChatCommandsEnabled();
-                case PRIVATE -> config.derpyPrivateCommandsEnabled();
-                case COOP -> config.derpyCoopCommandsEnabled();
-            };
-            case YOTP -> config.yotpChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.yotpPartyCommandsEnabled();
-                case GUILD -> config.yotpGuildCommandsEnabled();
-                case ALL -> config.yotpAllChatCommandsEnabled();
-                case PRIVATE -> config.yotpPrivateCommandsEnabled();
-                case COOP -> config.yotpCoopCommandsEnabled();
-            };
-            case YOTW -> config.yotwChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.yotwPartyCommandsEnabled();
-                case GUILD -> config.yotwGuildCommandsEnabled();
-                case ALL -> config.yotwAllChatCommandsEnabled();
-                case PRIVATE -> config.yotwPrivateCommandsEnabled();
-                case COOP -> config.yotwCoopCommandsEnabled();
-            };
-            case YOTS -> config.yotsChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.yotsPartyCommandsEnabled();
-                case GUILD -> config.yotsGuildCommandsEnabled();
-                case ALL -> config.yotsAllChatCommandsEnabled();
-                case PRIVATE -> config.yotsPrivateCommandsEnabled();
-                case COOP -> config.yotsCoopCommandsEnabled();
-            };
-            case A, B, H, M, T -> config.classLevelChatCommandEnabled() && switch (channel) {
-                case PARTY -> config.classLevelPartyCommandsEnabled();
-                case GUILD -> config.classLevelGuildCommandsEnabled();
-                case ALL -> config.classLevelAllChatCommandsEnabled();
-                case PRIVATE -> config.classLevelPrivateCommandsEnabled();
-                case COOP -> config.classLevelCoopCommandsEnabled();
-            };
+            case C -> config.c50ChatCommandEnabled() && pick(channel, config.c50PartyCommandsEnabled(),
+                config.c50GuildCommandsEnabled(), config.c50AllChatCommandsEnabled(),
+                config.c50PrivateCommandsEnabled(), config.c50CoopCommandsEnabled());
+            case CA, CA_ARCHER, CA_BERSERK, CA_HEALER, CA_MAGE, CA_TANK -> config.ca50ChatCommandEnabled()
+                && pick(channel, config.ca50PartyCommandsEnabled(), config.ca50GuildCommandsEnabled(),
+                config.ca50AllChatCommandsEnabled(), config.ca50PrivateCommandsEnabled(), config.ca50CoopCommandsEnabled());
+            case TPS -> config.tpsChatCommandEnabled() && pick(channel, config.tpsPartyCommandsEnabled(),
+                config.tpsGuildCommandsEnabled(), config.tpsAllChatCommandsEnabled(),
+                config.tpsPrivateCommandsEnabled(), config.tpsCoopCommandsEnabled());
+            case JERRY -> config.jerryChatCommandEnabled() && pick(channel, config.jerryPartyCommandsEnabled(),
+                config.jerryGuildCommandsEnabled(), config.jerryAllChatCommandsEnabled(),
+                config.jerryPrivateCommandsEnabled(), config.jerryCoopCommandsEnabled());
+            case SCORPIUS -> config.scorpChatCommandEnabled() && pick(channel, config.scorpPartyCommandsEnabled(),
+                config.scorpGuildCommandsEnabled(), config.scorpAllChatCommandsEnabled(),
+                config.scorpPrivateCommandsEnabled(), config.scorpCoopCommandsEnabled());
+            case DERPY -> config.derpyChatCommandEnabled() && pick(channel, config.derpyPartyCommandsEnabled(),
+                config.derpyGuildCommandsEnabled(), config.derpyAllChatCommandsEnabled(),
+                config.derpyPrivateCommandsEnabled(), config.derpyCoopCommandsEnabled());
+            case YOTP -> config.yotpChatCommandEnabled() && pick(channel, config.yotpPartyCommandsEnabled(),
+                config.yotpGuildCommandsEnabled(), config.yotpAllChatCommandsEnabled(),
+                config.yotpPrivateCommandsEnabled(), config.yotpCoopCommandsEnabled());
+            case YOTW -> config.yotwChatCommandEnabled() && pick(channel, config.yotwPartyCommandsEnabled(),
+                config.yotwGuildCommandsEnabled(), config.yotwAllChatCommandsEnabled(),
+                config.yotwPrivateCommandsEnabled(), config.yotwCoopCommandsEnabled());
+            case YOTS -> config.yotsChatCommandEnabled() && pick(channel, config.yotsPartyCommandsEnabled(),
+                config.yotsGuildCommandsEnabled(), config.yotsAllChatCommandsEnabled(),
+                config.yotsPrivateCommandsEnabled(), config.yotsCoopCommandsEnabled());
+            case A, B, H, M, T -> config.classLevelChatCommandEnabled() && pick(channel,
+                config.classLevelPartyCommandsEnabled(), config.classLevelGuildCommandsEnabled(),
+                config.classLevelAllChatCommandsEnabled(), config.classLevelPrivateCommandsEnabled(),
+                config.classLevelCoopCommandsEnabled());
+        };
+    }
+
+    /** The setting of the channel the command came from. */
+    private static boolean pick(ChatChannel channel, boolean party, boolean guild, boolean all, boolean priv,
+                                boolean coop) {
+        return switch (channel) {
+            case PARTY -> party;
+            case GUILD -> guild;
+            case ALL -> all;
+            case PRIVATE -> priv;
+            case COOP -> coop;
         };
     }
 

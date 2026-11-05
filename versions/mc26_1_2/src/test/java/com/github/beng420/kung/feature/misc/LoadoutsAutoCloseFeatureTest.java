@@ -23,6 +23,13 @@ public final class LoadoutsAutoCloseFeatureTest {
     }
 
     @Test
+    public void keyLabelsKeepTheirOwnNames() {
+        assertEquals("Backspace", LoadoutsAutoCloseFeature.keybindDisplay("key:259:14"));
+        assertEquals("Space", LoadoutsAutoCloseFeature.keybindDisplay("key:32:57"));
+        assertEquals("Shift", LoadoutsAutoCloseFeature.keybindDisplay("key:340:42"));
+    }
+
+    @Test
     public void playerNamedLoadoutsOnTheGridAreNotTakenForMenuButtons() {
         // The owner's Loadout 7 (slot 32) is "Kuudra Clear"; the "clear" button word used to swallow its bind.
         assertTrue(LoadoutsAutoCloseFeature.nameAllowsSelection(32, "Kuudra Clear"));

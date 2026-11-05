@@ -64,12 +64,9 @@ public final class SuperpairsValueTest {
     }
 
     @Test
-    public void textStaysReadableOnEveryColor() {
+    public void everyColorIsOpaque() {
         for (int kind = 0; kind < 14; kind++) {
-            int color = PairStyle.color(kind);
-            double luminance = 0.299 * (color >> 16 & 0xFF) + 0.587 * (color >> 8 & 0xFF) + 0.114 * (color & 0xFF);
-            assertEquals(luminance > 140 ? 0xFF000000 : 0xFFFFFFFF, PairStyle.textColor(kind));
-            assertEquals("Opaque", 0xFF, color >>> 24);
+            assertEquals("Opaque", 0xFF, PairStyle.color(kind) >>> 24);
         }
     }
 }

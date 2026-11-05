@@ -11,12 +11,13 @@ import java.util.Set;
 /** The SkyBlock item ids that fit in a sack (bundled from NotEnoughUpdates-REPO, MIT), for tracking items outside sack menus. */
 final class SackItems {
     private static final String RESOURCE = "kung-sack-items.json";
+    private static final Set<String> IDS = load();
 
     private SackItems() { }
 
     /** True for a sack item id; Hypixel writes "INK_SACK:3", the bundle "INK_SACK-3". */
     static boolean contains(String id) {
-        return id != null && Holder.IDS.contains(id.replace(':', '-'));
+        return id != null && IDS.contains(id.replace(':', '-'));
     }
 
     private static Set<String> load() {
@@ -29,9 +30,5 @@ final class SackItems {
             KungMod.LOGGER.warn("Sack item list unusable, tracking outside sacks is off.", exception);
         }
         return Set.copyOf(ids);
-    }
-
-    private static final class Holder {
-        static final Set<String> IDS = load();
     }
 }

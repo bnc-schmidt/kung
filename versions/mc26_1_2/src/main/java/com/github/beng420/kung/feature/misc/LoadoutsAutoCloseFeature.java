@@ -194,7 +194,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
         int key = parseKeybindPart(keybind, 1, -1);
         int scancode = parseKeybindPart(keybind, 2, 0);
         if (key >= 0) {
-            return compactHotkeyLabel(keyName(key));
+            return keyName(key);
         }
         return scancode == 0 ? "None" : "Scan " + scancode;
     }
@@ -379,7 +379,7 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return;
         }
 
-        String text = cleanMessage(message.getString());
+        String text = HypixelLocation.clean(message.getString());
         LoadoutEquipResult equipResult = loadoutEquipResult(text);
         if (equipResult == LoadoutEquipResult.NONE) {
             return;
@@ -512,13 +512,6 @@ public final class LoadoutsAutoCloseFeature extends ConfigurableFeature<MiscConf
             return LoadoutEquipResult.ALREADY_EQUIPPED;
         }
         return LoadoutEquipResult.NONE;
-    }
-
-    private static String cleanMessage(String text) {
-        if (text == null) {
-            return "";
-        }
-        return HypixelLocation.clean(text);
     }
 
     private static int matchingKeybindIndex(KeyEvent event) {
