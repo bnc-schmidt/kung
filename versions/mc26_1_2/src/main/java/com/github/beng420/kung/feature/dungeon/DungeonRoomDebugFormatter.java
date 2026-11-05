@@ -59,9 +59,7 @@ final class DungeonRoomDebugFormatter {
         }
         for (Map.Entry<DungeonLiveMapWriter.CellKey, DungeonKnownRoomCatalog.KnownCoreHint> entry
             : plan.hints().entrySet()) {
-            DungeonMapSnapshot.ObservedPoint observedPoint =
-                snapshot.pointAt(entry.getKey().x() * 2, entry.getKey().z() * 2);
-            DungeonScanPoint point = observedPoint == null ? null : observedPoint.point();
+            DungeonScanPoint point = snapshot.pointAt(entry.getKey().x() * 2, entry.getKey().z() * 2);
             lines.add("H " + entry.getValue().name()
                 + " " + entry.getValue().secrets()
                 + "s cell=" + entry.getKey().x() + "," + entry.getKey().z()

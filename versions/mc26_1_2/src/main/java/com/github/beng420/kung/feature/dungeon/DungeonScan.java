@@ -49,7 +49,7 @@ public final class DungeonScan {
         int stableCoreHash = NO_CORE_HASH;
         int doorBlockId = NO_DOOR_BLOCK;
         DungeonDoorKind doorKind = DungeonDoorKind.NONE;
-        DungeonMapSnapshot.ObservedPoint previous = snapshot.pointAt(gridX, gridZ);
+        DungeonScanPoint previous = snapshot.pointAt(gridX, gridZ);
         if (loaded && kind == DungeonScanPointKind.ROOM) {
             coreHash = DungeonScanUtils.getCoreHash(level, worldX, worldZ);
             stableCoreHash = DungeonScanUtils.getStableCoreHash(level, worldX, worldZ);
@@ -58,7 +58,7 @@ public final class DungeonScan {
         if (loaded && kind == DungeonScanPointKind.DOOR) {
             doorBlockId = DungeonScanUtils.getBlockId(level, worldX, DungeonScanUtils.MIN_DOOR_SCAN_Y, worldZ);
             doorKind = DungeonScanUtils.detectDoorKind(level, gridX, gridZ, worldX, worldZ,
-                previous == null ? DungeonDoorKind.NONE : previous.point().doorKind());
+                previous == null ? DungeonDoorKind.NONE : previous.doorKind());
         }
 
         return new DungeonScanPoint(

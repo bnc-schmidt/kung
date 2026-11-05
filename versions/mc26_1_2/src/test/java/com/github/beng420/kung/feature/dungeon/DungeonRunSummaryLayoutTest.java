@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.message.KungMessages;
 import com.google.gson.JsonParser;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
@@ -14,6 +15,12 @@ import net.minecraft.network.chat.TextColor;
 import org.junit.Test;
 
 public final class DungeonRunSummaryLayoutTest {
+    private static Component playerLine(String name, int nameColor, String details, int nameColumnWidth,
+                                        ToIntFunction<String> width) {
+        return DungeonRunSummaryLayout.playerLine(name, nameColor,
+            KungMessages.highlight(details).withStyle(DungeonRunSummaryLayout.TEXT_STYLE), nameColumnWidth, width);
+    }
+
     @Test
     public void proportionalNamesStartTheirSecretColumnAtExactlyTheSamePixel() {
         List<String> names = List.of("iiiiiiii", "WWWW", "Alice");
@@ -25,7 +32,7 @@ public final class DungeonRunSummaryLayoutTest {
 
     @Test
     public void customPaddingFontNeverLeaksIntoNamesOrStats() {
-        Component line = DungeonRunSummaryLayout.playerLine(
+        Component line = playerLine(
             "Alice", DungeonRunStats.DungeonClass.MAGE.argb(), "12 Secrets | 2-4 Rooms | P", 40, ignored -> 25);
         assertEquals("Alice", line.getSiblings().get(0).getString());
         assertEquals(FontDescription.DEFAULT, line.getSiblings().get(0).getStyle().getFont());
@@ -39,7 +46,7 @@ public final class DungeonRunSummaryLayoutTest {
     @Test
     public void namesAreBoldSoARestyledNameCannotShiftItsRow() {
         ToIntFunction<String> width = text -> text.chars().map(c -> c == 0xE000 ? 1 : 5).sum();
-        Component line = DungeonRunSummaryLayout.playerLine("Bob", 0xFFFFFFFF, "4 Secrets", 80, width);
+        Component line = playerLine("Bob", 0xFFFFFFFF, "4 Secrets", 80, width);
         assertTrue(line.getSiblings().get(0).getStyle().isBold());
         assertFalse(line.getSiblings().get(2).getStyle().isBold());
         // Bold adds one pixel per glyph; every row still starts its details at the same pixel.
@@ -75,7 +82,7 @@ public final class DungeonRunSummaryLayoutTest {
 
     @Test
     public void nameCarriesTheClassColourAndDetailsAreHighlightedNotWhite() {
-        Component line = DungeonRunSummaryLayout.playerLine(
+        Component line = playerLine(
             "Alice", DungeonRunStats.DungeonClass.MAGE.argb(), "12/52 Secrets | 2-4 Rooms | 0 Deaths", 40,
             ignored -> 25);
         assertEquals(TextColor.fromRgb(0x62DFFF), line.getSiblings().get(0).getStyle().getColor());
@@ -84,7 +91,7 @@ public final class DungeonRunSummaryLayoutTest {
         assertEquals(TextColor.fromRgb(0xFFCC55), details.getSiblings().get(1).getStyle().getColor());
         assertEquals(TextColor.fromRgb(0x555555), details.getSiblings().get(5).getStyle().getColor());
 
-        Component unknown = DungeonRunSummaryLayout.playerLine(
+        Component unknown = playerLine(
             "Bob", DungeonRunStats.DungeonClass.UNKNOWN.argb(), "?/52 Secrets", 40, ignored -> 25);
         assertEquals(TextColor.fromRgb(0xE9EDF2), unknown.getSiblings().get(0).getStyle().getColor());
     }
@@ -137,7 +144,7 @@ public final class DungeonRunSummaryLayoutTest {
     private static void assertAligned(List<String> names, ToIntFunction<String> width) {
         int column = DungeonRunSummaryLayout.nameColumnWidth(names, width);
         for (String name : names) {
-            Component line = DungeonRunSummaryLayout.playerLine(name, 0xFFFFFFFF, "4 Secrets", column, width);
+            Component line = playerLine(name, 0xFFFFFFFF, "4 Secrets", column, width);
             String padding = line.getSiblings().get(1).getString();
             assertTrue(padding.codePoints().allMatch(c -> c == 0xE000));
             assertEquals(column, DungeonRunSummaryLayout.nameWidth(name, width) + padding.length());

@@ -230,9 +230,8 @@ public final class DungeonMimicStaticChests {
         int minZ = match.components().stream().mapToInt(DungeonKnownRoomCatalog.MatchedComponent::roomGridZ).min().orElseThrow();
         List<DungeonStaticChestPattern.Cell> cells = new ArrayList<>();
         for (var component : match.components()) {
-            var observed = tracker.mapSnapshot().pointAt(component.roomGridX() * 2, component.roomGridZ() * 2);
-            if (observed == null) return null;
-            var point = observed.point();
+            var point = tracker.mapSnapshot().pointAt(component.roomGridX() * 2, component.roomGridZ() * 2);
+            if (point == null) return null;
             Set<Integer> cores = new HashSet<>(), stable = new HashSet<>();
             if (point.coreHash() != 0) cores.add(point.coreHash());
             if (point.stableCoreHash() != 0) stable.add(point.stableCoreHash());

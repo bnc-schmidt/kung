@@ -72,7 +72,7 @@ public final class RareDungeonRoomCatalogTest {
         // message (1).txt, 16:37:34.049: the later run's unknown cell, identified by the user.
         snapshot.addScan(1, 1789828654049L, 5, 5, List.of(new DungeonScanPoint(2, 2, -153, -153,
             DungeonScanPointKind.ROOM, true, 1351532750, -195425460, 0, DungeonDoorKind.NONE, true)));
-        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
         assertEquals(1, plan.matches().size());
         assertEquals(RoomType.RARE, plan.roomTypeAt(1, 1));
         var room = DungeonRoomRenderLayout.from(plan).rooms().getFirst();
@@ -105,7 +105,7 @@ public final class RareDungeonRoomCatalogTest {
         snapshot.observeMapVisibleRoom(1, 1);
         snapshot.addScan(1, 1792300000000L, 5, 5, List.of(new DungeonScanPoint(2, 2, -153, -153,
             DungeonScanPointKind.ROOM, true, core, stable, 0, DungeonDoorKind.NONE, true)));
-        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
         assertEquals(1, plan.matches().size());
         assertEquals(RoomType.RARE, plan.roomTypeAt(1, 1));
         assertEquals("Hanging Vines", DungeonRoomRenderLayout.from(plan).rooms().getFirst().template().name());

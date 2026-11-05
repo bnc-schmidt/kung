@@ -11,46 +11,36 @@ final class DungeonMapItems {
     private static Object cachedLevel;
     private static MapItemSavedData cachedMapData;
     private static int cachedLookupTick = Integer.MIN_VALUE;
-    private static MapItemSavedData cachedLookupMapData;
 
     private DungeonMapItems() {
     }
 
     static MapItemSavedData mapData(Minecraft client) {
         if (client.level == null || client.player == null) {
-            clearCache();
+            cachedLevel = null;
+            resetMapDataCache();
             return null;
         }
 
         if (cachedLevel != client.level) {
             cachedLevel = client.level;
-            clearMapDataCache();
+            resetMapDataCache();
         }
 
         int tick = client.player.tickCount;
-        if (cachedLookupTick == tick) {
-            return cachedLookupMapData != null ? cachedLookupMapData : cachedMapData;
-        }
-
-        MapItemSavedData found = findMapData(client);
-        cachedLookupTick = tick;
-        cachedLookupMapData = found;
-        if (found != null) {
-            cachedMapData = found;
-            return found;
+        if (cachedLookupTick != tick) {
+            MapItemSavedData found = findMapData(client);
+            cachedLookupTick = tick;
+            if (found != null) {
+                cachedMapData = found;
+            }
         }
         return cachedMapData;
     }
 
-    private static void clearCache() {
-        cachedLevel = null;
-        clearMapDataCache();
-    }
-
-    private static void clearMapDataCache() {
+    private static void resetMapDataCache() {
         cachedMapData = null;
         cachedLookupTick = Integer.MIN_VALUE;
-        cachedLookupMapData = null;
     }
 
     private static MapItemSavedData findMapData(Minecraft client) {

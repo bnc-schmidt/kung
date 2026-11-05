@@ -40,19 +40,11 @@ final class DungeonEnteredRooms {
 
     /** A door sits between two room cells (one scan coordinate odd). */
     static boolean enteredDoor(MatchRenderPlan plan, CellKey door) {
-        return entered(plan, firstSide(door)) && entered(plan, secondSide(door));
+        return entered(plan, door.firstSide()) && entered(plan, door.secondSide());
     }
 
     static boolean exitOfEnteredRoom(MatchRenderPlan plan, CellKey door) {
-        return entered(plan, firstSide(door)) || entered(plan, secondSide(door));
-    }
-
-    private static CellKey firstSide(CellKey door) {
-        return new CellKey(door.x() / 2, door.z() / 2);
-    }
-
-    private static CellKey secondSide(CellKey door) {
-        return new CellKey((door.x() + 1) / 2, (door.z() + 1) / 2);
+        return entered(plan, door.firstSide()) || entered(plan, door.secondSide());
     }
 
     /** Into an unentered room a door keeps its kind (open, wither, blood - all visible in the world) and nothing else. */
@@ -73,7 +65,7 @@ final class DungeonEnteredRooms {
     }
 
     private static boolean fairyEntered(MatchRenderPlan plan, CellKey door) {
-        for (CellKey side : List.of(firstSide(door), secondSide(door))) {
+        for (CellKey side : List.of(door.firstSide(), door.secondSide())) {
             if (plan.roomTypes().get(side) == RoomType.FAIRY && entered(plan, side)) return true;
         }
         return false;
@@ -86,7 +78,7 @@ final class DungeonEnteredRooms {
     static Set<CellKey> unexplored(MatchRenderPlan view) {
         Set<CellKey> cells = new HashSet<>();
         for (CellKey door : view.externalDoors().keySet()) {
-            for (CellKey side : List.of(firstSide(door), secondSide(door))) {
+            for (CellKey side : List.of(door.firstSide(), door.secondSide())) {
                 if (!entered(view, side) && DungeonScanUtils.isValidRoomGrid(side.x(), side.z())) cells.add(side);
             }
         }
@@ -131,8 +123,8 @@ final class DungeonEnteredRooms {
                 if (!snapshot.isFullyLoadedRoom(roomGridX, roomGridZ) || plan.roomOwners().containsKey(cell)
                     || plan.hints().containsKey(cell)
                     || mapVisible.contains(new DungeonMapSnapshot.GridKey(roomGridX, roomGridZ))) return false;
-                DungeonMapSnapshot.ObservedPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
-                if (point != null && !DungeonRoomClassifier.isEmptyCore(point.point().coreHash())) return false;
+                DungeonScanPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
+                if (point != null && !DungeonRoomClassifier.isEmptyCore(point.coreHash())) return false;
             }
         }
         return true;

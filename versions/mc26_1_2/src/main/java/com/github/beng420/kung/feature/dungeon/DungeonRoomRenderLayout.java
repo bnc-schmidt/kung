@@ -8,7 +8,6 @@ import com.github.beng420.kung.feature.dungeon.DungeonLiveMapWriter.MatchRenderP
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
-import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -31,7 +30,7 @@ record DungeonRoomRenderLayout(List<MatchedRoom> rooms, Set<CellKey> cells, Set<
             new RoomTemplate(hint.name(), hint.type(), hint.secrets(), hint.crypts(), hint.prince(), 0, List.of())));
 
         List<CellKey> ordered = new ArrayList<>(plan.roomOwners().keySet());
-        ordered.sort(Comparator.comparingInt(CellKey::z).thenComparingInt(CellKey::x));
+        ordered.sort(CellKey.ORDER);
         Set<CellKey> seen = new HashSet<>();
         Set<CellKey> rendered = new HashSet<>();
         List<MatchedRoom> rooms = new ArrayList<>();
@@ -44,11 +43,9 @@ record DungeonRoomRenderLayout(List<MatchedRoom> rooms, Set<CellKey> cells, Set<
             while (!pending.isEmpty()) {
                 CellKey cell = pending.removeFirst();
                 group.add(cell);
-                for (CellKey neighbor : List.of(new CellKey(cell.x() - 1, cell.z()),
-                    new CellKey(cell.x() + 1, cell.z()), new CellKey(cell.x(), cell.z() - 1),
-                    new CellKey(cell.x(), cell.z() + 1))) {
+                for (CellKey neighbor : cell.neighbors()) {
                     if (owner.equals(plan.roomOwners().get(neighbor))
-                        && plan.internalDoors().contains(new CellKey(cell.x() + neighbor.x(), cell.z() + neighbor.z()))
+                        && plan.internalDoors().contains(cell.doorTo(neighbor))
                         && seen.add(neighbor)) {
                         pending.addLast(neighbor);
                     }
@@ -71,9 +68,8 @@ record DungeonRoomRenderLayout(List<MatchedRoom> rooms, Set<CellKey> cells, Set<
                 && !predictedCells.containsAll(DungeonRoomPrediction.cells(room)))) continue;
             Set<CellKey> predictedDoors = new HashSet<>();
             for (CellKey first : predictedCells) for (CellKey second : predictedCells) {
-                if (Math.abs(first.x() - second.x()) + Math.abs(first.z() - second.z()) == 1) {
-                    predictedDoors.add(new CellKey(first.x() + second.x(), first.z() + second.z()));
-                }
+                CellKey door = first.doorTo(second);
+                if (door != null) predictedDoors.add(door);
             }
             if (predictedDoors.stream().anyMatch(plan.externalDoors()::containsKey)) continue;
             rooms.removeIf(room -> room.components().stream().anyMatch(c -> prediction.contains(c.roomGridX(), c.roomGridZ())));
@@ -131,7 +127,7 @@ record DungeonRoomRenderLayout(List<MatchedRoom> rooms, Set<CellKey> cells, Set<
                 template.prince(), template.variantNumber(), template.components());
         }
         List<MatchedComponent> grouped = cells.stream()
-            .sorted(Comparator.comparingInt(CellKey::z).thenComparingInt(CellKey::x))
+            .sorted(CellKey.ORDER)
             .map(cell -> components.getOrDefault(cell, new MatchedComponent(cell.x(), cell.z(), 0)))
             .toList();
         rooms.add(new MatchedRoom(template, grouped));

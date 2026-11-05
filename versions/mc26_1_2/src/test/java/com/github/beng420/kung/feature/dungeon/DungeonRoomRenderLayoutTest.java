@@ -142,7 +142,7 @@ public final class DungeonRoomRenderLayoutTest {
             for (var cell : LAYERS_CELLS) {
                 if (mapVisible) snapshot.observeMapVisibleRoom(cell.x(), cell.z());
                 else {
-                    var point = snapshot.pointAt(cell.x() * 2, cell.z() * 2).point();
+                    var point = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
                     snapshot.addScan(1, 1, 5, 5, List.of(new DungeonScanPoint(point.gridX(), point.gridZ(),
                         point.worldX(), point.worldZ(), point.kind(), point.loaded(), point.coreHash(),
                         point.stableCoreHash(), point.doorBlockId(), point.doorKind(), true)));
@@ -201,7 +201,7 @@ public final class DungeonRoomRenderLayoutTest {
         assertTrue(plan.matches().isEmpty());
         assertEquals(0, plan.hintAt(0, 0).secrets());
         assertEquals(0, plan.hintAt(1, 0).secrets());
-        assertEquals(3, plan.remoteRoomSecretsFoundOnly(1, 0));
+        assertEquals(3, plan.remoteRoomSecretsFound(1, 0, 0));
 
         DungeonRoomRenderLayout layout = DungeonRoomRenderLayout.from(plan);
         assertEquals(1, layout.rooms().size());

@@ -36,9 +36,6 @@ public final class DungeonStateTracker {
     private static final long RUN_SUMMARY_DELAY_TICKS = 20;
     private static final long LIFECYCLE_DUPLICATE_WINDOW_TICKS = 20;
     private static final long LIFECYCLE_MESSAGE_WINDOW_TICKS = 80;
-    private static final int DEBUG_ROOM_SIZE = 19;
-    private static final int DEBUG_DOOR_SIZE = 6;
-    private static final int DEBUG_CELL_GAP = 1;
     private static final int PLAYER_IDENTITY_MATCH_DISTANCE = 12;
     private static final int MAX_BABY_ZOMBIE_DEATHS = 8;
     private final DungeonRoomRepository roomRepository;
@@ -264,9 +261,9 @@ public final class DungeonStateTracker {
         lines.add("MapDecorations count=" + decorationCount);
         for (MapDecoration decoration : map.getDecorations()) {
             String name = DungeonMapCheckmarkReader.decorationName(decoration);
-            DungeonMapCheckmarkReader.MapPixel pixel = DungeonMapCheckmarkReader.mapPixelForDecoration(decoration);
+            DungeonMapCheckmarkReader.MapPixel pixel = DungeonMapCheckmarkReader.decorationPixel(decoration);
             DungeonMapCheckmarkReader.MapPixel overlayPixel =
-                DungeonMapCheckmarkReader.overlayPixelForDecoration(decoration, client, scanRecorder.mapSnapshot(), 19, 6, 1);
+                DungeonMapCheckmarkReader.overlayPixelForDecoration(decoration, client, scanRecorder.mapSnapshot());
             DungeonMapCheckmarkReader.MapRoom room =
                 DungeonMapCheckmarkReader.roomFromDecoration(decoration, client, scanRecorder.mapSnapshot());
             boolean strictParty = isStrictPartyMapDecoration(client, decoration, name);
@@ -350,7 +347,7 @@ public final class DungeonStateTracker {
         StringBuilder roomStates = new StringBuilder();
         for (int roomGridZ = 0; roomGridZ <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridZ++) {
             for (int roomGridX = 0; roomGridX <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridX++) {
-                DungeonMapSnapshot.ObservedPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
+                DungeonScanPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
                 if (point == null
                     && !snapshot.isVisitedRoom(roomGridX, roomGridZ)
                     && !snapshot.isClearedRoom(roomGridX, roomGridZ)
@@ -362,7 +359,7 @@ public final class DungeonStateTracker {
                 }
                 roomStates.append(roomGridX).append(',').append(roomGridZ)
                     .append(":hash=")
-                    .append(point == null ? "none" : point.point().coreHash() + "/" + point.point().stableCoreHash())
+                    .append(point == null ? "none" : point.coreHash() + "/" + point.stableCoreHash())
                     .append(":v=").append(snapshot.isVisitedRoom(roomGridX, roomGridZ))
                     .append(":c=").append(snapshot.isClearedRoom(roomGridX, roomGridZ))
                     .append(":done=").append(snapshot.isCompletedRoom(roomGridX, roomGridZ));
@@ -427,7 +424,7 @@ public final class DungeonStateTracker {
                 + "," + player.blockPosition().getY()
                 + "," + player.blockPosition().getZ()
                 + " roomGrid=" + grid.gridX() + "," + grid.gridZ()
-                + " overlayFromWorld=" + mapPixelForWorldX(player.getX()) + "," + mapPixelForWorldZ(player.getZ())
+                + " overlayFromWorld=" + Math.round(DungeonMapFeature.mapPixelForWorldX(player.getX())) + "," + Math.round(DungeonMapFeature.mapPixelForWorldZ(player.getZ()))
                 + " class=" + classText(player.getUUID()));
         }
     }
@@ -455,17 +452,10 @@ public final class DungeonStateTracker {
             String name = DungeonMapCheckmarkReader.decorationName(decoration);
             boolean selfDecoration = isSelfDecoration(client, decoration, name);
 
-            DungeonMapCheckmarkReader.MapPixel mapPixel = DungeonMapCheckmarkReader.mapPixelForDecoration(decoration);
+            DungeonMapCheckmarkReader.MapPixel mapPixel = DungeonMapCheckmarkReader.decorationPixel(decoration);
             DungeonMapCheckmarkReader.MapPixel anchoredOverlay =
-                DungeonMapCheckmarkReader.overlayPixelForDecoration(
-                    decoration,
-                    client,
-                    snapshot,
-                    DEBUG_ROOM_SIZE,
-                    DEBUG_DOOR_SIZE,
-                    DEBUG_CELL_GAP
-                );
-            DungeonMapCheckmarkReader.MapPixel rawOverlay = rawOverlayPixel(decoration);
+                DungeonMapCheckmarkReader.overlayPixelForDecoration(decoration, client, snapshot);
+            DungeonMapCheckmarkReader.MapPixel rawOverlay = DungeonMapFeature.rawOverlayPixel(decoration);
             DungeonMapCheckmarkReader.MapPixel renderOverlay = anchoredOverlay != null ? anchoredOverlay : rawOverlay;
             UUID resolvedUuid = resolveDecorationUuid(
                 client,
@@ -498,7 +488,7 @@ public final class DungeonStateTracker {
                 + " mapPixel=" + mapPixel.x() + "," + mapPixel.z()
                 + " anchoredOverlay=" + pixelText(anchoredOverlay)
                 + " rawOverlay=" + pixelText(rawOverlay)
-                + " renderOverlay=" + (loaded == null ? pixelText(renderOverlay) : mapPixelForWorldX(loaded.getX()) + "," + mapPixelForWorldZ(loaded.getZ()))
+                + " renderOverlay=" + (loaded == null ? pixelText(renderOverlay) : Math.round(DungeonMapFeature.mapPixelForWorldX(loaded.getX())) + "," + Math.round(DungeonMapFeature.mapPixelForWorldZ(loaded.getZ())))
                 + " rot=" + decoration.rot()
                 + " room=" + (room == null ? "none" : room.roomGridX() + "," + room.roomGridZ())
                 + " oldAccepted=" + isStrictPartyMapDecoration(client, decoration, name)
@@ -596,8 +586,8 @@ public final class DungeonStateTracker {
                 continue;
             }
 
-            int dx = mapPixelForWorldX(player.getX()) - markerPixel.x();
-            int dz = mapPixelForWorldZ(player.getZ()) - markerPixel.z();
+            int dx = Math.round(DungeonMapFeature.mapPixelForWorldX(player.getX())) - markerPixel.x();
+            int dz = Math.round(DungeonMapFeature.mapPixelForWorldZ(player.getZ())) - markerPixel.z();
             int distance = dx * dx + dz * dz;
             if (distance < bestDistance) {
                 bestDistance = distance;
@@ -618,50 +608,6 @@ public final class DungeonStateTracker {
     private String classText(UUID uuid) {
         DungeonPlayerStats stats = uuid == null ? null : runStats.playerStats(uuid);
         return stats == null ? "UNKNOWN(no-stats)" : stats.dungeonClass().name();
-    }
-
-    private static DungeonMapCheckmarkReader.MapPixel rawOverlayPixel(MapDecoration decoration) {
-        int mapX = (decoration.x() >> 1) + 64;
-        int mapZ = (decoration.y() >> 1) + 64;
-        return new DungeonMapCheckmarkReader.MapPixel(
-            Math.clamp(Math.round(mapX * debugGridPixelSize() / 127.0F), 0, debugGridPixelSize()),
-            Math.clamp(Math.round(mapZ * debugGridPixelSize() / 127.0F), 0, debugGridPixelSize())
-        );
-    }
-
-    private static int mapPixelForWorldX(double worldX) {
-        double roomProgress = (worldX - DungeonScanUtils.START_X) / DungeonScanUtils.ROOM_SIZE_BLOCKS;
-        return Math.clamp(
-            (int) Math.round(DEBUG_ROOM_SIZE / 2.0 + roomProgress * debugPixelsPerRoom()),
-            0,
-            debugGridPixelSize()
-        );
-    }
-
-    private static int mapPixelForWorldZ(double worldZ) {
-        double roomProgress = (worldZ - DungeonScanUtils.START_Z) / DungeonScanUtils.ROOM_SIZE_BLOCKS;
-        return Math.clamp(
-            (int) Math.round(DEBUG_ROOM_SIZE / 2.0 + roomProgress * debugPixelsPerRoom()),
-            0,
-            debugGridPixelSize()
-        );
-    }
-
-    private static int debugGridPixelSize() {
-        return debugScanGridToPixel(DungeonScanUtils.SCAN_GRID_SIZE);
-    }
-
-    private static int debugPixelsPerRoom() {
-        return DEBUG_ROOM_SIZE + DEBUG_DOOR_SIZE + DEBUG_CELL_GAP * 2;
-    }
-
-    private static int debugScanGridToPixel(int gridPosition) {
-        int pixel = 0;
-        for (int index = 0; index < gridPosition; index++) {
-            pixel += (index & 1) == 0 ? DEBUG_ROOM_SIZE : DEBUG_DOOR_SIZE;
-            pixel += DEBUG_CELL_GAP;
-        }
-        return pixel;
     }
 
     private static String gridKeysText(Set<DungeonMapSnapshot.GridKey> keys) {
@@ -1008,12 +954,12 @@ public final class DungeonStateTracker {
         int secrets,
         int crypts
     ) {
-        DungeonMapSnapshot.ObservedPoint initialPoint =
+        DungeonScanPoint initialPoint =
             scanRecorder.mapSnapshot().initialRoomPointAt(current.roomGridX(), current.roomGridZ());
         if (initialPoint == null
-            || initialPoint.point().kind() != DungeonScanPointKind.ROOM
-            || DungeonRoomClassifier.isEmptyCore(initialPoint.point().coreHash())
-            || sameHash(current, initialPoint.point())) {
+            || initialPoint.kind() != DungeonScanPointKind.ROOM
+            || DungeonRoomClassifier.isEmptyCore(initialPoint.coreHash())
+            || sameHash(current, initialPoint)) {
             return List.of();
         }
         return List.of(learnedRoomComponent(
@@ -1022,8 +968,8 @@ public final class DungeonStateTracker {
             roomType,
             secrets,
             crypts,
-            initialPoint.point().coreHash(),
-            initialPoint.point().stableCoreHash(),
+            initialPoint.coreHash(),
+            initialPoint.stableCoreHash(),
             current.roomGridX(),
             current.roomGridZ()
         ));
@@ -1076,14 +1022,14 @@ public final class DungeonStateTracker {
         for (int index = 0; index < queue.size(); index++) {
             int roomGridX = queue.get(index)[0];
             int roomGridZ = queue.get(index)[1];
-            DungeonMapSnapshot.ObservedPoint observedPoint = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
+            DungeonScanPoint observedPoint = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
             CurrentRoomCore roomCore = observedPoint == null
                 ? (roomGridX == currentRoomCore.roomGridX() && roomGridZ == currentRoomCore.roomGridZ()
                     ? currentRoomCore
                     : CurrentRoomCore.failed("Not loaded."))
                 : CurrentRoomCore.valid(
-                    observedPoint.point().coreHash(),
-                    observedPoint.point().stableCoreHash(),
+                    observedPoint.coreHash(),
+                    observedPoint.stableCoreHash(),
                     roomGridX,
                     roomGridZ
                 );
@@ -1134,21 +1080,21 @@ public final class DungeonStateTracker {
             return;
         }
 
-        DungeonMapSnapshot.ObservedPoint doorPoint = snapshot.pointAt(roomGridX * 2 + dx, roomGridZ * 2 + dz);
+        DungeonScanPoint doorPoint = snapshot.pointAt(roomGridX * 2 + dx, roomGridZ * 2 + dz);
         if (doorPoint != null
-            && doorPoint.point().kind() == DungeonScanPointKind.DOOR
-            && doorPoint.point().doorKind().visible()) {
+            && doorPoint.kind() == DungeonScanPointKind.DOOR
+            && doorPoint.doorKind().visible()) {
             return;
         }
 
-        DungeonMapSnapshot.ObservedPoint neighbor = snapshot.pointAt(nextRoomGridX * 2, nextRoomGridZ * 2);
+        DungeonScanPoint neighbor = snapshot.pointAt(nextRoomGridX * 2, nextRoomGridZ * 2);
         if (neighbor == null
-            || neighbor.point().kind() != DungeonScanPointKind.ROOM
-            || DungeonRoomClassifier.isEmptyCore(neighbor.point().coreHash())
-            || isBlockedMultiLearnRoom(snapshot, nextRoomGridX, nextRoomGridZ, neighbor.point().coreHash())
+            || neighbor.kind() != DungeonScanPointKind.ROOM
+            || DungeonRoomClassifier.isEmptyCore(neighbor.coreHash())
+            || isBlockedMultiLearnRoom(snapshot, nextRoomGridX, nextRoomGridZ, neighbor.coreHash())
             || hasConflictingKnownHint(
-                neighbor.point().coreHash(),
-                neighbor.point().stableCoreHash(),
+                neighbor.coreHash(),
+                neighbor.stableCoreHash(),
                 name,
                 roomType,
                 secrets
@@ -1259,7 +1205,7 @@ public final class DungeonStateTracker {
             : roomRepository.knownCoreHint(currentRoomCore.stableCoreHash());
         DungeonKnownRoomCatalog.MatchedRoom match =
             renderPlan().matchContaining(currentRoomCore.roomGridX(), currentRoomCore.roomGridZ());
-        DungeonMapSnapshot.ObservedPoint initialPoint =
+        DungeonScanPoint initialPoint =
             scanRecorder.mapSnapshot().initialRoomPointAt(currentRoomCore.roomGridX(), currentRoomCore.roomGridZ());
 
         String clipboardText = "roomGrid=" + currentRoomCore.roomGridX() + "," + currentRoomCore.roomGridZ()
@@ -1496,11 +1442,11 @@ public final class DungeonStateTracker {
         json.append('"');
     }
 
-    private static String formatInitialPoint(DungeonMapSnapshot.ObservedPoint initialPoint) {
-        if (initialPoint == null || initialPoint.point().kind() != DungeonScanPointKind.ROOM) {
+    private static String formatInitialPoint(DungeonScanPoint initialPoint) {
+        if (initialPoint == null || initialPoint.kind() != DungeonScanPointKind.ROOM) {
             return "none";
         }
-        return initialPoint.point().coreHash() + "/" + initialPoint.point().stableCoreHash();
+        return initialPoint.coreHash() + "/" + initialPoint.stableCoreHash();
     }
 
     private static String formatHint(DungeonKnownRoomCatalog.KnownCoreHint hint) {
@@ -1576,17 +1522,15 @@ public final class DungeonStateTracker {
     }
 
     private CurrentRoomCore snapshotRoomCore(int roomGridX, int roomGridZ) {
-        DungeonMapSnapshot.ObservedPoint observedPoint =
+        DungeonScanPoint observedPoint =
             scanRecorder.mapSnapshot().pointAt(roomGridX * 2, roomGridZ * 2);
-        if (observedPoint == null
-            || observedPoint.point().kind() != DungeonScanPointKind.ROOM
-            || DungeonRoomClassifier.isEmptyCore(observedPoint.point().coreHash())) {
+        if (observedPoint == null || !observedPoint.isRealRoom()) {
             return CurrentRoomCore.failed("No loaded room hash is available in the snapshot.");
         }
 
         return CurrentRoomCore.valid(
-            observedPoint.point().coreHash(),
-            observedPoint.point().stableCoreHash(),
+            observedPoint.coreHash(),
+            observedPoint.stableCoreHash(),
             roomGridX,
             roomGridZ
         );
@@ -1795,10 +1739,8 @@ public final class DungeonStateTracker {
     }
 
     private static boolean hasLocalRoomPoint(DungeonMapSnapshot snapshot, DungeonLiveMapWriter.CellKey cell) {
-        DungeonMapSnapshot.ObservedPoint observedPoint = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
-        return observedPoint != null
-            && observedPoint.point().kind() == DungeonScanPointKind.ROOM
-            && !DungeonRoomClassifier.isEmptyCore(observedPoint.point().coreHash());
+        DungeonScanPoint observedPoint = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
+        return observedPoint != null && observedPoint.isRealRoom();
     }
 
     private static List<DungeonRoomDataSyncClient.LiveDoorReport> liveDoorReports(
@@ -1832,10 +1774,10 @@ public final class DungeonStateTracker {
         if (snapshot.traversedDoors().contains(gridKey) || snapshot.openedLockedDoors().contains(gridKey)) {
             return true;
         }
-        DungeonMapSnapshot.ObservedPoint observedPoint = snapshot.pointAt(cell.x(), cell.z());
+        DungeonScanPoint observedPoint = snapshot.pointAt(cell.x(), cell.z());
         return observedPoint != null
-            && observedPoint.point().kind() == DungeonScanPointKind.DOOR
-            && observedPoint.point().doorKind().visible();
+            && observedPoint.kind() == DungeonScanPointKind.DOOR
+            && observedPoint.doorKind().visible();
     }
 
     private static void putLiveRoomReport(

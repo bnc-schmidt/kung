@@ -35,7 +35,7 @@ final class DungeonMapCheckmarkReader {
     }
 
     static void observe(Minecraft client, DungeonMapSnapshot snapshot) {
-        MapItemSavedData map = mapData(client);
+        MapItemSavedData map = DungeonMapItems.mapData(client);
         if (map == null) {
             clearCachedAnchor();
             logObserveDiagnostic("map=null");
@@ -107,7 +107,7 @@ final class DungeonMapCheckmarkReader {
     }
 
     static MapRoom roomFromDecoration(MapDecoration decoration, Minecraft client, DungeonMapSnapshot snapshot) {
-        MapItemSavedData map = mapData(client);
+        MapItemSavedData map = DungeonMapItems.mapData(client);
         if (map == null) {
             return null;
         }
@@ -135,10 +135,6 @@ final class DungeonMapCheckmarkReader {
 
         int radius = Math.max(anchor.roomSize() / 2 + PLAYER_DECORATION_SEARCH_RADIUS, 6);
         return bestDistance <= radius * radius ? bestRoom : null;
-    }
-
-    static MapPixel mapPixelForDecoration(MapDecoration decoration) {
-        return decorationPixel(decoration);
     }
 
     static boolean isPlayerDecoration(MapDecoration decoration) {
@@ -174,15 +170,8 @@ final class DungeonMapCheckmarkReader {
         return String.valueOf(decoration.type());
     }
 
-    static MapPixel overlayPixelForDecoration(
-        MapDecoration decoration,
-        Minecraft client,
-        DungeonMapSnapshot snapshot,
-        int overlayRoomSize,
-        int overlayDoorSize,
-        int overlayCellGap
-    ) {
-        MapItemSavedData map = mapData(client);
+    static MapPixel overlayPixelForDecoration(MapDecoration decoration, Minecraft client, DungeonMapSnapshot snapshot) {
+        MapItemSavedData map = DungeonMapItems.mapData(client);
         if (map == null) {
             return null;
         }
@@ -195,14 +184,14 @@ final class DungeonMapCheckmarkReader {
 
         MapPixel decorationPixel = decorationPixel(decoration);
         int mapStride = anchor.roomSize() + MAP_ROOM_GAP;
-        int overlayStride = overlayRoomSize + overlayDoorSize + overlayCellGap * 2;
-        int overlayEntranceCenterX = scanGridToOverlayPixel(entranceRoom.gridX() * 2, overlayRoomSize, overlayDoorSize, overlayCellGap)
-            + overlayRoomSize / 2;
-        int overlayEntranceCenterZ = scanGridToOverlayPixel(entranceRoom.gridZ() * 2, overlayRoomSize, overlayDoorSize, overlayCellGap)
-            + overlayRoomSize / 2;
+        int overlayStride = DungeonMapFeature.pixelsPerRoom();
+        int overlayEntranceCenterX = DungeonMapFeature.scanGridToPixel(entranceRoom.gridX() * 2)
+            + DungeonMapFeature.ROOM_SIZE / 2;
+        int overlayEntranceCenterZ = DungeonMapFeature.scanGridToPixel(entranceRoom.gridZ() * 2)
+            + DungeonMapFeature.ROOM_SIZE / 2;
         int mapEntranceCenterX = anchor.mapEntranceX() + anchor.roomSize() / 2;
         int mapEntranceCenterZ = anchor.mapEntranceZ() + anchor.roomSize() / 2;
-        int overlayGridSize = overlayGridPixelSize(overlayRoomSize, overlayDoorSize, overlayCellGap);
+        int overlayGridSize = DungeonMapFeature.GRID_PIXEL_SIZE;
         int overlayX = overlayEntranceCenterX
             + Math.round((decorationPixel.x() - mapEntranceCenterX) * overlayStride / (float) mapStride);
         int overlayZ = overlayEntranceCenterZ
@@ -211,13 +200,6 @@ final class DungeonMapCheckmarkReader {
             Math.clamp(overlayX, 0, overlayGridSize),
             Math.clamp(overlayZ, 0, overlayGridSize)
         );
-    }
-
-    private static MapItemSavedData mapData(Minecraft client) {
-        if (client.level == null || client.player == null) {
-            return null;
-        }
-        return DungeonMapItems.mapData(client);
     }
 
     private static MapAnchor mapAnchor(MapItemSavedData map, DungeonMapSnapshot snapshot) {
@@ -256,8 +238,6 @@ final class DungeonMapCheckmarkReader {
             physicalRoomX(entranceRoom.gridX()),
             physicalRoomZ(entranceRoom.gridZ())
         );
-        cachedAnchorMap = map;
-        cachedAnchorEntranceRoom = entranceRoom;
         cachedAnchor = anchor;
         return anchor;
     }
@@ -273,13 +253,11 @@ final class DungeonMapCheckmarkReader {
     private static DungeonMapSnapshot.GridKey entranceRoom(DungeonMapSnapshot snapshot) {
         for (int roomGridZ = 0; roomGridZ <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridZ++) {
             for (int roomGridX = 0; roomGridX <= DungeonScanUtils.SCAN_GRID_SIZE / 2; roomGridX++) {
-                DungeonMapSnapshot.ObservedPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
-                if (point == null
-                    || point.point().kind() != DungeonScanPointKind.ROOM
-                    || DungeonRoomClassifier.isEmptyCore(point.point().coreHash())) {
+                DungeonScanPoint point = snapshot.pointAt(roomGridX * 2, roomGridZ * 2);
+                if (point == null || !point.isRealRoom()) {
                     continue;
                 }
-                if (DungeonRoomClassifier.classifyRoom(point.point().coreHash()) == RoomType.START) {
+                if (DungeonRoomClassifier.classifyRoom(point.coreHash()) == RoomType.START) {
                     return new DungeonMapSnapshot.GridKey(roomGridX, roomGridZ);
                 }
             }
@@ -391,7 +369,7 @@ final class DungeonMapCheckmarkReader {
         com.github.beng420.kung.util.KungDebugRecorder.event("map-check", diagnostic);
     }
 
-    private static MapPixel decorationPixel(MapDecoration decoration) {
+    static MapPixel decorationPixel(MapDecoration decoration) {
         return new MapPixel((decoration.x() >> 1) + MAP_SIZE / 2, (decoration.y() >> 1) + MAP_SIZE / 2);
     }
 
@@ -524,19 +502,6 @@ final class DungeonMapCheckmarkReader {
             && (centerVisible >= Math.max(2, centerSamples / 3) || visible >= Math.max(2, sampled / 5));
         boolean roomConnection = sampled > 0 && visible >= Math.max(3, sampled * 3 / 5);
         return new DoorBridge(connected, roomConnection);
-    }
-
-    private static int scanGridToOverlayPixel(int gridPosition, int roomSize, int doorSize, int cellGap) {
-        int pixel = 0;
-        for (int index = 0; index < gridPosition; index++) {
-            pixel += (index & 1) == 0 ? roomSize : doorSize;
-            pixel += cellGap;
-        }
-        return pixel;
-    }
-
-    private static int overlayGridPixelSize(int roomSize, int doorSize, int cellGap) {
-        return scanGridToOverlayPixel(DungeonScanUtils.SCAN_GRID_SIZE, roomSize, doorSize, cellGap);
     }
 
     private static DungeonMapClearState checkmarkState(MapItemSavedData map, int roomX, int roomZ, int roomSize) {

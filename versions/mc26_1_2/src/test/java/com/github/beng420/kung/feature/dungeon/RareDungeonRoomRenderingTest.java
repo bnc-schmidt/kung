@@ -52,16 +52,18 @@ public final class RareDungeonRoomRenderingTest {
         var room = DungeonRoomRenderLayout.from(plan).rooms().getFirst();
         assertEquals(RoomType.RARE, room.template().type());
         assertEquals(4, room.template().secrets());
-        assertEquals(2, plan.remoteRoomSecretsFoundOnly(0, 0));
+        assertEquals(2, plan.remoteRoomSecretsFound(0, 0, 0));
         assertEquals(1, DungeonRoomProgress.from(plan).cleared());
     }
 
     @Test public void oldPeerNormalTypeCanBeRefinedByRareAndNeverDowngraded() {
         DungeonMapSnapshot snapshot = new DungeonMapSnapshot();
-        for (RoomType type : List.of(RoomType.NORMAL, RoomType.RARE, RoomType.NORMAL)) {
-            snapshot.mergeRemoteRooms("teammate", List.of(new DungeonMapSnapshot.RemoteRoom(0, 0,
-                "Custom rare room", type, 4, 0, 0, 4, true, false, false, "teammate", 1L)));
-        }
+        snapshot.replaceRemoteLiveData(
+            List.of(RoomType.NORMAL, RoomType.RARE, RoomType.NORMAL).stream()
+                .map(type -> new DungeonMapSnapshot.RemoteRoom(0, 0,
+                    "Custom rare room", type, 4, 0, 0, 4, true, false, false, "teammate", 1L))
+                .toList(),
+            List.of());
         var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, repository(null));
         assertEquals(RoomType.RARE, plan.roomTypeAt(0, 0));
         assertEquals(RoomType.RARE, DungeonRoomRenderLayout.from(plan).rooms().getFirst().template().type());
@@ -106,7 +108,7 @@ public final class RareDungeonRoomRenderingTest {
             DungeonScanPointKind.ROOM, true, 1192954774, -408192692, 0, DungeonDoorKind.NONE)));
         snapshot.observeRoomClearState(0, 0, DungeonMapClearState.CLEARED);
         snapshot.observeRoomClearState(1, 0, DungeonMapClearState.CLEARED);
-        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
         assertEquals(2, plan.matches().size());
         assertEquals(RoomType.RARE, plan.roomTypeAt(0, 0));
         assertEquals(RoomType.NORMAL, plan.roomTypeAt(1, 0));

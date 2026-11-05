@@ -377,13 +377,13 @@ public final class DungeonKnownRoomCatalog {
         boolean hasNewStableHash = false;
         long order = System.currentTimeMillis();
         for (DungeonKnownRoomCatalog.MatchedComponent component : match.components()) {
-            DungeonMapSnapshot.ObservedPoint observedPoint = roomPointAt(snapshot, component.cell());
+            DungeonScanPoint observedPoint = roomPointAt(snapshot, component.cell());
             if (observedPoint == null) {
                 return AutoLearnResult.none();
             }
 
-            int coreHash = observedPoint.point().coreHash();
-            int stableCoreHash = observedPoint.point().stableCoreHash();
+            int coreHash = observedPoint.coreHash();
+            int stableCoreHash = observedPoint.stableCoreHash();
             if (DungeonRoomClassifier.isEmptyCore(coreHash) || stableCoreHash == 0) {
                 return AutoLearnResult.none();
             }
@@ -876,21 +876,21 @@ public final class DungeonKnownRoomCatalog {
                 return null;
             }
 
-            DungeonMapSnapshot.ObservedPoint observedPoint = soft
+            DungeonScanPoint observedPoint = soft
                 ? knownRoomPointAt(snapshot, cell)
                 : roomPointAt(snapshot, cell);
             if (observedPoint == null) {
                 return null;
             }
 
-            if (matchesComponent(observedPoint.point(), component)) {
+            if (matchesComponent(observedPoint, component)) {
                 exactComponentCount++;
             } else if (!soft || !matchesTemplateHint(
-                knownHintForPoint(snapshot, cache, observedPoint.point()), variant.template().key())) {
+                knownHintForPoint(snapshot, cache, observedPoint), variant.template().key())) {
                 return null;
             }
 
-            components.add(new MatchedComponent(cell.x(), cell.z(), observedPoint.point().coreHash()));
+            components.add(new MatchedComponent(cell.x(), cell.z(), observedPoint.coreHash()));
         }
 
         int requiredExactComponents = Math.max(MIN_SOFT_MATCHED_COMPONENTS, variant.componentCount() - 1);
@@ -1019,7 +1019,7 @@ public final class DungeonKnownRoomCatalog {
                     && !hasVisibleDoorBetween(snapshot, cell, neighbor)
                     && expectedHint.equals(knownHintAt(snapshot, cache, neighbor)))
             .stream()
-            .map(cell -> new MatchedComponent(cell.x(), cell.z(), knownRoomPointAt(snapshot, cell).point().coreHash()))
+            .map(cell -> new MatchedComponent(cell.x(), cell.z(), knownRoomPointAt(snapshot, cell).coreHash()))
             .toList();
     }
 
@@ -1041,30 +1041,30 @@ public final class DungeonKnownRoomCatalog {
     }
 
     /** The scanned room cell at the grid position, or null when it is missing or not a room. */
-    private static DungeonMapSnapshot.ObservedPoint roomPointAt(DungeonMapSnapshot snapshot, CellKey cell) {
-        DungeonMapSnapshot.ObservedPoint observedPoint = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
-        return observedPoint != null && observedPoint.point().kind() == DungeonScanPointKind.ROOM ? observedPoint : null;
+    private static DungeonScanPoint roomPointAt(DungeonMapSnapshot snapshot, CellKey cell) {
+        DungeonScanPoint observedPoint = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
+        return observedPoint != null && observedPoint.kind() == DungeonScanPointKind.ROOM ? observedPoint : null;
     }
 
-    private static DungeonMapSnapshot.ObservedPoint knownRoomPointAt(DungeonMapSnapshot snapshot, CellKey cell) {
-        DungeonMapSnapshot.ObservedPoint observedPoint = roomPointAt(snapshot, cell);
-        return observedPoint == null || DungeonRoomClassifier.isEmptyCore(observedPoint.point().coreHash())
+    private static DungeonScanPoint knownRoomPointAt(DungeonMapSnapshot snapshot, CellKey cell) {
+        DungeonScanPoint observedPoint = roomPointAt(snapshot, cell);
+        return observedPoint == null || DungeonRoomClassifier.isEmptyCore(observedPoint.coreHash())
             ? null : observedPoint;
     }
 
     private static KnownCoreHint knownHintAt(DungeonMapSnapshot snapshot, TemplateCache cache, CellKey cell) {
-        DungeonMapSnapshot.ObservedPoint observedPoint = knownRoomPointAt(snapshot, cell);
-        return observedPoint == null ? null : knownHintForPoint(snapshot, cache, observedPoint.point());
+        DungeonScanPoint observedPoint = knownRoomPointAt(snapshot, cell);
+        return observedPoint == null ? null : knownHintForPoint(snapshot, cache, observedPoint);
     }
 
     private static boolean hasVisibleDoorBetween(DungeonMapSnapshot snapshot, CellKey first, CellKey second) {
         int dx = Integer.compare(second.x(), first.x());
         int dz = Integer.compare(second.z(), first.z());
         if (snapshot.hasMapRoomBoundary(first.x() * 2 + dx, first.z() * 2 + dz)) return true;
-        DungeonMapSnapshot.ObservedPoint doorPoint = snapshot.pointAt(first.x() * 2 + dx, first.z() * 2 + dz);
+        DungeonScanPoint doorPoint = snapshot.pointAt(first.x() * 2 + dx, first.z() * 2 + dz);
         return doorPoint != null
-            && doorPoint.point().kind() == DungeonScanPointKind.DOOR
-            && doorPoint.point().doorKind().visible();
+            && doorPoint.kind() == DungeonScanPointKind.DOOR
+            && doorPoint.doorKind().visible();
     }
 
     private static RoomTemplate templateFromHint(KnownCoreHint hint) {
@@ -1171,13 +1171,13 @@ public final class DungeonKnownRoomCatalog {
                     continue;
                 }
 
-                DungeonMapSnapshot.ObservedPoint observedPoint = roomPointAt(snapshot, neighbor);
+                DungeonScanPoint observedPoint = roomPointAt(snapshot, neighbor);
                 if (observedPoint == null
-                    || !matchesTemplateHint(knownHintForPoint(snapshot, cache, observedPoint.point()), key)) {
+                    || !matchesTemplateHint(knownHintForPoint(snapshot, cache, observedPoint), key)) {
                     continue;
                 }
 
-                return new MatchedComponent(neighbor.x(), neighbor.z(), observedPoint.point().coreHash());
+                return new MatchedComponent(neighbor.x(), neighbor.z(), observedPoint.coreHash());
             }
         }
         return null;

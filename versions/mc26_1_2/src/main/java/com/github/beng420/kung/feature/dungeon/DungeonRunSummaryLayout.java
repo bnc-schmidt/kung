@@ -17,7 +17,7 @@ final class DungeonRunSummaryLayout {
     static final FontDescription.Resource SPACING_FONT =
         new FontDescription.Resource(Identifier.fromNamespaceAndPath("kung", "chat_spacing"));
     private static final int COLUMN_GAP = 8;
-    private static final Style TEXT_STYLE = Style.EMPTY.withFont(FontDescription.DEFAULT).withBold(false);
+    static final Style TEXT_STYLE = Style.EMPTY.withFont(FontDescription.DEFAULT).withBold(false);
     /**
      * Names are drawn bold. A mod that restyles a name in chat (a colour gradient, bold) would otherwise make it wider
      * than measured and push the rest of its row to the right; a bold name cannot get wider by being made bold.
@@ -66,14 +66,9 @@ final class DungeonRunSummaryLayout {
         }).toList();
     }
 
-    /** The name takes {@code nameColor} (class colour); details use the shared report highlighting. */
-    static Component playerLine(String name, int nameColor, String details, int nameColumnWidth,
+    /** The name takes {@code nameColor} (class colour); the details come already styled. */
+    static Component playerLine(String name, int nameColor, Component details, int nameColumnWidth,
                                 ToIntFunction<String> width) {
-        return playerLine(name, nameColor, KungMessages.highlight(details).withStyle(TEXT_STYLE), nameColumnWidth, width);
-    }
-
-    private static Component playerLine(String name, int nameColor, Component details, int nameColumnWidth,
-                                        ToIntFunction<String> width) {
         int padding = Math.max(COLUMN_GAP, nameColumnWidth - nameWidth(name, width));
         return Component.empty()
             .append(Component.literal(name).setStyle(NAME_STYLE.withColor(nameColor & 0xFFFFFF)))

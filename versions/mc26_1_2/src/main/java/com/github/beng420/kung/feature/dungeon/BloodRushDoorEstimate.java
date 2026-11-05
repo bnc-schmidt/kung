@@ -9,7 +9,7 @@ record BloodRushDoorEstimate(int count, boolean exact, int total) {
 
     static BloodRushDoorEstimate remaining(DungeonLiveMapWriter.MatchRenderPlan plan, DungeonMapSnapshot snapshot) {
         int total = totalKnown(plan, snapshot);
-        int opened = plan.minimumVisibleOpenedSpecialDoorCells(snapshot).size();
+        int opened = plan.openedRawNonStartSpecialDoorCells(snapshot).size();
         return new BloodRushDoorEstimate(Math.max(0, total - opened), isExact(plan, snapshot), total);
     }
 

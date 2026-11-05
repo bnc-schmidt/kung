@@ -19,7 +19,7 @@ final class DungeonRoomPrediction {
     private DungeonRoomPrediction() { }
 
     static List<MatchedRoom> predict(DungeonMapSnapshot snapshot, List<RoomTemplate> templates) {
-        var points = snapshot.points().stream().map(DungeonMapSnapshot.ObservedPoint::point)
+        var points = snapshot.points().stream()
             .filter(point -> point.kind() == DungeonScanPointKind.ROOM
                 && !DungeonRoomClassifier.isEmptyCore(point.coreHash())).toList();
         Map<Placement, MatchedRoom> candidates = new LinkedHashMap<>();
@@ -56,8 +56,7 @@ final class DungeonRoomPrediction {
             int roomX = x + component.dx();
             int roomZ = z + component.dz();
             if (roomX < 0 || roomZ < 0 || roomX > 5 || roomZ > 5) return null;
-            var observed = snapshot.pointAt(roomX * 2, roomZ * 2);
-            DungeonScanPoint point = observed == null ? null : observed.point();
+            DungeonScanPoint point = snapshot.pointAt(roomX * 2, roomZ * 2);
             if (point != null && !DungeonRoomClassifier.isEmptyCore(point.coreHash())) {
                 if (point.kind() != DungeonScanPointKind.ROOM
                     || !component.matches(point.coreHash(), point.stableCoreHash())) return null;
@@ -78,7 +77,7 @@ final class DungeonRoomPrediction {
                 int doorZ = a.roomGridZ() + b.roomGridZ();
                 var door = snapshot.pointAt(doorX, doorZ);
                 if (snapshot.hasMapRoomBoundary(doorX, doorZ)
-                    || door != null && door.point().doorKind().visible()) return null;
+                    || door != null && door.doorKind().visible()) return null;
             }
         }
         return new MatchedRoom(variant.template(), List.copyOf(cells));

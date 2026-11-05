@@ -147,7 +147,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
             return;
         }
 
-        Set<DungeonLiveMapWriter.CellKey> openedDoors = plan.minimumVisibleOpenedSpecialDoorCells(snapshot);
+        Set<DungeonLiveMapWriter.CellKey> openedDoors = plan.openedRawNonStartSpecialDoorCells(snapshot);
         int remainingDoors = estimate.count();
         if (!progressBaselineReady) {
             progressBaselineReady = true;
@@ -296,7 +296,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         initialTitleStableSinceTick = Long.MIN_VALUE;
         progressBaselineReady = true;
         observedOpenedDoorCells.clear();
-        observedOpenedDoorCells.addAll(plan.minimumVisibleOpenedSpecialDoorCells(snapshot));
+        observedOpenedDoorCells.addAll(plan.openedRawNonStartSpecialDoorCells(snapshot));
         lastRemainingDoorCount = BloodRushDoorEstimate.remaining(plan, snapshot).count();
         logDoorTitleState("show initial count="
             + estimate.count()
@@ -366,7 +366,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
             + " knownTotal="
             + BloodRushDoorEstimate.totalKnown(plan, snapshot)
             + " knownOpened="
-            + plan.minimumVisibleOpenedSpecialDoorCells(snapshot).size()
+            + plan.openedRawNonStartSpecialDoorCells(snapshot).size()
             + " bloodRushOpened="
             + plan.bloodRushOpenedSpecialDoorCells().size()
             + " minimumTotal="
@@ -374,7 +374,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
             + " minimumLocked="
             + plan.minimumVisibleBloodRushLockedSpecialDoorCount(snapshot)
             + " minimumOpened="
-            + plan.minimumVisibleOpenedSpecialDoorCells(snapshot).size()
+            + plan.openedRawNonStartSpecialDoorCells(snapshot).size()
             + " mapVisibleRooms="
             + plan.mapVisibleRoomCount(snapshot)
             + " recognizedMapRooms="

@@ -17,4 +17,9 @@ public record DungeonScanPoint(
                             boolean loaded, int coreHash, int stableCoreHash, int doorBlockId, DungeonDoorKind doorKind) {
         this(gridX, gridZ, worldX, worldZ, kind, loaded, coreHash, stableCoreHash, doorBlockId, doorKind, false);
     }
+
+    /** A room point whose core is not the empty (unloaded or air) core. */
+    public boolean isRealRoom() {
+        return kind == DungeonScanPointKind.ROOM && !DungeonRoomClassifier.isEmptyCore(coreHash);
+    }
 }

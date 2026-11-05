@@ -72,6 +72,11 @@ public final class DungeonScanUtils {
         return isEven(gridX) != isEven(gridZ);
     }
 
+    /** A door point between two rooms side by side (odd x, even z). */
+    public static boolean isHorizontalDoor(int gridX, int gridZ) {
+        return !isEven(gridX) && isEven(gridZ);
+    }
+
     public static boolean isSeparatorScanPoint(int gridX, int gridZ) {
         return !isEven(gridX) && !isEven(gridZ);
     }

@@ -74,9 +74,9 @@ public final class DungeonRuntimeRegressionTest {
         snapshot.addScan(0, 0, 5, 5, List.of(room(101, 1001)));
         long revision = snapshot.scanRevision();
         snapshot.addScan(1, 1, 5, 5, List.of(room(101, 1002)));
-        assertEquals(1002, snapshot.pointAt(0, 0).point().stableCoreHash());
+        assertEquals(1002, snapshot.pointAt(0, 0).stableCoreHash());
         assertTrue(snapshot.scanRevision() > revision);
-        assertEquals(1001, snapshot.initialRoomPointAt(0, 0).point().stableCoreHash());
+        assertEquals(1001, snapshot.initialRoomPointAt(0, 0).stableCoreHash());
     }
 
     @Test public void midRunActivationUsesRememberedEntranceInsteadOfCurrentRoom() {
@@ -179,7 +179,7 @@ public final class DungeonRuntimeRegressionTest {
                     DungeonScanPointKind.ROOM, true, 123456789, 987654321, 0, DungeonDoorKind.NONE, true)));
                 assertNotSame(prediction, repository.matchKnownRooms(visibleRun));
                 assertTrue(repository.matchKnownRooms(visibleRun).isEmpty());
-                assertNull(DungeonLiveMapWriter.MatchRenderPlan.from(visibleRun).hintAt(0, 0));
+                assertNull(DungeonLiveMapWriter.MatchRenderPlan.from(visibleRun, KnownDungeonRoomRepository.INSTANCE).hintAt(0, 0));
                 visibleRun.addScan(2, 2, 5, 5, List.of(room(component.coreHash(), component.stableCoreHash())));
                 assertEquals(template.name(), repository.matchKnownRooms(visibleRun).getFirst().template().name());
             }
@@ -219,11 +219,11 @@ public final class DungeonRuntimeRegressionTest {
             if (mapVisible) snapshot.observeMapVisibleRoom(0, 0);
             else snapshot.addScan(1, 1, 5, 5, List.of(new DungeonScanPoint(0, 0, -185, -185,
                 DungeonScanPointKind.ROOM, true, preload, 987654321, 0, DungeonDoorKind.NONE, true)));
-            var visible = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+            var visible = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
             assertTrue(visible.matches().isEmpty());
             assertNull("Rendering must not reintroduce a bundled preload", visible.hintAt(0, 0));
             snapshot.addScan(2, 2, 5, 5, List.of(room(123456789, 987654321)));
-            assertEquals(123456789, snapshot.pointAt(0, 0).point().coreHash());
+            assertEquals(123456789, snapshot.pointAt(0, 0).coreHash());
             assertFalse("Chunk loss must not restore prediction for an already observed room",
                 snapshot.allowsRoomPrediction(0, 0));
             snapshot.reset();
@@ -273,12 +273,12 @@ public final class DungeonRuntimeRegressionTest {
             snapshot.addScan(0, 0, 5, 5, List.of(new DungeonScanPoint(0, 0, -185, -185,
                 DungeonScanPointKind.ROOM, true, 1256805352, -1281477207, 0, DungeonDoorKind.NONE, !mapVisible)));
             snapshot.addScan(1, 1, 5, 5, List.of(room(-1595482137, 994913400)));
-            assertEquals(-1595482137, snapshot.pointAt(0, 0).point().coreHash());
+            assertEquals(-1595482137, snapshot.pointAt(0, 0).coreHash());
             // The trace dropped the next hashes; arbitrary unknowns exercise that transition.
             snapshot.addScan(2, 2, 5, 5, List.of(room(123456789, 987654321)));
             assertEquals("Blaze", KnownDungeonRoomRepository.INSTANCE.matchKnownRooms(snapshot).getFirst().template().name());
             snapshot.observeRoomClearState(0, 0, DungeonMapClearState.COMPLETED);
-            var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+            var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
             assertEquals("Blaze", plan.matches().getFirst().template().name());
             assertTrue(plan.isCompletedRoom(0, 0));
 
@@ -313,7 +313,7 @@ public final class DungeonRuntimeRegressionTest {
         // First nonempty observation at 00:08:56.515 in the user's 00:10:01 trace.
         snapshot.addScan(1906, 1789769336515L, 5, 5, List.of(new DungeonScanPoint(6, 0, -89, -185,
             DungeonScanPointKind.ROOM, true, 1904169381, 578676452, 0, DungeonDoorKind.NONE, true)));
-        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+        var plan = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
         assertEquals("The visible Ice Fill needs direct bundled evidence", 1, plan.matches().size());
         var match = plan.matches().getFirst();
         assertEquals("Ice Fill", match.template().name());
@@ -326,7 +326,7 @@ public final class DungeonRuntimeRegressionTest {
         snapshot.observeRoomClearState(3, 0, DungeonMapClearState.COMPLETED);
         snapshot.addScan(1907, 1789769336565L, 5, 5, List.of(new DungeonScanPoint(6, 0, -89, -185,
             DungeonScanPointKind.ROOM, true, 123456789, 987654321, 0, DungeonDoorKind.NONE, true)));
-        var completed = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot);
+        var completed = DungeonLiveMapWriter.MatchRenderPlan.from(snapshot, KnownDungeonRoomRepository.INSTANCE);
         assertEquals("Ice Fill", completed.matches().getFirst().template().name());
         assertTrue(completed.isCompletedRoom(3, 0));
     }
