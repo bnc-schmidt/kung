@@ -1,6 +1,7 @@
 package com.github.beng420.kung.command;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+import static com.github.beng420.kung.command.CommandTestSupport.parse;
+import static com.github.beng420.kung.command.CommandTestSupport.userDispatcher;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNotNull;
@@ -14,19 +15,6 @@ import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import org.junit.Test;
 
 public class GreenhouseHologramCommandTest {
-    private static CommandDispatcher<FabricClientCommandSource> dispatcher() {
-        var dispatcher = new CommandDispatcher<FabricClientCommandSource>();
-        var root = literal("kung");
-        UserCommandGroup.register(root, null);
-        dispatcher.register(root);
-        return dispatcher;
-    }
-
-    private static ParseResults<FabricClientCommandSource> parse(CommandDispatcher<FabricClientCommandSource> dispatcher,
-                                                                 String command) {
-        return dispatcher.parse(command, null);
-    }
-
     private static void assertExecutable(CommandDispatcher<FabricClientCommandSource> dispatcher, String command) {
         ParseResults<FabricClientCommandSource> parsed = parse(dispatcher, command);
         assertTrue(command, parsed.getExceptions().isEmpty());
@@ -36,7 +24,7 @@ public class GreenhouseHologramCommandTest {
 
     @Test
     public void greenhouseStillOpensThePlannerAndTheHologramHangsBelowIt() {
-        var dispatcher = dispatcher();
+        var dispatcher = userDispatcher();
 
         assertExecutable(dispatcher, "kung greenhouse");
         assertExecutable(dispatcher, "kung greenhouse dump");
@@ -50,7 +38,7 @@ public class GreenhouseHologramCommandTest {
 
     @Test
     public void theHologramCommandsAreNotThePlanner() {
-        var dispatcher = dispatcher();
+        var dispatcher = userDispatcher();
 
         var planner = parse(dispatcher, "kung greenhouse").getContext().getCommand();
         var blueprint = parse(dispatcher, "kung greenhouse blueprint").getContext().getCommand();
@@ -62,7 +50,7 @@ public class GreenhouseHologramCommandTest {
 
     @Test
     public void unknownSubcommandsDoNotParseToACommand() {
-        var dispatcher = dispatcher();
+        var dispatcher = userDispatcher();
 
         for (String command : new String[] {"kung greenhouse bogus", "kung greenhouse blueprint bogus",
             "kung greenhouse holo off extra"}) {

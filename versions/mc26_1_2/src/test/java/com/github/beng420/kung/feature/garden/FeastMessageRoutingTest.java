@@ -7,6 +7,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.network.chat.Component;
 import org.junit.Test;
+import static com.github.beng420.kung.TestFixtures.receiveGame;
 import static org.junit.Assert.*;
 
 public class FeastMessageRoutingTest {
@@ -40,44 +41,31 @@ public class FeastMessageRoutingTest {
             active.get() ? Component.literal("Reformatted chat output") : message);
         String seasoning = "RARE CROP! Seasoning (+80\uE02B) (automatically donated)";
         try {
-            assertTrue(receive(seasoning, false));
+            assertTrue(receiveGame(seasoning, false));
             assertEquals(List.of(seasoning), observed);
             assertEquals(28, session.snapshot().donations());
 
             // Identical text in a second server event represents another drop, not a duplicate.
-            assertTrue(receive(seasoning, false));
+            assertTrue(receiveGame(seasoning, false));
             assertEquals(29, session.snapshot().donations());
             hidden.set(true);
-            assertFalse(receive(seasoning, false));
+            assertFalse(receiveGame(seasoning, false));
             assertEquals(30, session.snapshot().donations());
             assertEquals(3, observed.size());
             assertEquals(Long.valueOf(1_234), kernels.balance());
             assertEquals(0, rate.snapshot(1_000).kernels());
 
-            assertFalse(receive(seasoning, true));
+            assertFalse(receiveGame(seasoning, true));
             assertEquals(30, session.snapshot().donations());
             assertEquals(3, observed.size());
-            assertFalse(receive("[NPC] Feast Chef Ted: Thanks for the donation! I've added a Kernel to your purse.", false));
+            assertFalse(receiveGame("[NPC] Feast Chef Ted: Thanks for the donation! I've added a Kernel to your purse.", false));
             assertEquals(Long.valueOf(1_235), kernels.balance());
             assertEquals(30, session.snapshot().donations());
             assertEquals(1, rate.snapshot(1_000).kernels());
-            assertFalse(receive("[NPC] Feast Chef Ted: Thanks for the donation! I've added a Kernel to your purse.", true));
+            assertFalse(receiveGame("[NPC] Feast Chef Ted: Thanks for the donation! I've added a Kernel to your purse.", true));
             assertEquals("Action bars cannot credit the rate", 1, rate.snapshot(1_000).kernels());
         } finally {
             active.set(false);
         }
-    }
-
-    // Exercise Fabric's complete delivery sequence, including its post-filter events.
-    private static boolean receive(String text, boolean overlay) {
-        Component message = Component.literal(text);
-        boolean allowed = ClientReceiveMessageEvents.ALLOW_GAME.invoker().allowReceiveGameMessage(message, overlay);
-        if (allowed) {
-            message = ClientReceiveMessageEvents.MODIFY_GAME.invoker().modifyReceivedGameMessage(message, overlay);
-            ClientReceiveMessageEvents.GAME.invoker().onReceiveGameMessage(message, overlay);
-        } else {
-            ClientReceiveMessageEvents.GAME_CANCELED.invoker().onReceiveGameMessageCanceled(message, overlay);
-        }
-        return allowed;
     }
 }

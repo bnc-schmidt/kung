@@ -47,8 +47,8 @@ plays for you.
 
 ## Development
 
-One source tree in `versions/mc26_1_2/src` builds for both Minecraft versions; each
-`versions/mcX/src/version/java` only holds the API that differs. Build both jars from the
+One source tree in `versions/mc26_1_2/src` builds for all three Minecraft versions; each
+`versions/mcX/src/version/java` only holds the API that differs. Build all jars from the
 project root:
 
 ```powershell

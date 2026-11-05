@@ -2,22 +2,15 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog.*;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import java.util.List;
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class DungeonMapTrapTest {
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class DungeonMapTrapTest extends MinecraftBootstrapTest {
     @Test public void exactTrapBackgroundSurvivesCheckmarksButNormalOrangeDoesNotQualify() {
         for (int size : List.of(16, 18)) {
             for (int checkColor : List.of(18, 30, 34)) {

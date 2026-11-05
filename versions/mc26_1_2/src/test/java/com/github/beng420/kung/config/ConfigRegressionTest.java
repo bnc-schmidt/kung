@@ -1,5 +1,7 @@
 package com.github.beng420.kung.config;
 
+import static com.github.beng420.kung.config.ConfigTestSupport.read;
+
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.SlayerConfig;
 import com.github.beng420.kung.config.category.SplitsConfig;
@@ -8,17 +10,12 @@ import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.runtime.AppServices;
 import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
 import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
-import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Objects;
 import org.junit.Test;
 
 public final class ConfigRegressionTest {
-    private static KungConfig read(String json) {
-        return KungConfig.read(new StringReader(json));
-    }
-
     @Test
     public void defaultsAndLegacySettings() {
         KungConfig defaults = read("{}");

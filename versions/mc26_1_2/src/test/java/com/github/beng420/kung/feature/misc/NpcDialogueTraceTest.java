@@ -2,27 +2,18 @@ package com.github.beng420.kung.feature.misc;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import java.net.URI;
 import java.util.Optional;
-import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.HoverEvent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.Bootstrap;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class NpcDialogueTraceTest {
-    @BeforeClass
-    public static void bootstrap() {
-        // ClickEvent.Action loads the dialog registry codecs.
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class NpcDialogueTraceTest extends MinecraftBootstrapTest {
     @Test
     public void clickableSegmentsFormatIntoOneTraceLine() {
         CompoundTag answer = new CompoundTag();

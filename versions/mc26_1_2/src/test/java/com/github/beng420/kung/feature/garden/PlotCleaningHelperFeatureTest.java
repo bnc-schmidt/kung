@@ -7,23 +7,16 @@ import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.config.KungSettings;
 import com.github.beng420.kung.feature.garden.PlotCleaningHelperFeature.Plot;
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class PlotCleaningHelperFeatureTest {
+public final class PlotCleaningHelperFeatureTest extends MinecraftBootstrapTest {
     private static BlockState sponge() { return Blocks.SPONGE.defaultBlockState(); }
-
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
 
     @Test public void leavesGrassAndAllFlowersCountButTheGrassBlockDoesNot() {
         for (Block block : new Block[] {Blocks.OAK_LEAVES, Blocks.SPRUCE_LEAVES, Blocks.CHERRY_LEAVES,

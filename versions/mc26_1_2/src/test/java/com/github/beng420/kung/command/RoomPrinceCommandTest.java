@@ -1,6 +1,6 @@
 package com.github.beng420.kung.command;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+import static com.github.beng420.kung.command.CommandTestSupport.kung;
 import static org.junit.Assert.*;
 
 import com.mojang.brigadier.CommandDispatcher;
@@ -56,10 +56,6 @@ public final class RoomPrinceCommandTest {
     }
 
     private static CommandDispatcher<FabricClientCommandSource> dispatcher() {
-        var dispatcher = new CommandDispatcher<FabricClientCommandSource>();
-        var root = literal("kung");
-        RoomLearningCommandGroup.register(root, null);
-        dispatcher.register(root);
-        return dispatcher;
+        return kung(root -> RoomLearningCommandGroup.register(root, null));
     }
 }

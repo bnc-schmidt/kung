@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import static com.github.beng420.kung.TestFixtures.receiveGame;
 import static org.junit.Assert.*;
 
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -72,17 +73,5 @@ public final class DungeonMessageRoutingTest {
         } finally {
             active.set(false);
         }
-    }
-
-    private static boolean receiveGame(String text, boolean overlay) {
-        Component message = Component.literal(text);
-        boolean allowed = ClientReceiveMessageEvents.ALLOW_GAME.invoker().allowReceiveGameMessage(message, overlay);
-        if (allowed) {
-            message = ClientReceiveMessageEvents.MODIFY_GAME.invoker().modifyReceivedGameMessage(message, overlay);
-            ClientReceiveMessageEvents.GAME.invoker().onReceiveGameMessage(message, overlay);
-        } else {
-            ClientReceiveMessageEvents.GAME_CANCELED.invoker().onReceiveGameMessageCanceled(message, overlay);
-        }
-        return allowed;
     }
 }

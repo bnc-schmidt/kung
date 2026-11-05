@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.runtime.AppServices;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
@@ -9,15 +10,9 @@ import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.world.phys.Vec3;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class M7DragonFeatureTest {
-    @BeforeClass public static void bootstrap() {
-        net.minecraft.SharedConstants.tryDetectVersion();
-        net.minecraft.server.Bootstrap.bootStrap();
-    }
-
+public final class M7DragonFeatureTest extends MinecraftBootstrapTest {
     @Test public void copiedDiagnosticsStayOffWithoutTheDeveloperAccount() {
         var config = new Gson().fromJson("""
             {"dungeonMap":{"m7DragonHelperEnabled":true,"devDragonDiagnosticsEnabled":true}}

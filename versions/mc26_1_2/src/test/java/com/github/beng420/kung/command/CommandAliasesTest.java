@@ -1,26 +1,14 @@
 package com.github.beng420.kung.command;
 
-import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
+import static com.github.beng420.kung.command.CommandTestSupport.parse;
+import static com.github.beng420.kung.command.CommandTestSupport.userDispatcher;
 import static org.junit.Assert.*;
 
 import com.mojang.brigadier.CommandDispatcher;
-import com.mojang.brigadier.ParseResults;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
 import org.junit.Test;
 
 public class CommandAliasesTest {
-    private static CommandDispatcher<FabricClientCommandSource> dispatcher() {
-        var dispatcher = new CommandDispatcher<FabricClientCommandSource>();
-        var root = literal("kung");
-        UserCommandGroup.register(root, null);
-        dispatcher.register(root);
-        return dispatcher;
-    }
-
-    private static ParseResults<FabricClientCommandSource> parse(CommandDispatcher<FabricClientCommandSource> dispatcher, String command) {
-        return dispatcher.parse(command, null);
-    }
-
     private static boolean executable(CommandDispatcher<FabricClientCommandSource> dispatcher, String command) {
         var parsed = parse(dispatcher, command);
         return parsed.getExceptions().isEmpty() && !parsed.getReader().canRead() && parsed.getContext().getCommand() != null;
@@ -28,7 +16,7 @@ public class CommandAliasesTest {
 
     @Test
     public void everyNameOfSplitsRunsTheSameCommand() {
-        var dispatcher = dispatcher();
+        var dispatcher = userDispatcher();
         for (String name : new String[] {"splits", "pbs", "personalbests"}) {
             assertTrue(name, executable(dispatcher, "kung " + name));
         }
@@ -39,7 +27,7 @@ public class CommandAliasesTest {
 
     @Test
     public void anAliasTakesNoMoreThanItsCommandAndOthersAreUntouched() {
-        var dispatcher = dispatcher();
+        var dispatcher = userDispatcher();
         assertFalse(executable(dispatcher, "kung pbs extra"));
         assertFalse(executable(dispatcher, "kung personalbest"));
         assertTrue(executable(dispatcher, "kung jerry"));

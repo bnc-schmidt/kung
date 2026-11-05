@@ -1,28 +1,20 @@
 package com.github.beng420.kung.config;
 
+import static com.github.beng420.kung.config.ConfigTestSupport.read;
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.config.category.HitboxesConfig;
-import java.io.StringReader;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.server.Bootstrap;
-import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 
-public final class HitboxesTest {
+public final class HitboxesTest extends MinecraftBootstrapTest {
     @Rule public final TemporaryFolder temporary = new TemporaryFolder();
-
-    @BeforeClass
-    public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
 
     @Test
     public void oldConfigsDefaultOffAndMalformedEntriesDoNotBecomeInvisibleBoxes() {
@@ -251,6 +243,4 @@ public final class HitboxesTest {
         assertNull(HitboxEditorScreen.parseHex("#1234567"));
         assertNull(HitboxEditorScreen.parseHex("#xyzxyz"));
     }
-
-    private static KungConfig read(String json) { return KungConfig.read(new StringReader(json)); }
 }

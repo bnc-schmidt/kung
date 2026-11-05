@@ -1,5 +1,6 @@
 package com.github.beng420.kung.update;
 
+import static com.github.beng420.kung.update.ZipFixtures.entry;
 import static org.junit.Assert.*;
 
 import com.sun.net.httpserver.HttpServer;
@@ -16,7 +17,6 @@ import java.util.HashMap;
 import java.util.HexFormat;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.Rule;
 import org.junit.Test;
@@ -227,12 +227,6 @@ public final class KungUpdateDownloadTest {
             entry(zip, "assets/kung/payload.txt", "resource payload".getBytes(StandardCharsets.UTF_8));
         }
         return bytes.toByteArray();
-    }
-
-    private static void entry(ZipOutputStream zip, String name, byte[] bytes) throws IOException {
-        zip.putNextEntry(new ZipEntry(name));
-        zip.write(bytes);
-        zip.closeEntry();
     }
 
     private static void assertEmpty(Path directory) throws IOException {

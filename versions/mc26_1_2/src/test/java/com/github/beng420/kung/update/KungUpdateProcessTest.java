@@ -1,5 +1,6 @@
 package com.github.beng420.kung.update;
 
+import static com.github.beng420.kung.update.ZipFixtures.entry;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
@@ -10,7 +11,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.util.concurrent.TimeUnit;
 import java.util.jar.JarFile;
-import java.util.zip.ZipEntry;
 import java.util.zip.ZipOutputStream;
 import org.junit.Rule;
 import org.junit.Test;
@@ -166,12 +166,8 @@ public final class KungUpdateProcessTest {
 
     private static void jar(Path path, String version) throws IOException {
         try (var zip = new ZipOutputStream(Files.newOutputStream(path))) {
-            zip.putNextEntry(new ZipEntry("fabric.mod.json"));
-            zip.write(("{\"id\":\"kung\",\"version\":\"" + version + "\"}").getBytes(StandardCharsets.UTF_8));
-            zip.closeEntry();
-            zip.putNextEntry(new ZipEntry("payload.txt"));
-            zip.write(version.getBytes(StandardCharsets.UTF_8));
-            zip.closeEntry();
+            entry(zip, "fabric.mod.json", ("{\"id\":\"kung\",\"version\":\"" + version + "\"}").getBytes(StandardCharsets.UTF_8));
+            entry(zip, "payload.txt", version.getBytes(StandardCharsets.UTF_8));
         }
     }
 

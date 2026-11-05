@@ -2,30 +2,21 @@ package com.github.beng420.kung.feature.misc;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.feature.misc.NpcDialogueSkipFeature.ClickGuard;
 import com.github.beng420.kung.feature.misc.NpcDialogueSkipFeature.Option;
 import java.util.List;
 import java.util.Optional;
-import net.minecraft.SharedConstants;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.ClickEvent;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.network.chat.Style;
 import net.minecraft.resources.Identifier;
-import net.minecraft.server.Bootstrap;
 import org.junit.Before;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class NpcDialogueSkipFeatureTest {
-    @BeforeClass
-    public static void bootstrap() {
-        // ClickEvent.Action loads the dialog registry codecs.
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class NpcDialogueSkipFeatureTest extends MinecraftBootstrapTest {
     @Before
     public void fullBuildOnly() {
         org.junit.Assume.assumeFalse("Skip NPC Dialogue is not in the Modrinth build", com.github.beng420.kung.KungBuild.MODRINTH);

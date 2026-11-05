@@ -1,5 +1,6 @@
 package com.github.beng420.kung.skyblock;
 
+import static com.github.beng420.kung.TestFixtures.receiveGame;
 import static org.junit.Assert.*;
 
 import java.util.List;
@@ -31,7 +32,7 @@ public final class HypixelDungeonFloorMessageTest {
                 state.reset();
                 hidden.set(cancel);
                 int before = received.get();
-                assertEquals(!cancel, receive(ENTRY, false));
+                assertEquals(!cancel, receiveGame(ENTRY, false));
                 assertEquals(before + 1, received.get());
                 assertEquals(HypixelDungeonFloor.UNKNOWN, state.current());
                 state.worldChanged(2_000L);
@@ -40,7 +41,7 @@ public final class HypixelDungeonFloorMessageTest {
             }
             state.reset();
             int before = received.get();
-            receive(ENTRY, true);
+            receiveGame(ENTRY, true);
             assertEquals(before, received.get());
             state.worldChanged(2_000L);
             state.observe(CATACOMBS, List.of("The Catacombs"), 2_001L);
@@ -48,17 +49,5 @@ public final class HypixelDungeonFloorMessageTest {
         } finally {
             active.set(false);
         }
-    }
-
-    private static boolean receive(String text, boolean overlay) {
-        Component message = Component.literal(text);
-        boolean allowed = ClientReceiveMessageEvents.ALLOW_GAME.invoker().allowReceiveGameMessage(message, overlay);
-        if (allowed) {
-            message = ClientReceiveMessageEvents.MODIFY_GAME.invoker().modifyReceivedGameMessage(message, overlay);
-            ClientReceiveMessageEvents.GAME.invoker().onReceiveGameMessage(message, overlay);
-        } else {
-            ClientReceiveMessageEvents.GAME_CANCELED.invoker().onReceiveGameMessageCanceled(message, overlay);
-        }
-        return allowed;
     }
 }

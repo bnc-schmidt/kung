@@ -2,26 +2,18 @@ package com.github.beng420.kung.feature.garden;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import java.util.List;
-import net.minecraft.SharedConstants;
 import net.minecraft.core.BlockPos;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.CocoaBlock;
 import net.minecraft.world.level.block.CropBlock;
 import net.minecraft.world.level.block.DoublePlantBlock;
 import net.minecraft.world.level.block.NetherWartBlock;
 import net.minecraft.world.level.block.state.properties.DoubleBlockHalf;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public class VisitorCropTrackerTest {
-    @BeforeClass
-    public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public class VisitorCropTrackerTest extends MinecraftBootstrapTest {
     @Test
     public void flowerHalvesAndGardenPumpkinsAreHarvestable() {
         for (var block : List.of(Blocks.ROSE_BUSH, Blocks.SUNFLOWER)) {

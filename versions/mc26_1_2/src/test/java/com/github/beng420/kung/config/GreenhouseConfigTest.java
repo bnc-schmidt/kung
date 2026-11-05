@@ -1,10 +1,10 @@
 package com.github.beng420.kung.config;
 
+import static com.github.beng420.kung.config.ConfigTestSupport.read;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.config.category.GreenhouseConfig;
-import java.io.StringReader;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.Rule;
@@ -150,9 +150,5 @@ public final class GreenhouseConfigTest {
         assertEquals("key:75:0", config.toggleKeybind());
         assertEquals("K", 75, config.toggleKey());
         assertEquals("U unloads", "key:85:0", config.unloadKeybind());
-    }
-
-    private static KungConfig read(String json) {
-        return KungConfig.read(new StringReader(json));
     }
 }

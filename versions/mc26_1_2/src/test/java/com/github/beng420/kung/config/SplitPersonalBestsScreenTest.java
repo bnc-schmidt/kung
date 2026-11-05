@@ -2,17 +2,10 @@ package com.github.beng420.kung.config;
 
 import static org.junit.Assert.*;
 
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
-import org.junit.BeforeClass;
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import org.junit.Test;
 
-public final class SplitPersonalBestsScreenTest {
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class SplitPersonalBestsScreenTest extends MinecraftBootstrapTest {
     @Test public void inputFilterAllowsEditingButRejectsLettersAndMisplacedSeparators() {
         for (String text : new String[] {"", "0", "01:", "01:2", "01:23.", ":.456", "01:23.456"}) {
             assertTrue(text, SplitPersonalBestsScreen.acceptsTimeInput(text));

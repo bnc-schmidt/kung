@@ -2,25 +2,18 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.compat.McCompat;
 import java.util.List;
 import java.util.UUID;
-import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.boss.wither.WitherBoss;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.phys.Vec3;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class DungeonDebuffPositionTest {
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class DungeonDebuffPositionTest extends MinecraftBootstrapTest {
     @Test public void goldorMarkerCoordinatesMatchReceivedMovementBeforeTheMobFinishesInterpolating() {
         var goldor = wither();
         Vec3 rendered = new Vec3(45.080954954055635, 117.19359608171682, 40.03958822780525);

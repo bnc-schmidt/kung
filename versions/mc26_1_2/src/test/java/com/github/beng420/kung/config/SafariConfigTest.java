@@ -1,8 +1,8 @@
 package com.github.beng420.kung.config;
 
-import java.io.StringReader;
 import java.nio.file.Files;
 import org.junit.Test;
+import static com.github.beng420.kung.config.ConfigTestSupport.read;
 import static org.junit.Assert.*;
 
 public class SafariConfigTest {
@@ -46,9 +46,5 @@ public class SafariConfigTest {
         assertEquals(123, restored.feast.x());
         assertEquals(74, restored.feast.y());
         assertEquals(91, restored.dungeon.x());
-    }
-
-    private static KungConfig read(String json) {
-        return KungConfig.read(new StringReader(json));
     }
 }

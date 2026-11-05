@@ -3,22 +3,15 @@ package com.github.beng420.kung.feature.dungeon;
 import static org.junit.Assert.*;
 
 import com.github.beng420.kung.KungBuild;
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
-import net.minecraft.SharedConstants;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class ColoredPillarsFeatureTest {
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class ColoredPillarsFeatureTest extends MinecraftBootstrapTest {
     @Test public void fourPillarsUseTheirOwnColorForEveryMaterial() {
         int[][] centers = {{46, 41}, {46, 65}, {100, 65}, {100, 41}};
         Block[][] expected = {

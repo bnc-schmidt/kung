@@ -2,23 +2,16 @@ package com.github.beng420.kung.feature.misc;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.MinecraftBootstrapTest;
 import java.util.Set;
-import net.minecraft.SharedConstants;
 import net.minecraft.network.chat.Component;
-import net.minecraft.server.Bootstrap;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.decoration.ArmorStand;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.phys.AABB;
-import org.junit.BeforeClass;
 import org.junit.Test;
 
-public final class HitboxesFeatureTest {
-    @BeforeClass public static void bootstrap() {
-        SharedConstants.tryDetectVersion();
-        Bootstrap.bootStrap();
-    }
-
+public final class HitboxesFeatureTest extends MinecraftBootstrapTest {
     @Test
     public void nametagsReduceToTheirMobNameAndMatchWholeWords() {
         assertEquals("Zealot", HitboxesFeature.mobName("[Lv55] Zealot 13,000/13,000❤"));
