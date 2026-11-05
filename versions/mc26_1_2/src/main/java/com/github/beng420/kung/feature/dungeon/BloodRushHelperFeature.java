@@ -5,6 +5,7 @@ import com.github.beng420.kung.config.category.BRHelperConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.message.KungMessages;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.HashSet;
 import java.util.Locale;
@@ -21,7 +22,6 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
     private boolean initialTitleShown;
     private long initialTitleScheduledTick = Long.MIN_VALUE;
     private long initialTitleStableSinceTick = Long.MIN_VALUE;
-    private int initialTitleCandidateCount = -1;
     private String initialTitleCandidateText = "";
     private Integer forcedDoorTitleCount;
     private final Set<DungeonLiveMapWriter.CellKey> observedOpenedDoorCells = new HashSet<>();
@@ -47,15 +47,11 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         return config().enabled();
     }
 
-    boolean doorTitlePending(long dungeonTick) {
+    boolean doorTitlePending() {
         return enabled()
             && initialTitleScheduled
             && !initialTitleShown
             && forcedDoorTitleCount == null;
-    }
-
-    boolean shouldFastScanDoors(long dungeonTick) {
-        return doorTitlePending(dungeonTick);
     }
 
     void debugShowDoorTitle(Minecraft client, int doorCount) {
@@ -78,40 +74,36 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
             return;
         }
         initialTitleScheduled = true;
-        initialTitleShown = false;
         initialTitleScheduledTick = dungeonTick;
-        initialTitleStableSinceTick = Long.MIN_VALUE;
-        initialTitleCandidateCount = -1;
-        initialTitleCandidateText = "";
-        lastLoggedDoorTitleState = "";
-        serverTicksSinceRunStart = 0L;
-        maxObservedBloodRushDoors = 0;
-        bloodRushDoneShown = false;
-        observedOpenedDoorCells.clear();
-        progressBaselineReady = false;
-        lastRemainingDoorCount = -1;
-        lastProgressPlan = null;
+        resetRunState();
         KungDebugRecorder.event("door-title", "scheduled initial atTick=" + dungeonTick);
     }
 
     void clear(long dungeonTick) {
         initialTitleScheduled = false;
-        initialTitleShown = false;
         initialTitleScheduledTick = Long.MIN_VALUE;
-        initialTitleStableSinceTick = Long.MIN_VALUE;
-        initialTitleCandidateCount = -1;
-        initialTitleCandidateText = "";
         forcedDoorTitleCount = null;
-        observedOpenedDoorCells.clear();
-        progressBaselineReady = false;
-        lastRemainingDoorCount = -1;
-        lastLoggedDoorTitleState = "";
         lastLoggedDoorProgressState = "";
+        resetRunState();
+        KungDebugRecorder.event("door-title", "cleared atTick=" + dungeonTick);
+    }
+
+    private void resetRunState() {
+        initialTitleShown = false;
+        resetCandidate();
+        lastLoggedDoorTitleState = "";
         serverTicksSinceRunStart = 0L;
         maxObservedBloodRushDoors = 0;
         bloodRushDoneShown = false;
+        observedOpenedDoorCells.clear();
+        progressBaselineReady = false;
+        lastRemainingDoorCount = -1;
         lastProgressPlan = null;
-        KungDebugRecorder.event("door-title", "cleared atTick=" + dungeonTick);
+    }
+
+    private void resetCandidate() {
+        initialTitleCandidateText = "";
+        initialTitleStableSinceTick = Long.MIN_VALUE;
     }
 
     void serverTick() {
@@ -124,7 +116,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         if (!enabled() || !realRunStarted || message == null) {
             return;
         }
-        String clean = DungeonLifecycleSignals.clean(message).toLowerCase(Locale.ROOT);
+        String clean = HypixelLocation.clean(message).toLowerCase(Locale.ROOT);
         if ("the blood door has been opened!".equals(clean)) {
             recordBloodRushDoorObservation(tracker.renderPlan(), tracker.mapSnapshot());
             showBloodRushDone(client);
@@ -159,11 +151,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
                 initialTitleShown = true;
                 displayDoorTitle(client, estimate.remainingTitle(plan.bloodIsNext()));
             }
-            logDoorProgressState("baseline opened="
-                + openedDoors.size()
-                + " remaining="
-                + remainingDoors
-                + " "
+            logDoorProgressState("baseline opened=" + openedDoors.size() + " remaining=" + remainingDoors + " "
                 + doorTitleDiagnostics(tracker));
             return;
         }
@@ -176,36 +164,22 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         if (newlyOpenedDoors.isEmpty() && !remainingDropped) {
             lastRemainingDoorCount = remainingDoors;
             observedOpenedDoorCells.addAll(openedDoors);
-            logDoorProgressState("steady opened="
-                + openedDoors.size()
-                + " remaining="
-                + remainingDoors
-                + " "
+            logDoorProgressState("steady opened=" + openedDoors.size() + " remaining=" + remainingDoors + " "
                 + doorTitleDiagnostics(tracker));
             return;
         }
 
         if (newlyOpenedDoors.isEmpty()) {
             lastRemainingDoorCount = remainingDoors;
-            logDoorProgressState("path-adjusted opened=[] remaining="
-                + remainingDoors
-                + " previousRemaining="
-                + previousRemainingDoors
-                + " "
-                + doorTitleDiagnostics(tracker));
+            logDoorProgressState("path-adjusted opened=[] remaining=" + remainingDoors + " previousRemaining="
+                + previousRemainingDoors + " " + doorTitleDiagnostics(tracker));
             return;
         }
 
         observedOpenedDoorCells.addAll(openedDoors);
         lastRemainingDoorCount = remainingDoors;
-        logDoorProgressState("door-fell opened="
-            + cellKeysText(newlyOpenedDoors)
-            + " remaining="
-            + remainingDoors
-            + " dropped="
-            + remainingDropped
-            + " "
-            + doorTitleDiagnostics(tracker));
+        logDoorProgressState("door-fell opened=" + cellKeysText(newlyOpenedDoors) + " remaining=" + remainingDoors
+            + " dropped=" + remainingDropped + " " + doorTitleDiagnostics(tracker));
 
         if (remainingDoors <= 0) {
             if (!bloodRushDoneShown && estimate.exact() && plan.hasLockedBloodSpecialDoor()
@@ -216,9 +190,7 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         }
         initialTitleScheduled = false;
         initialTitleShown = true;
-        initialTitleCandidateCount = -1;
-        initialTitleCandidateText = "";
-        initialTitleStableSinceTick = Long.MIN_VALUE;
+        resetCandidate();
         displayDoorTitle(client, estimate.remainingTitle(plan.bloodIsNext()));
     }
 
@@ -245,69 +217,38 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         recordBloodRushDoorObservation(plan, snapshot);
         BloodRushDoorEstimate estimate = BloodRushDoorEstimate.initial(plan, snapshot);
         if (!estimate.available()) {
-            initialTitleCandidateCount = -1;
-            initialTitleCandidateText = "";
-            initialTitleStableSinceTick = Long.MIN_VALUE;
-            logDoorTitleState("waiting estimate=false since="
-                + initialTitleScheduledTick
-                + " "
+            resetCandidate();
+            logDoorTitleState("waiting estimate=false since=" + initialTitleScheduledTick + " "
                 + doorTitleDiagnostics(tracker));
             return;
         }
 
         String titleText = estimate.initialTitle();
-        if (estimate.count() != initialTitleCandidateCount || !titleText.equals(initialTitleCandidateText)) {
-            initialTitleCandidateCount = estimate.count();
+        if (!titleText.equals(initialTitleCandidateText)) {
             initialTitleCandidateText = titleText;
             initialTitleStableSinceTick = dungeonTick;
-            logDoorTitleState("candidate count="
-                + estimate.count()
-                + " text=\""
-                + titleText
-                + "\" exact="
-                + estimate.exact()
-                + " tick="
-                + dungeonTick
-                + " "
-                + doorTitleDiagnostics(tracker));
+            logDoorTitleState("candidate count=" + estimate.count() + " text=\"" + titleText + "\" exact="
+                + estimate.exact() + " tick=" + dungeonTick + " " + doorTitleDiagnostics(tracker));
             return;
         }
 
         if (initialTitleStableSinceTick == Long.MIN_VALUE
             || dungeonTick - initialTitleStableSinceTick < DOOR_TITLE_STABLE_TICKS) {
-            logDoorTitleState("confirming count="
-                + estimate.count()
-                + " text=\""
-                + titleText
-                + "\" exact="
-                + estimate.exact()
-                + " since="
-                + initialTitleStableSinceTick
-                + " "
-                + doorTitleDiagnostics(tracker));
+            logDoorTitleState("confirming count=" + estimate.count() + " text=\"" + titleText + "\" exact="
+                + estimate.exact() + " since=" + initialTitleStableSinceTick + " " + doorTitleDiagnostics(tracker));
             return;
         }
 
         displayDoorTitle(client, titleText);
         initialTitleShown = true;
         initialTitleScheduled = false;
-        initialTitleCandidateCount = -1;
-        initialTitleCandidateText = "";
-        initialTitleStableSinceTick = Long.MIN_VALUE;
+        resetCandidate();
         progressBaselineReady = true;
         observedOpenedDoorCells.clear();
         observedOpenedDoorCells.addAll(plan.openedRawNonStartSpecialDoorCells(snapshot));
         lastRemainingDoorCount = BloodRushDoorEstimate.remaining(plan, snapshot).count();
-        logDoorTitleState("show initial count="
-            + estimate.count()
-            + " text=\""
-            + titleText
-            + "\" exact="
-            + estimate.exact()
-            + " remaining="
-            + lastRemainingDoorCount
-            + " "
-            + doorTitleDiagnostics(tracker));
+        logDoorTitleState("show initial count=" + estimate.count() + " text=\"" + titleText + "\" exact="
+            + estimate.exact() + " remaining=" + lastRemainingDoorCount + " " + doorTitleDiagnostics(tracker));
     }
 
     private static String cellKeysText(Set<DungeonLiveMapWriter.CellKey> cells) {
@@ -339,56 +280,29 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         if (plan == null || snapshot == null) {
             return;
         }
-        int observedTotal = Math.max(
-            Math.max(plan.bloodRushTotalSpecialDoorCount(), plan.knownNonStartSpecialDoorCount()),
-            Math.max(plan.knownNonStartSpecialDoorCount(), plan.rawNonStartSpecialDoorCount(snapshot))
-        );
-        observedTotal = Math.max(observedTotal, plan.openedRawNonStartSpecialDoorCount(snapshot));
-        maxObservedBloodRushDoors = Math.max(
-            maxObservedBloodRushDoors,
-            Math.max(observedTotal, plan.minimumVisibleBloodRushSpecialDoorCount(snapshot))
-        );
+        int observedTotal = Math.max(BloodRushDoorEstimate.totalKnown(plan, snapshot),
+            plan.openedRawNonStartSpecialDoorCount(snapshot));
+        maxObservedBloodRushDoors = Math.max(maxObservedBloodRushDoors,
+            Math.max(observedTotal, plan.minimumVisibleBloodRushSpecialDoorCount(snapshot)));
     }
 
     private String doorTitleDiagnostics(DungeonStateTracker tracker) {
         DungeonMapSnapshot snapshot = tracker.mapSnapshot();
         DungeonLiveMapWriter.MatchRenderPlan plan = tracker.renderPlan();
-        return "observedRooms="
-            + plan.observedRoomCount()
-            + " rawRoomCells="
-            + snapshot.observedRoomCount()
-            + " rawDoors="
-            + snapshot.lockedSpecialDoorCount()
-            + " bloodRushTotal="
-            + plan.bloodRushTotalSpecialDoorCount()
-            + " bloodRushLocked="
-            + plan.bloodRushLockedSpecialDoorCount()
-            + " knownTotal="
-            + BloodRushDoorEstimate.totalKnown(plan, snapshot)
-            + " knownOpened="
-            + plan.openedRawNonStartSpecialDoorCells(snapshot).size()
-            + " bloodRushOpened="
-            + plan.bloodRushOpenedSpecialDoorCells().size()
-            + " minimumTotal="
-            + plan.minimumVisibleBloodRushSpecialDoorCount(snapshot)
-            + " minimumLocked="
-            + plan.minimumVisibleBloodRushLockedSpecialDoorCount(snapshot)
-            + " minimumOpened="
-            + plan.openedRawNonStartSpecialDoorCells(snapshot).size()
-            + " mapVisibleRooms="
-            + plan.mapVisibleRoomCount(snapshot)
-            + " recognizedMapRooms="
-            + plan.recognizedMapVisibleRoomCount(snapshot)
-            + " pathVisible="
-            + plan.bloodRushPathVisibleEnough(snapshot)
-            + " matches="
-            + plan.matches().size()
-            + " hasBlood="
-            + plan.hasRoomType(RoomType.BLOOD)
-            + " exact="
-            + BloodRushDoorEstimate.isExact(plan, snapshot)
-            + " bloodRushDoors="
-            + plan.bloodRushSpecialDoorSummary();
+        return "observedRooms=" + plan.observedRoomCount() + " rawRoomCells=" + snapshot.observedRoomCount()
+            + " rawDoors=" + snapshot.lockedSpecialDoorCount() + " bloodRushTotal="
+            + plan.bloodRushTotalSpecialDoorCount() + " bloodRushLocked=" + plan.bloodRushLockedSpecialDoorCount()
+            + " knownTotal=" + BloodRushDoorEstimate.totalKnown(plan, snapshot) + " knownOpened="
+            + plan.openedRawNonStartSpecialDoorCells(snapshot).size() + " bloodRushOpened="
+            + plan.bloodRushOpenedSpecialDoorCells().size() + " minimumTotal="
+            + plan.minimumVisibleBloodRushSpecialDoorCount(snapshot) + " minimumLocked="
+            + plan.minimumVisibleBloodRushLockedSpecialDoorCount(snapshot) + " minimumOpened="
+            + plan.openedRawNonStartSpecialDoorCells(snapshot).size() + " mapVisibleRooms="
+            + plan.mapVisibleRoomCount(snapshot) + " recognizedMapRooms="
+            + plan.recognizedMapVisibleRoomCount(snapshot) + " pathVisible="
+            + plan.bloodRushPathVisibleEnough(snapshot) + " matches=" + plan.matches().size() + " hasBlood="
+            + plan.hasRoomType(RoomType.BLOOD) + " exact=" + BloodRushDoorEstimate.isExact(plan, snapshot)
+            + " bloodRushDoors=" + plan.bloodRushSpecialDoorSummary();
     }
 
     private void logDoorTitleState(String stateText) {
@@ -418,11 +332,8 @@ public final class BloodRushHelperFeature extends ConfigurableFeature<BRHelperCo
         bloodRushDoneShown = true;
         // Server confirmation wins over door scans that arrive after Blood has opened.
         initialTitleScheduled = false;
-        String subtitle = "took "
-            + formatServerTickTime(serverTicksSinceRunStart)
-            + " | "
-            + Math.max(0, maxObservedBloodRushDoors)
-            + " doors";
+        String subtitle = "took " + formatServerTickTime(serverTicksSinceRunStart) + " | "
+            + Math.max(0, maxObservedBloodRushDoors) + " doors";
         showDoorTitle(client, "Blood rush done", subtitle, ChatFormatting.RED, Math.max(20, doorTitleStayTicks()));
         if (client != null && client.player != null) {
             client.player.sendSystemMessage(KungMessages.info("BR", "Blood rush done - " + subtitle));

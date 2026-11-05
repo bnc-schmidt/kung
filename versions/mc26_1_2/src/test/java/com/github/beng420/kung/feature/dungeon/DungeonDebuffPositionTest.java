@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.*;
 
+import com.github.beng420.kung.compat.McCompat;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.SharedConstants;
@@ -53,11 +54,11 @@ public final class DungeonDebuffPositionTest {
         marker.setPos(1, 2, 3);
         var bounds = marker.getBoundingBox();
         marker.moveOrInterpolateTo(new Vec3(4, 5, 6));
-        assertEquals(new Vec3(4, 5, 6), DungeonDebuffFeature.matchingPosition(marker));
+        assertEquals(new Vec3(4, 5, 6), McCompat.interpolatedPosition(marker));
         assertEquals(bounds.move(3, 3, 3), DungeonDebuffFeature.matchingTarget(marker).bounds());
         assertEquals(new Vec3(1, 2, 3), marker.position());
         marker.getInterpolation().cancel();
-        assertEquals(marker.position(), DungeonDebuffFeature.matchingPosition(marker));
+        assertEquals(marker.position(), McCompat.interpolatedPosition(marker));
         assertEquals(bounds, DungeonDebuffFeature.matchingTarget(marker).bounds());
     }
 

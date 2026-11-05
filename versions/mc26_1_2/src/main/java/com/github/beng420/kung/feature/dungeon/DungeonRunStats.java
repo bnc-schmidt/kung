@@ -994,7 +994,7 @@ public final class DungeonRunStats {
 
     public void observeMessage(Minecraft client, String rawMessage, long nowTick, DungeonDeathTracker.MessageSource source) {
         if (rawMessage == null || rawMessage.isBlank() || sendingRunSummary) return;
-        String message = DungeonLifecycleSignals.clean(rawMessage);
+        String message = HypixelLocation.clean(rawMessage);
         if (isGeneratedRunSummaryLine(message) || source == DungeonDeathTracker.MessageSource.ACTIONBAR) return;
         // Bonus assists may be social messages, but personal counters never come from quoted chat.
         observeScoreKillMessage(client, message);
@@ -1067,7 +1067,7 @@ public final class DungeonRunStats {
     }
 
     void observeScoreboardLine(Minecraft client, String raw) {
-        String line = DungeonLifecycleSignals.clean(raw);
+        String line = HypixelLocation.clean(raw);
         if (line.isBlank()) return;
         observeStatLine(client, line);
         int totalDeaths = DungeonDeathTracker.teamTotal(line);
@@ -1135,7 +1135,7 @@ public final class DungeonRunStats {
     }
 
     UUID observeTabLine(Minecraft client, String line, UUID uuid) {
-        line = DungeonLifecycleSignals.clean(line);
+        line = HypixelLocation.clean(line);
         int partySecrets = DungeonSecretCounts.partyFound(line);
         if (partySecrets >= 0) {
             observeSecretsTotal(partySecrets);
@@ -1246,7 +1246,7 @@ public final class DungeonRunStats {
     }
 
     void observeStatLine(Minecraft client, String raw) {
-        String line = DungeonLifecycleSignals.clean(raw);
+        String line = HypixelLocation.clean(raw);
         observeFloorMetadata(line);
         observeServerScoreLine(line);
         var fraction = DungeonSecretCounts.party(line);

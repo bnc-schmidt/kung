@@ -220,7 +220,7 @@ public final class DungeonMimicStaticChests {
 
     private static DungeonStaticChestPattern.Room roomAt(DungeonStateTracker tracker, BlockPos pos, boolean capture) {
         var grid = DungeonScanUtils.getRoomGridPosition(pos);
-        if (grid.gridX() < 0 || grid.gridX() > 5 || grid.gridZ() < 0 || grid.gridZ() > 5) return null;
+        if (!DungeonScanUtils.isValidRoomGrid(grid.gridX(), grid.gridZ())) return null;
         var plan = tracker.renderPlan();
         var match = plan.matches().stream().filter(m -> m.contains(grid.gridX(), grid.gridZ())).findFirst().orElse(null);
         if (match == null || match.components().size() != match.template().components().size()) return null;

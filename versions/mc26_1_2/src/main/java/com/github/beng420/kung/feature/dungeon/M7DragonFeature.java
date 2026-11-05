@@ -1,22 +1,25 @@
 package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.compat.McCompat;
+import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.KungHudEditorScreen;
 import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.DungeonConfig;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioSplit;
 import com.github.beng420.kung.config.category.DungeonConfig.DragonPrioUnit;
-import java.util.List;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.dungeon.M7DragonTracker.Statue;
+import com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature;
 import com.github.beng420.kung.runtime.KungDeveloperAccess;
-import com.github.beng420.kung.runtime.KungFileLayout;
+import com.github.beng420.kung.runtime.KungPaths;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.ui.HudPose;
 import com.github.beng420.kung.util.KungDebugRecorder;
-import java.io.BufferedWriter;
+import com.google.gson.JsonArray;
+import com.google.gson.JsonParser;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -25,11 +28,14 @@ import java.nio.file.StandardOpenOption;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.EnumMap;
+import java.util.EnumSet;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
+import java.util.function.DoubleFunction;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
@@ -39,6 +45,7 @@ import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleType;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.chat.Component;
@@ -47,6 +54,7 @@ import net.minecraft.network.protocol.game.ClientboundLevelParticlesPacket;
 import net.minecraft.resources.Identifier;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.boss.enderdragon.EnderDragon;
+import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
@@ -58,7 +66,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private final Map<UUID, EnderDragon> entities = new LinkedHashMap<>();
     /** Last health and highest health seen per dragon, from its entity data; any dragon, identified or not. */
     private record HpSeen(EnderDragon dragon, float last, float peak) { }
-    private final Map<UUID, HpSeen> hpSeen = new java.util.HashMap<>();
+    private final Map<UUID, HpSeen> hpSeen = new HashMap<>();
     private final Map<Statue, Boolean> statuePresent = new EnumMap<>(Statue.class);
     /** Resolved statues awaiting one shared title; EnumMap dedupes and keeps arena order. */
     private final Map<Statue, M7DragonTracker.Outcome> pendingTitles = new EnumMap<>(Statue.class);
@@ -71,8 +79,8 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private final Map<Statue, Integer> prioNumbers = new EnumMap<>(Statue.class);
     private int hintCount;
     /** Server tick each dragon was first seen, and its per-tick part positions while being recorded. */
-    private final Map<UUID, Long> spawnTicks = new java.util.HashMap<>();
-    private final Map<UUID, List<double[]>> timelineRows = new java.util.HashMap<>();
+    private final Map<UUID, Long> spawnTicks = new HashMap<>();
+    private final Map<UUID, List<double[]>> timelineRows = new HashMap<>();
     /** Newest recorded flight per statue, and how many flights the file already holds per statue. */
     private final Map<Statue, M7DragonAim.Timeline> timelines = new EnumMap<>(Statue.class);
     private final Map<Statue, Integer> timelineCounts = new EnumMap<>(Statue.class);
@@ -84,10 +92,9 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private static final String TIMELINE_FILE = "m7-dragon-timelines.jsonl";
     /** Flight path per statue, from spawn to the point the dragon left its range. */
     private final Map<Statue, List<Vec3>> trails = new EnumMap<>(Statue.class);
-    private final java.util.EnumSet<Statue> trailsClosed = java.util.EnumSet.noneOf(Statue.class);
-    private final java.util.Set<UUID> hitboxesRecorded = new java.util.HashSet<>();
+    private final EnumSet<Statue> trailsClosed = EnumSet.noneOf(Statue.class);
     /** Most recent recorded start paths per statue, newest last, capped at MAX_RECORDED_PATHS. */
-    private final Map<Statue, java.util.ArrayDeque<List<Vec3>>> recordedPaths = new EnumMap<>(Statue.class);
+    private final Map<Statue, ArrayDeque<List<Vec3>>> recordedPaths = new EnumMap<>(Statue.class);
     private DungeonConfig.DragonPart recordedPathsPart;
     private static final int MAX_RECORDED_PATHS = 5;
     private static final int MAX_TRAIL_POINTS = 256;
@@ -136,7 +143,6 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         spawnHints.clear();
         prioNumbers.clear();
         hintCount = 0;
-        hitboxesRecorded.clear();
         trails.clear();
         trailsClosed.clear();
         if (!KungDeveloperAccess.allowed()) lastDeveloperReport = "";
@@ -189,7 +195,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private void observeMessage(String message, boolean overlay) {
         if (overlay) return;
         synchronizeEpoch();
-        String clean = DungeonLifecycleSignals.clean(message);
+        String clean = HypixelLocation.clean(message);
         if (!HypixelInstanceTracker.INSTANCE.catacombs() || !clean.startsWith("[BOSS] Wither King:")) return;
         witherKingEpoch = epoch;
         if (!ready()) return;
@@ -199,7 +205,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     }
 
     public void observeSpawn(Entity entity) {
-        if (entity instanceof net.minecraft.world.entity.projectile.arrow.AbstractArrow arrow) {
+        if (entity instanceof AbstractArrow arrow) {
             observeArrow(arrow);
             return;
         }
@@ -258,11 +264,11 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         var attempt = tracker.attempt(entity.getUUID());
         if (attempt == null) {
             if (tracker.unknownDeath(entity.getUUID())) trace("unidentified-death uuid=" + entity.getUUID()
-                + " position=" + DungeonDebuffFeature.matchingPosition(entity));
+                + " position=" + McCompat.interpolatedPosition(entity));
             return;
         }
         if (attempt.dead()) return;
-        tracker.move(entity.getUUID(), DungeonDebuffFeature.matchingPosition(entity));
+        tracker.move(entity.getUUID(), McCompat.interpolatedPosition(entity));
         tracker.death(entity.getUUID());
         trace("death " + attempt.statue().label() + " uuid=" + entity.getUUID()
             + " position=" + attempt.position() + " estimatedInside=" + attempt.statue().contains(attempt.position()));
@@ -291,10 +297,9 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
                 iterator.remove();
                 continue;
             }
-            tracker.move(entry.getKey(), DungeonDebuffFeature.matchingPosition(dragon));
+            tracker.move(entry.getKey(), McCompat.interpolatedPosition(dragon));
             recordTimeline(entry.getKey(), dragon);
             recordTrail(dragon);
-            recordHitbox(dragon);
         }
         // Five fixed blocks, only while the arena is loaded; never request chunks or scan structures.
         if (inArena(client)) for (Statue statue : Statue.values()) {
@@ -383,7 +388,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         if (config().devDragonDiagnosticsEnabled()) for (EnderDragon dragon : entities.values()) {
             if (dragon.isRemoved() || !dragon.isAlive()) continue;
             // White: received origin used by the estimate; yellow: interpolated body-box center.
-            markers.add(point(DungeonDebuffFeature.matchingPosition(dragon), 0xFFFFFFFF));
+            markers.add(point(McCompat.interpolatedPosition(dragon), 0xFFFFFFFF));
             markers.add(point(dragon.getBoundingBox().getCenter()
                 .add(dragon.getPosition(partialTick).subtract(dragon.position())), 0xFFFFFF55));
         }
@@ -403,10 +408,8 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
 
     /** Waypoint rests on the spawn anchor until that statue's dragon is in the air, then rides it. */
     private Vec3 waypoint(Statue statue, float partialTick) {
-        var attempt = tracker.latest(statue);
-        if (attempt == null || attempt.dead()) return spawnCentre(statue);
-        EnderDragon dragon = entities.get(attempt.uuid());
-        if (dragon == null || dragon.isRemoved() || !dragon.isAlive()) return spawnCentre(statue);
+        EnderDragon dragon = liveDragon(statue);
+        if (dragon == null) return spawnCentre(statue);
         // getPosition is the entity origin, which sits at the dragon's feet. Ride the body-box
         // centre instead, carrying over the interpolation delta so it does not stutter.
         Vec3 centre = dragonCentre(dragon)
@@ -419,51 +422,12 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         return centre;
     }
 
-    /**
-     * Extends the flight path while the dragon's origin is still inside its statue range, then
-     * adds the first outside point and stops. Points are kept at least half a block apart, which
-     * bounds the list without a timer - a dragon crossing a 27-block range leaves a few dozen.
-     */
-    /**
-     * Dumps every part hitbox of a dragon once, as origin-relative x/y/z plus width/height/depth.
-     * The body is the part you want the core inside, and its centre follows from its own box -
-     * no eyeballing, no slider. One line per dragon per run.
-     */
-    private void recordHitbox(EnderDragon dragon) {
-        if (!KungDeveloperAccess.allowed() || !hitboxesRecorded.add(dragon.getUUID())) return;
-        var attempt = tracker.attempt(dragon.getUUID());
-        if (attempt == null) return;
-        Vec3 origin = dragon.position();
-        StringBuilder line = new StringBuilder("{\"statue\":\"").append(attempt.statue().name())
-            .append("\",\"tick\":").append(tracker.tick()).append(",\"parts\":[");
-        int index = 0;
-        for (var part : dragon.getSubEntities()) {
-            AABB box = part.getBoundingBox();
-            if (index > 0) line.append(',');
-            line.append("{\"i\":").append(index++)
-                .append(",\"x\":").append(round(box.minX - origin.x))
-                .append(",\"y\":").append(round(box.minY - origin.y))
-                .append(",\"z\":").append(round(box.minZ - origin.z))
-                .append(",\"w\":").append(round(box.getXsize()))
-                .append(",\"h\":").append(round(box.getYsize()))
-                .append(",\"d\":").append(round(box.getZsize())).append('}');
-        }
-        AABB own = dragon.getBoundingBox();
-        line.append("],\"own\":{\"y\":").append(round(own.minY - origin.y))
-            .append(",\"h\":").append(round(own.getYsize())).append("}}");
-        appendLine("m7-dragon-hitboxes.jsonl", line.toString());
-    }
-
     private void closeTrail(UUID uuid) {
         var attempt = tracker.attempt(uuid);
         if (attempt == null || !trailsClosed.add(attempt.statue())) return;
         recordPath(attempt.statue(), trails.getOrDefault(attempt.statue(), List.of()));
     }
 
-    /**
-     * Where the core marker rides. Part hitboxes describe collision; this box is what lines up
-     * with the model. The flight path follows the configured part instead (trailPoint).
-     */
     /**
      * Where dragonCentre will be the moment this statue's dragon spawns: its box sits on the
      * anchor and is centred horizontally, so the centre is half the dragon's height up. Without
@@ -473,6 +437,10 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         return statue.spawn().add(0, McCompat.ENDER_DRAGON.getHeight() / 2.0, 0);
     }
 
+    /**
+     * Where the core marker rides. Part hitboxes describe collision; this box is what lines up
+     * with the model. The flight path follows the configured part instead (trailPoint).
+     */
     static Vec3 dragonCentre(EnderDragon dragon) {
         return dragon.getBoundingBox().getCenter();
     }
@@ -486,7 +454,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     /** Box Centre keeps the original file, so paths recorded before the switch stay usable. */
     static String pathsFile(DungeonConfig.DragonPart part) {
         return part == DungeonConfig.DragonPart.BOX ? "m7-dragon-paths.jsonl"
-            : "m7-dragon-paths-" + part.name().toLowerCase(java.util.Locale.ROOT) + ".jsonl";
+            : "m7-dragon-paths-" + part.name().toLowerCase(Locale.ROOT) + ".jsonl";
     }
 
     /** One row per server tick for the first TIMELINE_TICKS after spawn: every part, anchor-relative. */
@@ -503,7 +471,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         // Two client ticks can share a server tick; the first one wins.
         if (!rows.isEmpty() && rows.getLast()[0] >= offset) return;
         // Parts are simulated from the smoothed body; shift them onto the last server position.
-        Vec3 lag = DungeonDebuffFeature.matchingPosition(dragon).subtract(dragon.position());
+        Vec3 lag = McCompat.interpolatedPosition(dragon).subtract(dragon.position());
         var parts = DungeonConfig.DragonPart.values();
         double[] row = new double[1 + parts.length * 3];
         row[0] = offset;
@@ -535,10 +503,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private void loadTimelines() {
         if (timelinesLoaded) return;
         timelinesLoaded = true;
-        Minecraft client = Minecraft.getInstance();
-        Path gameDirectory = client == null ? Path.of(".") : client.gameDirectory.toPath();
-        Path file = new KungFileLayout(gameDirectory, gameDirectory.resolve("config"))
-            .dungeonDataDirectory().resolve(TIMELINE_FILE);
+        Path file = KungPaths.dungeonDataDirectory().resolve(TIMELINE_FILE);
         if (!Files.exists(file)) return;
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
@@ -593,7 +558,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             // ponytail: without a recorded flight there is no snap or lead - aim at the neck where it
             // spawns, then where it is. One dragon alive for MIN_TIMELINE_ROWS ticks records one.
             Vec3 neck = timeline == null ? corePoint(statue, DungeonConfig.DragonPart.NECK, partialTick) : null;
-            java.util.function.DoubleFunction<Vec3> neckAt =
+            DoubleFunction<Vec3> neckAt =
                 tick -> neck != null ? neck : timeline.at(tick, DungeonConfig.DragonPart.NECK);
             var aim = M7DragonAim.aim(eye, neckAt, since, M7DragonAim.ARROW_SPEED);
             if (aim == null) continue;
@@ -616,7 +581,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
 
     private void updateSpamPlans(Minecraft client) {
         spamPlans.clear();
-        var misc = com.github.beng420.kung.config.KungConfig.get().misc;
+        var misc = KungConfig.get().misc;
         // The Bow Draw bar's M7 Dragon Ticks need the plans without the aim markers.
         boolean bar = misc.bowDrawIndicatorEnabled() && misc.bowDrawDragonTicksEnabled();
         if (client.player == null || !inArena(client) || !config().m7DragonHelperEnabled()
@@ -672,7 +637,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     private static boolean clear(Minecraft client, Vec3 eye, M7DragonAim.Shot shot, double speed) {
         Vec3 at = eye;
         Vec3 velocity = shot.direction().scale(speed);
-        var pos = new net.minecraft.core.BlockPos.MutableBlockPos();
+        var pos = new BlockPos.MutableBlockPos();
         for (int tick = 0; tick < shot.ticks(); tick++) {
             for (int quarter = 1; quarter <= 4; quarter++) {
                 pos.set(at.x + velocity.x * quarter / 4, at.y + velocity.y * quarter / 4, at.z + velocity.z * quarter / 4);
@@ -724,7 +689,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
 
     /** One of your arrows, from the packet that spawned it to the tick it hit, stuck or vanished. */
     private static final class ShotTrack {
-        final net.minecraft.world.entity.projectile.arrow.AbstractArrow arrow;
+        final AbstractArrow arrow;
         final long fireTick;
         final Vec3 feet;
         final Vec3 eye;
@@ -739,7 +704,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         String closestAt = "null";
         double nearestNow = Double.MAX_VALUE;
 
-        ShotTrack(net.minecraft.world.entity.projectile.arrow.AbstractArrow arrow, long fireTick, Vec3 feet, Vec3 eye,
+        ShotTrack(AbstractArrow arrow, long fireTick, Vec3 feet, Vec3 eye,
                   int draw, String mode, String dungeonClass, Map<Statue, Double> since) {
             this.arrow = arrow;
             this.fireTick = fireTick;
@@ -758,7 +723,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
      * where the arrow ended - so the spot, draw and timing that hit can be read off many runs.
      * Yours: it appears at your eye (Hypixel spawns it 0.1 below) and nobody else owns it.
      */
-    private void observeArrow(net.minecraft.world.entity.projectile.arrow.AbstractArrow arrow) {
+    private void observeArrow(AbstractArrow arrow) {
         // The same arrow can be added twice (every horizontal shot of the last run was logged twice).
         if (!KungDeveloperAccess.allowed() || !ready() || shots.size() >= 64
             || shots.stream().anyMatch(shot -> shot.arrow == arrow)) return;
@@ -775,7 +740,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         // The draw this arrow came from is the last one released - while spamming the next is already running.
         // ponytail: -1 with the Bow Draw HUD switched off; its counter survives Hypixel rewriting the held bow.
         shots.add(new ShotTrack(arrow, tracker.tick(), player.position(), player.getEyePosition(),
-            com.github.beng420.kung.feature.misc.BowDrawIndicatorFeature.INSTANCE.releasedTicks(), aimMode().name(),
+            BowDrawIndicatorFeature.INSTANCE.releasedTicks(), aimMode().name(),
             String.valueOf(services().dungeonStateTracker().runStats().selfDungeonClass()), since));
     }
 
@@ -883,7 +848,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     }
 
     private void rememberPath(Statue statue, List<Vec3> absolute) {
-        var paths = recordedPaths.computeIfAbsent(statue, ignored -> new java.util.ArrayDeque<>());
+        var paths = recordedPaths.computeIfAbsent(statue, ignored -> new ArrayDeque<>());
         paths.addLast(absolute);
         while (paths.size() > MAX_RECORDED_PATHS) paths.removeFirst();
     }
@@ -899,21 +864,18 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         if (recordedPathsPart != null) {
             // Switched mid-run: stop this run's trails so no path mixes two parts in one file.
             trails.clear();
-            trailsClosed.addAll(java.util.EnumSet.allOf(Statue.class));
+            trailsClosed.addAll(EnumSet.allOf(Statue.class));
         }
         recordedPathsPart = part;
         recordedPaths.clear();
-        Minecraft client = Minecraft.getInstance();
-        Path gameDirectory = client == null ? Path.of(".") : client.gameDirectory.toPath();
-        Path file = new KungFileLayout(gameDirectory, gameDirectory.resolve("config"))
-            .dungeonDataDirectory().resolve(pathsFile(part));
+        Path file = KungPaths.dungeonDataDirectory().resolve(pathsFile(part));
         if (!Files.exists(file)) return;
         try {
             for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                 Statue statue;
-                com.google.gson.JsonArray points;
+                JsonArray points;
                 try {
-                    var json = com.google.gson.JsonParser.parseString(line).getAsJsonObject();
+                    var json = JsonParser.parseString(line).getAsJsonObject();
                     statue = Statue.valueOf(json.get("statue").getAsString());
                     points = json.getAsJsonArray("points");
                 } catch (RuntimeException malformed) {
@@ -934,20 +896,17 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
     }
 
     private void appendLine(String fileName, String line) {
-        Minecraft client = Minecraft.getInstance();
-        Path gameDirectory = client == null ? Path.of(".") : client.gameDirectory.toPath();
-        Path file = new KungFileLayout(gameDirectory, gameDirectory.resolve("config"))
-            .dungeonDataDirectory().resolve(fileName);
         try {
-            Files.createDirectories(file.getParent());
-            try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-                writer.write(line);
-                writer.newLine();
-            }
+            append(KungPaths.dungeonDataDirectory().resolve(fileName), line);
         } catch (IOException exception) {
             trace("append-failed " + fileName + " " + exception.getMessage());
         }
+    }
+
+    private static void append(Path file, String line) throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, line + System.lineSeparator(), StandardCharsets.UTF_8,
+            StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
     /** Two decimals: the sampling step is 0.5 blocks, so more digits are noise. */
@@ -1173,11 +1132,6 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         }
     }
 
-    /**
-     * Appends one line per resolved dragon so the real counting box can be fitted offline.
-     * Runs unattended - no dev command - because the feature is already Beng114-only. Only
-     * COUNTS and MISSED are written; UNKNOWN says nothing about the box.
-     */
     /** Offsets are relative to the spawn anchor, which is the frame the counting box is fitted in. */
     static String deathLine(long tick, Statue statue, M7DragonTracker.Outcome outcome, Vec3 at) {
         return "{\"tick\":" + tick
@@ -1237,15 +1191,17 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         return true;
     }
 
+    /**
+     * Appends one line per resolved dragon so the real counting box can be fitted offline.
+     * Runs unattended - no dev command - because the feature is already Beng114-only. Only
+     * COUNTS and MISSED are written; UNKNOWN says nothing about the box.
+     */
     private void recordDeath(M7DragonTracker.Result result) {
         Statue statue = result.statue();
         Vec3 at = result.position();
         if (!KungDeveloperAccess.allowed() || statue == null || at == null
             || result.outcome() == M7DragonTracker.Outcome.UNKNOWN) return;
-        Minecraft client = Minecraft.getInstance();
-        Path gameDirectory = client == null ? Path.of(".") : client.gameDirectory.toPath();
-        Path file = new KungFileLayout(gameDirectory, gameDirectory.resolve("config"))
-            .dungeonDataDirectory().resolve("m7-dragon-deaths.jsonl");
+        Path file = KungPaths.dungeonDataDirectory().resolve("m7-dragon-deaths.jsonl");
         String line = deathLine(tracker.tick(), statue, result.outcome(), at);
         try {
             DeathSample candidate = new DeathSample(statue.name(),
@@ -1261,12 +1217,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             trace("death-sample-read-failed " + exception.getMessage());
         }
         try {
-            Files.createDirectories(file.getParent());
-            try (BufferedWriter writer = Files.newBufferedWriter(file, StandardCharsets.UTF_8,
-                StandardOpenOption.CREATE, StandardOpenOption.APPEND)) {
-                writer.write(line);
-                writer.newLine();
-            }
+            append(file, line);
         } catch (IOException exception) {
             trace("death-record-failed " + exception.getMessage());
         }
@@ -1320,7 +1271,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             EnderDragon dragon = entry.getValue();
             var attempt = tracker.attempt(entry.getKey());
             if (attempt == null) continue;
-            Vec3 position = DungeonDebuffFeature.matchingPosition(dragon);
+            Vec3 position = McCompat.interpolatedPosition(dragon);
             sample(attempt.statue().label() + " uuid=" + entry.getKey() + " received=" + position
                 + " rendered=" + dragon.position() + " bounds=" + dragon.getBoundingBox()
                 + " health=" + dragon.getHealth() + " estimatedInside=" + attempt.statue().contains(position));

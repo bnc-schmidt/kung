@@ -7,6 +7,7 @@ import com.github.beng420.kung.config.category.DungeonConfig.PillarMaterial;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
@@ -56,7 +57,7 @@ public final class ColoredPillarsFeature extends ConfigurableFeature<DungeonConf
 
     void observeBossMessage(String message, boolean overlay, boolean catacombs, long epoch) {
         if (overlay || !catacombs || bossEpoch == epoch) return;
-        String text = DungeonLifecycleSignals.clean(message);
+        String text = HypixelLocation.clean(message);
         if (text.startsWith("[BOSS] Maxor:") || text.startsWith("[BOSS] Storm:")
                 || text.startsWith("[BOSS] Goldor:") || text.startsWith("[BOSS] Necron:")) {
             bossEpoch = epoch;

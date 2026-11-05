@@ -1,6 +1,5 @@
 package com.github.beng420.kung.feature.dungeon;
 
-import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Function;
@@ -61,7 +60,7 @@ record DungeonStaticChestPattern(String room, List<Cell> cells, Point chest, Lis
     }
 
     Resolution resolve(Room observed, Function<BlockPos, String> blockAt) {
-        Set<BlockPos> intersection = null;
+        BlockPos common = null;
         int possible = 0, confirmed = 0;
         for (var transform : transforms(observed)) {
             boolean rejected = false, loaded = true;
@@ -73,13 +72,12 @@ record DungeonStaticChestPattern(String room, List<Cell> cells, Point chest, Lis
             if (rejected) continue;
             possible++;
             if (loaded) confirmed++;
-            Set<BlockPos> fixed = Set.of(transform.world(chest.blockPos()));
-            if (intersection == null) intersection = new HashSet<>(fixed);
-            else intersection.retainAll(fixed);
+            BlockPos fixed = transform.world(chest.blockPos());
+            common = possible == 1 || fixed.equals(common) ? fixed : null;
         }
         // Unloaded probes preserve an orientation as possible; they never prove a mismatch.
         // Exclude only a position common to EVERY possible rotation, with a fully checked template.
-        return new Resolution(confirmed > 0 && intersection != null ? Set.copyOf(intersection) : Set.of(), possible, confirmed);
+        return new Resolution(confirmed > 0 && common != null ? Set.of(common) : Set.of(), possible, confirmed);
     }
 
     record Point(int x, int y, int z) {

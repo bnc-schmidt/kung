@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.dungeon;
 import static org.junit.Assert.*;
 
 import com.github.beng420.kung.config.category.DungeonConfig.DragonDebuffScope;
+import com.github.beng420.kung.feature.dungeon.M7DragonTracker.Statue;
 import java.util.List;
 import java.util.UUID;
 import net.minecraft.world.phys.AABB;
@@ -14,7 +15,7 @@ public final class DungeonDebuffTrackerTest {
     public void earlyHitFeedbackKeepsSameTickMultiplicityAndOriginalOffsetsAcrossSelectionDelay() {
         var tracker = new DungeonDebuffTracker();
         UUID red = UUID.randomUUID();
-        var dragon = tracker.spawn(red, "Red", new Vec3(32, 6, 59));
+        var dragon = tracker.spawn(red, Statue.RED, new Vec3(32, 6, 59));
         tracker.advance();
         for (int i = 0; i < 3; i++) assertTrue(tracker.arrowHit());
         for (int i = 0; i < 3; i++) tracker.advance();
@@ -31,8 +32,8 @@ public final class DungeonDebuffTrackerTest {
     @Test
     public void liveTraceEarlyThreeHitsGoToOneStatueAndLaterDpsDoesNotCount() {
         var tracker = new DungeonDebuffTracker();
-        var blue = tracker.spawn(UUID.randomUUID(), "Blue", new Vec3(85.1099, 6, 96.3198));
-        var purple = tracker.spawn(UUID.randomUUID(), "Purple", new Vec3(85.1099, 6, 96.3198));
+        var blue = tracker.spawn(UUID.randomUUID(), Statue.BLUE, new Vec3(85.1099, 6, 96.3198));
+        var purple = tracker.spawn(UUID.randomUUID(), Statue.PURPLE, new Vec3(85.1099, 6, 96.3198));
         // 20:31:01 trace: both dragons previously received [1, 4, 4, 133, 133, ...].
         for (int offset : new int[] {1, 4, 4, 133, 133, 133, 134, 134, 136}) {
             while (tracker.tick() < offset) tracker.advance();
@@ -57,14 +58,14 @@ public final class DungeonDebuffTrackerTest {
     @Test
     public void windowEndsAfterFortyTicksAndMissingPositionCannotInventAnAssignment() {
         var tracker = new DungeonDebuffTracker();
-        var dragon = tracker.spawn(UUID.randomUUID(), "Red", new Vec3(32, 6, 59));
+        var dragon = tracker.spawn(UUID.randomUUID(), Statue.RED, new Vec3(32, 6, 59));
         while (tracker.tick() < 40) tracker.advance();
         assertTrue(tracker.arrowHit());
         tracker.advance();
         assertFalse(tracker.arrowHit());
         assertEquals(1, dragon.arrows.count);
         tracker.clearDragons();
-        var unknown = tracker.spawn(UUID.randomUUID(), "Blue");
+        var unknown = tracker.spawn(UUID.randomUUID(), Statue.BLUE);
         tracker.arrowHit();
         for (int i = 0; i < 3; i++) tracker.advance();
         assertFalse(tracker.arrowHit());
@@ -75,7 +76,7 @@ public final class DungeonDebuffTrackerTest {
     public void sprayUsesOriginalPacketTickExpiresInServerTicksAndKeepsFirstDragonTiming() {
         var tracker = new DungeonDebuffTracker();
         UUID uuid = UUID.randomUUID();
-        var dragon = tracker.spawn(uuid, "Purple");
+        var dragon = tracker.spawn(uuid, Statue.PURPLE);
         tracker.advance();
         long packetTick = tracker.tick();
         tracker.advance(); // Delayed metadata/target resolution must not shift the measurement.
@@ -97,7 +98,7 @@ public final class DungeonDebuffTrackerTest {
         UUID mob = UUID.randomUUID();
         assertFalse(tracker.spray(mob, tracker.tick()));
         assertTrue(tracker.highlighted().contains(mob));
-        tracker.spawn(UUID.randomUUID(), "Green");
+        tracker.spawn(UUID.randomUUID(), Statue.GREEN);
         tracker.clearDragons();
         assertTrue(tracker.highlighted().contains(mob));
         tracker.reset();
@@ -109,19 +110,19 @@ public final class DungeonDebuffTrackerTest {
     public void unloadedDragonIsNotKilledAndSameUuidCannotRestartItsClock() {
         var tracker = new DungeonDebuffTracker();
         UUID uuid = UUID.randomUUID();
-        var dragon = tracker.spawn(uuid, "Orange");
+        var dragon = tracker.spawn(uuid, Statue.ORANGE);
         tracker.advance();
-        assertSame(dragon, tracker.spawn(uuid, "Orange"));
+        assertSame(dragon, tracker.spawn(uuid, Statue.ORANGE));
         assertEquals(0, dragon.spawnTick);
         assertSame(dragon, tracker.end(uuid, false));
         assertTrue(dragon.details().contains("death not confirmed"));
         assertTrue(dragon.summary(tracker.tick()).contains("Sprayed: no"));
         assertNull(tracker.end(uuid, true));
-        assertSame(dragon, tracker.spawn(uuid, "Orange"));
+        assertSame(dragon, tracker.spawn(uuid, Statue.ORANGE));
         tracker.arrowHit();
         assertEquals(0, dragon.arrows.count);
         UUID next = UUID.randomUUID();
-        assertEquals(1, tracker.spawn(next, "Orange").spawnTick);
+        assertEquals(1, tracker.spawn(next, Statue.ORANGE).spawnTick);
     }
 
     @Test
@@ -176,14 +177,14 @@ public final class DungeonDebuffTrackerTest {
 
     @Test
     public void locationAndMemoryBoundsDoNotInventDragonState() {
-        assertEquals("Purple", DungeonDebuffTracker.dragonName(new Vec3(56, 14, 125)));
-        assertNull(DungeonDebuffTracker.dragonName(new Vec3(56, 100, 125)));
-        assertNull(DungeonDebuffTracker.dragonName(Vec3.ZERO));
+        assertEquals(Statue.PURPLE, DungeonDebuffTracker.statueAt(new Vec3(56, 14, 125)));
+        assertNull(DungeonDebuffTracker.statueAt(new Vec3(56, 100, 125)));
+        assertNull(DungeonDebuffTracker.statueAt(Vec3.ZERO));
         var tracker = new DungeonDebuffTracker();
         for (int i = 0; i < 300; i++) tracker.spray(new UUID(0, i), 0);
         assertEquals(DungeonDebuffTracker.MAX_MARKERS, tracker.highlighted().size());
         UUID uuid = UUID.randomUUID();
-        var dragon = tracker.spawn(uuid, "Red", new Vec3(32, 6, 59));
+        var dragon = tracker.spawn(uuid, Statue.RED, new Vec3(32, 6, 59));
         for (int i = 0; i < 300; i++) tracker.arrowHit();
         for (int i = 0; i < 3; i++) tracker.advance();
         assertEquals(128, dragon.arrows.count);
@@ -195,7 +196,7 @@ public final class DungeonDebuffTrackerTest {
     public void respawnOfSameColorResetsArrowsSprayAndHudTime() {
         var tracker = new DungeonDebuffTracker();
         UUID first = UUID.randomUUID();
-        tracker.spawn(first, "Red", new Vec3(32, 6, 59));
+        tracker.spawn(first, Statue.RED, new Vec3(32, 6, 59));
         tracker.arrowHit();
         tracker.spray(first, 0);
         for (int i = 0; i < 3; i++) tracker.advance();
@@ -203,8 +204,8 @@ public final class DungeonDebuffTrackerTest {
         var lines = DragonDebuffHud.lines(tracker.latestDragons(), tracker.tick());
         assertTrue(lines.stream().anyMatch(line -> line.getString().equals("Red: Time: 0.15s | Arrows: 1 | Sprayed: 0t")));
         UUID nextId = UUID.randomUUID();
-        var next = tracker.spawn(nextId, "Red", new Vec3(32, 6, 59));
-        tracker.spawn(UUID.randomUUID(), "Blue");
+        var next = tracker.spawn(nextId, Statue.RED, new Vec3(32, 6, 59));
+        tracker.spawn(UUID.randomUUID(), Statue.BLUE);
         assertEquals(2, tracker.latestDragons().size());
         assertEquals(0, tracker.latestDragons().getFirst().arrows.count);
         assertFalse(tracker.latestDragons().getFirst().ended);
@@ -238,15 +239,15 @@ public final class DungeonDebuffTrackerTest {
     public void pairedSpawnsChoosePurpleAtItsStatueRegardlessOfPacketOrderOrLaterMovement() {
         for (boolean purpleFirst : new boolean[] {false, true}) {
             var tracker = new DungeonDebuffTracker();
-            var first = tracker.spawn(UUID.randomUUID(), purpleFirst ? "Purple" : "Orange", new Vec3(56, 12, 120));
+            var first = tracker.spawn(UUID.randomUUID(), purpleFirst ? Statue.PURPLE : Statue.ORANGE, new Vec3(56, 12, 120));
             tracker.advance();
-            var second = tracker.spawn(UUID.randomUUID(), purpleFirst ? "Orange" : "Purple", new Vec3(80, 100, 56));
+            var second = tracker.spawn(UUID.randomUUID(), purpleFirst ? Statue.ORANGE : Statue.PURPLE, new Vec3(80, 100, 56));
             assertTrue(tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).isEmpty());
             assertEquals(2, tracker.displayedDragons(DragonDebuffScope.ALL_DRAGONS).size());
             tracker.advance();
             tracker.advance();
             var selected = tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).getFirst();
-            assertEquals("Purple", selected.name);
+            assertEquals(Statue.PURPLE, selected.statue);
             assertTrue(selected.shownIn(DragonDebuffScope.NEAREST_STATUE));
             var other = purpleFirst ? second : first;
             assertFalse(other.shownIn(DragonDebuffScope.NEAREST_STATUE));
@@ -260,8 +261,8 @@ public final class DungeonDebuffTrackerTest {
     public void nextWaveSelectsAgainAndDeadSelectedResultDoesNotSwitchToTheOtherDragon() {
         var tracker = new DungeonDebuffTracker();
         UUID purpleId = UUID.randomUUID();
-        var purple = tracker.spawn(purpleId, "Purple", new Vec3(56, 14, 120));
-        var orange = tracker.spawn(UUID.randomUUID(), "Orange", new Vec3(56, 14, 120));
+        var purple = tracker.spawn(purpleId, Statue.PURPLE, new Vec3(56, 14, 120));
+        var orange = tracker.spawn(UUID.randomUUID(), Statue.ORANGE, new Vec3(56, 14, 120));
         tracker.spray(purpleId, 0);
         tracker.arrowHit();
         tracker.end(purpleId, true); // Even a kill within the grouping window still gets the correct report.
@@ -271,7 +272,7 @@ public final class DungeonDebuffTrackerTest {
         assertEquals(1, purple.arrows.count);
         assertFalse(orange.shownIn(DragonDebuffScope.NEAREST_STATUE));
         assertSame(purple, tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).getFirst());
-        var next = tracker.spawn(UUID.randomUUID(), "Red", new Vec3(32, 14, 59));
+        var next = tracker.spawn(UUID.randomUUID(), Statue.RED, new Vec3(32, 14, 59));
         for (int i = 0; i < 3; i++) tracker.advance();
         assertSame(next, tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).getFirst());
         assertTrue(purple.shownIn(DragonDebuffScope.NEAREST_STATUE));
@@ -282,10 +283,10 @@ public final class DungeonDebuffTrackerTest {
     @Test
     public void nearestSelectionUsesOnlyNewSpawnsAndRequiresKnownPlayerPosition() {
         var tracker = new DungeonDebuffTracker();
-        var single = tracker.spawn(UUID.randomUUID(), "Orange", new Vec3(32, 200, 59));
+        var single = tracker.spawn(UUID.randomUUID(), Statue.ORANGE, new Vec3(32, 200, 59));
         for (int i = 0; i < 3; i++) tracker.advance();
         assertSame(single, tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).getFirst());
-        tracker.spawn(UUID.randomUUID(), "Purple", null);
+        tracker.spawn(UUID.randomUUID(), Statue.PURPLE, null);
         for (int i = 0; i < 3; i++) tracker.advance();
         assertTrue(tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE).isEmpty());
         assertEquals(2, tracker.displayedDragons(DragonDebuffScope.ALL_DRAGONS).size());

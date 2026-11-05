@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.category.SplitsConfig;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.github.beng420.kung.util.ServerTpsTracker;
 import java.util.ArrayList;
@@ -255,7 +256,7 @@ public final class DungeonSplitTracker {
 
     public boolean observeMessage(String message, long nowTick) {
         if (message == null || message.isBlank()) return false;
-        String clean = DungeonLifecycleSignals.clean(message);
+        String clean = HypixelLocation.clean(message);
         // The record line comes after the score banner has ended the run, so it is read before the running check.
         DungeonPbTitle.floorFinish(clean, hasKnownFloor() ? floor : -1, masterMode, config.get());
         if (DungeonLifecycleSignals.isRunStart(clean)

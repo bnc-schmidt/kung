@@ -36,7 +36,6 @@ enum ChatCommand {
 
     /** Levels 1 to 200 without leading zeros; a longer number is no command. */
     private static final String LEVEL = "(?<level>[1-9]|[1-9][0-9]|1[0-9]{2}|200)";
-    private static final CatacombsAverageCalculator CALCULATOR = new CatacombsAverageCalculator();
     private final Goal goal;
     private final DungeonClass dungeonClass;
     final Pattern pattern;
@@ -191,7 +190,7 @@ enum ChatCommand {
             responseConsumer.accept(SpecialMayors.answer(special(), System.currentTimeMillis(), KungTime.zone()));
             return;
         }
-        CALCULATOR.calculateAsync(targetName, goal, level, dungeonClass, false).whenComplete((result, throwable) -> client.execute(() -> {
+        CatacombsAverageCalculator.calculateAsync(targetName, goal, level, dungeonClass, false).whenComplete((result, throwable) -> client.execute(() -> {
             if (throwable != null) {
                 KungMod.LOGGER.warn("Failed to answer !" + name().toLowerCase(Locale.ROOT) + " command.", throwable);
                 responseConsumer.accept("Could not calculate " + what(level) + " for " + targetName + ".");

@@ -16,16 +16,8 @@ public final class DungeonAnnouncements {
     private static final long PARTY_COOLDOWN_MILLIS = 300L;
 
     private final Queue<String> pendingPartyMessages = new ArrayDeque<>();
-    private final HypixelChatSender chatSender;
+    private final HypixelChatSender chatSender = HypixelChatSender.INSTANCE;
     private long lastPartyMessageMillis;
-
-    public DungeonAnnouncements() {
-        this(HypixelChatSender.INSTANCE);
-    }
-
-    DungeonAnnouncements(HypixelChatSender chatSender) {
-        this.chatSender = java.util.Objects.requireNonNull(chatSender, "chatSender");
-    }
 
     public void reset() {
         pendingPartyMessages.clear();
@@ -69,16 +61,9 @@ public final class DungeonAnnouncements {
         boolean shareTotal,
         boolean shareIndividual
     ) {
-        if (shareTotal && shareIndividual) {
-            return eventText;
-        }
-        if (shareTotal) {
-            return "Total Deaths: " + totalDeaths;
-        }
-        if (shareIndividual) {
-            return individualText;
-        }
-        return "";
+        return shareTotal && shareIndividual ? eventText
+            : shareTotal ? "Total Deaths: " + totalDeaths
+            : shareIndividual ? individualText : "";
     }
 
     public void sendPartyAfterCooldown(Minecraft client, String message) {

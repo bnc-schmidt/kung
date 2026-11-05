@@ -7,6 +7,7 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.feature.dungeon.room.RoomType;
 import com.github.beng420.kung.skyblock.HypixelDungeonFloor;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.util.KungDebugRecorder;
@@ -123,7 +124,7 @@ public final class DungeonStateTracker {
 
     boolean shouldFastScanDoors() {
         if (KungBuild.MODRINTH) return false;
-        return BloodRushHelperFeature.INSTANCE.shouldFastScanDoors(dungeonTick);
+        return BloodRushHelperFeature.INSTANCE.doorTitlePending();
     }
 
     boolean realRunStarted() {
@@ -600,7 +601,7 @@ public final class DungeonStateTracker {
 
     /** Opens the report on its first run-end line (before the split tracker answers it) and ends the wait at the dashed line. */
     void observeSplitReport(String text, long tick) {
-        String clean = DungeonLifecycleSignals.clean(text);
+        String clean = HypixelLocation.clean(text);
         if (splitReportDueTick == Long.MIN_VALUE) {
             if (DungeonLifecycleSignals.isRunFinished(clean)) splitReportDueTick = tick + SPLIT_REPORT_FALLBACK_TICKS;
         } else if (SPLIT_REPORT_END.matcher(clean).matches()) {
@@ -620,7 +621,7 @@ public final class DungeonStateTracker {
     /** Hypixel changed the Necron-death dialogue: until the first dragon, keep every line that could mark it. */
     private void traceNecronEnd(String text) {
         if (!splitTracker.inNecronEndWindow()) return;
-        String clean = DungeonLifecycleSignals.clean(text);
+        String clean = HypixelLocation.clean(text);
         String lower = clean.toLowerCase(Locale.ROOT);
         if (lower.contains("necron") || lower.contains("relic")
             || clean.startsWith("[BOSS] Wither King:") || clean.startsWith("[BOSS] The Wither King:")) {

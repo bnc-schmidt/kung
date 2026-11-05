@@ -16,6 +16,10 @@ public final class CatacombsAverageCalculator {
     private static final double[] HECATOMB_BONUSES = {
         0.0, 0.0056, 0.0072, 0.0088, 0.0104, 0.012, 0.0136, 0.0152, 0.0168, 0.0184, 0.02
     };
+    public static double hecatombBonus(int level) {
+        return HECATOMB_BONUSES[Math.clamp(level, 0, HECATOMB_BONUSES.length - 1)];
+    }
+
     private static final long[] CATACOMBS_XP = {
         0L, 50L, 125L, 235L, 395L, 625L, 955L, 1_425L, 2_095L, 3_045L, 4_385L, 6_275L,
         8_940L, 12_700L, 17_960L, 25_340L, 35_640L, 50_040L, 70_040L, 97_640L, 135_640L,
@@ -33,7 +37,7 @@ public final class CatacombsAverageCalculator {
      * {@code level} is the target of every goal. {@code dungeonClass} narrows two goals: with
      * {@link Goal#CLASS_AVERAGE} it is the only class played, with {@link Goal#CLASS_LEVEL} the class to level.
      */
-    public CompletableFuture<Result> calculateAsync(String username, Goal goal, int level, DungeonClass dungeonClass,
+    public static CompletableFuture<Result> calculateAsync(String username, Goal goal, int level, DungeonClass dungeonClass,
                                                     boolean useLastRunXp) {
         String normalized = HypixelLocation.trimmedName(username);
         if (!HypixelLocation.isPlayerName(normalized)) {
@@ -53,7 +57,7 @@ public final class CatacombsAverageCalculator {
             });
     }
 
-    Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, int level,
+    static Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, int level,
                      DungeonClass dungeonClass, boolean useLastRunXp) {
         if (player == null || player.profiles().isEmpty()) {
             return Result.error("no SkyBlock profile found");
@@ -85,7 +89,7 @@ public final class CatacombsAverageCalculator {
             useLastRunXp ? "lastRunXp=" + lastRunXp : "lastRunXp=disabled", goal));
     }
 
-    private EnumMap<DungeonClass, Double> classXpPerRun(Map<DungeonClass, Integer> classPerks) {
+    private static EnumMap<DungeonClass, Double> classXpPerRun(Map<DungeonClass, Integer> classPerks) {
         return classXpPerRun(classPerks, 300_000.0, HECATOMB_BONUSES[10], 0.06, 0.20, 0,
             SkyBlockMayorTracker.INSTANCE.catacombsXpMultiplier());
     }
@@ -104,7 +108,7 @@ public final class CatacombsAverageCalculator {
         return classXpPerRun;
     }
 
-    private long catacombsXpPerRun() {
+    private static long catacombsXpPerRun() {
         return catacombsXpPerRun(300_000.0, true, HECATOMB_BONUSES[10], 10, 0,
             SkyBlockMayorTracker.INSTANCE.catacombsXpMultiplier());
     }

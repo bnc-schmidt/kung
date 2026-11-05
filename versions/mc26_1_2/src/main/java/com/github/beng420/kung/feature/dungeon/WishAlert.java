@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.DungeonConfig;
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,7 +58,7 @@ public final class WishAlert {
         String boss = enragedBoss(raw, config, selfClass, client.player.experienceLevel, developer);
         // A matching line that still produces no alert used to vanish without a trace. Record which
         // gate held it, so one saved trace answers "why was it quiet" instead of a guess.
-        if (raw != null && ENRAGED.matcher(raw.trim()).matches()) {
+        if (boss != null || raw != null && ENRAGED.matcher(raw.trim()).matches()) {
             KungDebugRecorder.event("wish-alert", "enraged fired=" + (boss != null)
                 + " enabled=" + config.wishAlertEnabled()
                 + " class=" + selfClass + " xpLevel=" + client.player.experienceLevel
@@ -72,7 +73,7 @@ public final class WishAlert {
         boolean ready = canWish(config, selfClass, client.player.experienceLevel,
             com.github.beng420.kung.runtime.KungDeveloperAccess.allowed());
         for (String line : lines) {
-            String name = lowHealth.observe(DungeonLifecycleSignals.clean(line), config.wishAlertLowHealthPercent(), ready);
+            String name = lowHealth.observe(HypixelLocation.clean(line), config.wishAlertLowHealthPercent(), ready);
             if (name != null) alert(client, name + " is below " + config.wishAlertLowHealthPercent() + "% HP");
         }
     }

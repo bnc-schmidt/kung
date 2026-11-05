@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.dungeon;
 
 import com.github.beng420.kung.config.category.DungeonConfig.DragonDebuffScope;
+import com.github.beng420.kung.feature.dungeon.M7DragonTracker.Statue;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,6 +9,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import net.minecraft.core.BlockPos;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
@@ -62,11 +64,11 @@ final class DungeonDebuffTracker {
         return true;
     }
 
-    Dragon spawn(UUID uuid, String name) {
-        return spawn(uuid, name, null);
+    Dragon spawn(UUID uuid, Statue statue) {
+        return spawn(uuid, statue, null);
     }
 
-    Dragon spawn(UUID uuid, String name, Vec3 playerPosition) {
+    Dragon spawn(UUID uuid, Statue statue, Vec3 playerPosition) {
         Dragon previous = dragons.get(uuid);
         if (previous != null) return previous; // A client-range reload is not another server spawn.
         if (dragons.size() >= 32) {
@@ -74,7 +76,7 @@ final class DungeonDebuffTracker {
             if (retired.isEmpty()) return null;
             dragons.remove(retired.get().getKey());
         }
-        Dragon dragon = new Dragon(name, tick);
+        Dragon dragon = new Dragon(statue, tick);
         dragons.put(uuid, dragon);
         if (spawnWave.isEmpty()) {
             waveTick = tick;
@@ -97,9 +99,9 @@ final class DungeonDebuffTracker {
         for (Dragon dragon : spawnWave) {
             dragon.selectionPending = false;
             if (wavePlayerPosition == null) continue;
-            double distance = statueDistanceSquared(dragon.name, wavePlayerPosition);
+            double distance = statueDistanceSquared(dragon.statue, wavePlayerPosition);
             if (distance < closest || distance == closest && selectedDragon != null
-                && dragon.name.compareTo(selectedDragon.name) < 0) {
+                && dragon.statue.label().compareTo(selectedDragon.statue.label()) < 0) {
                 closest = distance;
                 selectedDragon = dragon;
             }
@@ -112,24 +114,16 @@ final class DungeonDebuffTracker {
         spawnWave.clear();
     }
 
-    private static double statueDistanceSquared(String name, Vec3 position) {
-        Vec3 statue = switch (name) {
-            case "Red" -> new Vec3(32, 0, 59);
-            case "Orange" -> new Vec3(80, 0, 56);
-            case "Green" -> new Vec3(32, 0, 94);
-            case "Blue" -> new Vec3(79, 0, 94);
-            case "Purple" -> new Vec3(56, 0, 120);
-            default -> null;
-        };
+    private static double statueDistanceSquared(Statue statue, Vec3 position) {
         // Statues have different heights; horizontal distance reflects the player's assignment.
-        if (statue == null) return Double.POSITIVE_INFINITY;
-        double dx = position.x - statue.x, dz = position.z - statue.z;
+        BlockPos block = statue.statueBlock();
+        double dx = position.x - block.getX(), dz = position.z - block.getZ();
         return dx * dx + dz * dz;
     }
 
     List<Dragon> latestDragons() {
-        Map<String, Dragon> latest = new LinkedHashMap<>();
-        for (Dragon dragon : dragons.values()) latest.put(dragon.name, dragon);
+        Map<Statue, Dragon> latest = new LinkedHashMap<>();
+        for (Dragon dragon : dragons.values()) latest.put(dragon.statue, dragon);
         return List.copyOf(latest.values());
     }
 
@@ -188,14 +182,12 @@ final class DungeonDebuffTracker {
         return second - nearest < 0.5 ? null : result;
     }
 
-    static String dragonName(Vec3 position) {
+    static Statue statueAt(Vec3 position) {
         if (position.y < 0 || position.y > 40) return null;
-        String[] names = {"Red", "Orange", "Green", "Blue", "Purple"};
-        double[][] bounds = {{14.5, 45.5, 39.5, 70.5}, {72, 47, 102, 77}, {7, 80, 37, 110},
-            {71.5, 82.5, 96.5, 107.5}, {45.5, 113.5, 68.5, 136.5}};
-        for (int i = 0; i < bounds.length; i++) {
-            double[] b = bounds[i];
-            if (position.x >= b[0] && position.z >= b[1] && position.x <= b[2] && position.z <= b[3]) return names[i];
+        for (Statue statue : Statue.values()) {
+            AABB range = statue.range();
+            if (position.x >= range.minX && position.z >= range.minZ
+                && position.x <= range.maxX && position.z <= range.maxZ) return statue;
         }
         return null;
     }
@@ -207,7 +199,7 @@ final class DungeonDebuffTracker {
     }
 
     static final class Dragon {
-        final String name;
+        final Statue statue;
         final long spawnTick;
         final Hits arrows = new Hits();
         long sprayTick = -1;
@@ -218,8 +210,8 @@ final class DungeonDebuffTracker {
         boolean nearestInWave;
         boolean resultAnnounced;
 
-        Dragon(String name, long spawnTick) {
-            this.name = name;
+        Dragon(Statue statue, long spawnTick) {
+            this.statue = statue;
             this.spawnTick = spawnTick;
         }
 
@@ -228,13 +220,13 @@ final class DungeonDebuffTracker {
         }
 
         String summary(long now) {
-            return name + ": Time: " + String.format(Locale.ROOT, "%.2fs", ((ended ? endTick : now) - spawnTick) / 20.0)
+            return statue.label() + ": Time: " + String.format(Locale.ROOT, "%.2fs", ((ended ? endTick : now) - spawnTick) / 20.0)
                 + " | Arrows: " + (nearestInWave ? arrows.count : "--")
                 + " | Sprayed: " + (sprayTick < 0 ? "no" : sprayTick + "t");
         }
 
         String details() {
-            return name + " dragon\n"
+            return statue.label() + " dragon\n"
                 + "Arrows (first " + DEBUFF_TICKS + " ticks): " + (nearestInWave ? arrows.describe() : "-- (another statue selected)") + "\n"
                 + "Ice Spray: " + (sprayTick < 0 ? "no matching ice marker received" : sprayTick + "t after spawn") + "\n"
                 + "End: " + (killed ? "death confirmed" : "entity removed; death not confirmed") + "\n"

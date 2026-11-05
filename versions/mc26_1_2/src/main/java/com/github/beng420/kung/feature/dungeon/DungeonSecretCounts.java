@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.regex.Pattern;
 
 /** Shared tab counts and percentages describe the party, never an individual player. */
@@ -11,19 +12,19 @@ final class DungeonSecretCounts {
     private DungeonSecretCounts() { }
 
     static int partyFound(String raw) {
-        var match = PARTY_FOUND.matcher(DungeonLifecycleSignals.clean(raw));
+        var match = PARTY_FOUND.matcher(HypixelLocation.clean(raw));
         return match.matches() ? Integer.parseInt(match.group(1).replace(",", "")) : -1;
     }
 
     static double percent(String raw) {
-        var match = PERCENT.matcher(DungeonLifecycleSignals.clean(raw));
+        var match = PERCENT.matcher(HypixelLocation.clean(raw));
         if (!match.matches()) return -1;
         double value = Double.parseDouble(match.group(1));
         return value <= 100 ? value : -1;
     }
 
     static Fraction party(String raw) {
-        var match = PARTY.matcher(DungeonLifecycleSignals.clean(raw));
+        var match = PARTY.matcher(HypixelLocation.clean(raw));
         if (!match.matches()) return null;
         int found = Integer.parseInt(match.group(1));
         int total = match.group(2).equals("?") ? -1 : Integer.parseInt(match.group(2));

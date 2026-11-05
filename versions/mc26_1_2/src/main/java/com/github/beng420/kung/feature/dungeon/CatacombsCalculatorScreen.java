@@ -53,9 +53,7 @@ public final class CatacombsCalculatorScreen extends Screen {
     private static final UiNumberField CLASS_PERK_LEVEL = new UiNumberField(0, 5, 1);
     private static final NumberFormat INTEGER_FORMAT = NumberFormat.getIntegerInstance(Locale.GERMANY);
     private static final DungeonClass[] CLASSES = DungeonClass.values();
-    private static final double[] HECATOMB_BONUSES = {
-        0.0, 0.0056, 0.0072, 0.0088, 0.0104, 0.012, 0.0136, 0.0152, 0.0168, 0.0184, 0.02
-    };
+    private static final String[] ROMAN = {"0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
 
     private long loadRequestId;
     private final List<ClickRegion> clickRegions = new ArrayList<>();
@@ -230,10 +228,10 @@ public final class CatacombsCalculatorScreen extends Screen {
             if (loadedPlayer != null && loadedPlayer.profiles().size() > 1) {
                 lineY += drawProfileButtons(graphics, x + 14, lineY, panelWidth - 28, mouseX, mouseY) + 8;
             }
-            drawLevelBar(graphics, x + 14, lineY, panelWidth - 28, "Catacombs", profile.cataXp(), true);
+            drawLevelBar(graphics, x + 14, lineY, panelWidth - 28, "Catacombs", THEME.text(), profile.cataXp(), true);
             lineY += 42;
             for (DungeonClass dungeonClass : CLASSES) {
-                drawLevelBar(graphics, x + 14, lineY, panelWidth - 28, dungeonClass.label(), profile.classXp(dungeonClass), false);
+                drawLevelBar(graphics, x + 14, lineY, panelWidth - 28, dungeonClass.label(), dungeonClass.color(), profile.classXp(dungeonClass), false);
                 lineY += 42;
             }
             drawKV(graphics, x + 14, lineY, panelWidth - 28, "Class Average", decimal(classAverage(profile)), THEME.text());
@@ -262,8 +260,8 @@ public final class CatacombsCalculatorScreen extends Screen {
 
         drawHeading(graphics, "Floor stats", x + 12, lineY);
         lineY += 24;
-        FloorStats stats = profile == null ? null : selectedFloor.masterMode() ? profile.stats().master() : profile.stats().catacombs();
-        String floorNumber = selectedFloor.floorNumber();
+        FloorStats stats = profile == null ? null : selectedFloor.masterMode ? profile.stats().master() : profile.stats().catacombs();
+        String floorNumber = selectedFloor.floorNumber;
         drawKV(graphics, x + 14, lineY, panelWidth - 28, "Best score", stats == null ? "..." : floorStat(stats.bestScore(), floorNumber), THEME.text());
         lineY += ROW;
         drawKV(graphics, x + 14, lineY, panelWidth - 28, "Personal best (S+)", stats == null ? "..." : duration(stats.sPlus(), floorNumber), THEME.text());
@@ -285,26 +283,26 @@ public final class CatacombsCalculatorScreen extends Screen {
         int leftX = x + 14;
         int rightX = leftX + columnWidth + 10;
         int rowY = lineY;
-        drawControl(graphics, leftX, rowY, columnWidth, "Floor", selectedFloor.label(), mouseX, mouseY,
-            () -> selectedFloor = selectedFloor.previous(),
-            () -> selectedFloor = selectedFloor.next());
+        drawControl(graphics, leftX, rowY, columnWidth, "Floor", selectedFloor.label, mouseX, mouseY,
+            () -> selectedFloor = cycle(selectedFloor, -1),
+            () -> selectedFloor = cycle(selectedFloor, 1));
         drawToggleControl(graphics, rightX, rowY, columnWidth, "Catacombs Expert Ring", expertRing,
             () -> expertRing = !expertRing);
         rowY += 38;
         drawControl(graphics, leftX, rowY, columnWidth, "Hecatomb", hecatombLabel(), mouseX, mouseY,
             () -> hecatombLevel = HECATOMB_LEVEL.decrement(hecatombLevel),
             () -> hecatombLevel = HECATOMB_LEVEL.increment(hecatombLevel));
-        drawControl(graphics, rightX, rowY, columnWidth, "Scarf accessory", scarfAccessory.label(), mouseX, mouseY,
-            () -> scarfAccessory = scarfAccessory.previous(),
-            () -> scarfAccessory = scarfAccessory.next());
+        drawControl(graphics, rightX, rowY, columnWidth, "Scarf accessory", scarfAccessory.label, mouseX, mouseY,
+            () -> scarfAccessory = cycle(scarfAccessory, -1),
+            () -> scarfAccessory = cycle(scarfAccessory, 1));
         rowY += 38;
         drawControl(graphics, leftX, rowY, columnWidth, "Global boost", boostLabel(globalBoost), mouseX, mouseY,
             () -> globalBoost = cycleGlobalBoost(-1),
             () -> globalBoost = cycleGlobalBoost(1));
         MayorBoost mayorBoost = currentMayorBoost();
         drawControl(graphics, rightX, rowY, columnWidth, "Mayor boost", mayorLabel(mayorBoost), mouseX, mouseY,
-            () -> manualMayorBoost = mayorBoost.previous(),
-            () -> manualMayorBoost = mayorBoost.next());
+            () -> manualMayorBoost = cycle(mayorBoost, -1),
+            () -> manualMayorBoost = cycle(mayorBoost, 1));
         rowY += 38;
         drawControl(graphics, leftX, rowY, columnWidth, "Catacombs Graduate", romanLevel(graduateLevel) + " (" + (graduateLevel * 2) + "%)", mouseX, mouseY,
             () -> graduateLevel = GRADUATE_LEVEL.decrement(graduateLevel),
@@ -431,12 +429,13 @@ public final class CatacombsCalculatorScreen extends Screen {
         int y,
         int barWidth,
         String label,
+        int labelColor,
         double xp,
         boolean highlight
     ) {
         double level = levelFromXp(xp);
         String value = decimal(level);
-        graphics.text(font, label, x, y, highlight ? THEME.text() : classColor(label), true);
+        graphics.text(font, label, x, y, labelColor, true);
         graphics.text(font, value, x + barWidth - font.width(value), y, THEME.text(), true);
         int barY = y + 13;
         graphics.fill(x, barY, x + barWidth, barY + 5, THEME.panelDark());
@@ -466,7 +465,11 @@ public final class CatacombsCalculatorScreen extends Screen {
         Runnable next
     ) {
         graphics.text(font, trim(label, controlWidth - 8), x, y, THEME.text(), true);
-        int boxY = y + 12;
+        drawStepper(graphics, x, y + 12, controlWidth, value, mouseX, mouseY, previous, next);
+    }
+
+    private void drawStepper(GuiGraphicsExtractor graphics, int x, int boxY, int controlWidth, String value,
+                             int mouseX, int mouseY, Runnable previous, Runnable next) {
         graphics.fill(x, boxY, x + controlWidth, boxY + CONTROL_HEIGHT, THEME.control());
         boolean leftHover = inside(mouseX, mouseY, x, boxY, 16, CONTROL_HEIGHT);
         boolean rightHover = inside(mouseX, mouseY, x + controlWidth - 16, boxY, 16, CONTROL_HEIGHT);
@@ -516,19 +519,7 @@ public final class CatacombsCalculatorScreen extends Screen {
         int controlWidth = Math.min(150, Math.max(104, rowWidth / 4));
         int controlX = x + rowWidth - controlWidth;
         graphics.text(font, trim(label, Math.max(20, rowWidth - controlWidth - 12)), x, y + 5, THEME.text(), true);
-        graphics.fill(controlX, y + 1, controlX + controlWidth, y + 1 + CONTROL_HEIGHT, THEME.control());
-        boolean leftHover = inside(mouseX, mouseY, controlX, y + 1, 16, CONTROL_HEIGHT);
-        boolean rightHover = inside(mouseX, mouseY, controlX + controlWidth - 16, y + 1, 16, CONTROL_HEIGHT);
-        graphics.fill(controlX, y + 1, controlX + 16, y + 1 + CONTROL_HEIGHT, leftHover ? THEME.controlHover() : THEME.control());
-        graphics.fill(controlX + controlWidth - 16, y + 1, controlX + controlWidth, y + 1 + CONTROL_HEIGHT,
-            rightHover ? THEME.controlHover() : THEME.control());
-        graphics.text(font, "<", controlX + 5, y + 5, THEME.text(), true);
-        graphics.text(font, ">", controlX + controlWidth - 11, y + 5, THEME.text(), true);
-        String shown = trim(value, controlWidth - 38);
-        graphics.text(font, shown, controlX + controlWidth / 2 - font.width(shown) / 2, y + 5, THEME.text(), true);
-        addClickRegion(controlX, y + 1, controlWidth / 2, CONTROL_HEIGHT, (clickX, clickY, button) -> previous.run());
-        addClickRegion(controlX + controlWidth / 2, y + 1, controlWidth - controlWidth / 2, CONTROL_HEIGHT,
-            (clickX, clickY, button) -> next.run());
+        drawStepper(graphics, controlX, y + 1, controlWidth, value, mouseX, mouseY, previous, next);
     }
 
     private int drawWrappedText(
@@ -664,15 +655,15 @@ public final class CatacombsCalculatorScreen extends Screen {
     }
 
     private Calculation calculate() {
-        double baseXp = selectedFloor.baseXp();
-        double hecatomb = HECATOMB_BONUSES[Math.clamp(hecatombLevel, 0, HECATOMB_BONUSES.length - 1)];
+        double baseXp = selectedFloor.baseXp;
+        double hecatomb = CatacombsAverageCalculator.hecatombBonus(hecatombLevel);
         MayorBoost mayor = currentMayorBoost();
         long cataPerRun = CatacombsAverageCalculator.catacombsXpPerRun(baseXp, expertRing, hecatomb,
-            explorerLevel, globalBoost, mayor.multiplier());
+            explorerLevel, globalBoost, mayor.multiplier);
 
         EnumMap<DungeonClass, Double> classXpPerRun = CatacombsAverageCalculator.classXpPerRun(
-            classPerks, baseXp, hecatomb, scarfAccessory.bonus(), graduateLevel * 0.02,
-            globalBoost, mayor.multiplier());
+            classPerks, baseXp, hecatomb, scarfAccessory.bonus, graduateLevel * 0.02,
+            globalBoost, mayor.multiplier);
         double average = 0.0;
         for (DungeonClass dungeonClass : CLASSES) {
             average += classXpPerRun.get(dungeonClass);
@@ -708,7 +699,7 @@ public final class CatacombsCalculatorScreen extends Screen {
             return "[Kung] Load a player to calculate ca" + calculation.classTargetLevel() + ".";
         }
         return "[Kung] " + CatacombsAverageCalculator.classAverageSummaryLine(
-            loadedPlayer.name(), selectedFloor.shortLabel(), calculation.classTargetLevel(), calculation.breakdown());
+            loadedPlayer.name(), selectedFloor.shortLabel, calculation.classTargetLevel(), calculation.breakdown());
     }
 
     private String catacombsSummaryLine(Calculation calculation) {
@@ -716,7 +707,7 @@ public final class CatacombsCalculatorScreen extends Screen {
             return "[Kung] Load a player to calculate c" + calculation.targetLevel() + ".";
         }
         return "[Kung] " + CatacombsAverageCalculator.catacombsSummaryLine(
-            loadedPlayer.name(), selectedFloor.shortLabel(), calculation.targetLevel(), calculation.runsToCatacombs());
+            loadedPlayer.name(), selectedFloor.shortLabel, calculation.targetLevel(), calculation.runsToCatacombs());
     }
 
     private MayorBoost currentMayorBoost() {
@@ -735,9 +726,14 @@ public final class CatacombsCalculatorScreen extends Screen {
 
     private String mayorLabel(MayorBoost boost) {
         if (manualMayorBoost != null) {
-            return boost.label();
+            return boost.label;
         }
         return "Auto: " + SkyBlockMayorTracker.INSTANCE.catacombsXpBoostLabel();
+    }
+
+    private static <T extends Enum<T>> T cycle(T value, int direction) {
+        T[] values = value.getDeclaringClass().getEnumConstants();
+        return values[Math.floorMod(value.ordinal() + direction, values.length)];
     }
 
     private double cycleGlobalBoost(int direction) {
@@ -821,11 +817,6 @@ public final class CatacombsCalculatorScreen extends Screen {
         return suffix;
     }
 
-    private int classColor(String label) {
-        DungeonClass dungeonClass = classFromLabel(label);
-        return dungeonClass == null ? THEME.text() : dungeonClass.color();
-    }
-
     private double classAverage(ProfileData profile) {
         double average = 0.0;
         for (DungeonClass dungeonClass : CLASSES) {
@@ -849,18 +840,16 @@ public final class CatacombsCalculatorScreen extends Screen {
     }
 
     private String hecatombLabel() {
-        String[] roman = {"None", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
         int level = Math.clamp(hecatombLevel, 0, 10);
         if (level == 0) {
             return "None";
         }
-        double shown = HECATOMB_BONUSES[level] * 100.0;
-        return roman[level] + " (+" + String.format(Locale.ROOT, "%.2f", shown) + "%)";
+        double shown = CatacombsAverageCalculator.hecatombBonus(level) * 100.0;
+        return ROMAN[level] + " (+" + String.format(Locale.ROOT, "%.2f", shown) + "%)";
     }
 
     private static String romanLevel(int level) {
-        String[] roman = {"0", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X"};
-        return roman[Math.clamp(level, 0, roman.length - 1)];
+        return ROMAN[Math.clamp(level, 0, ROMAN.length - 1)];
     }
 
     private static String boostLabel(double boost) {
@@ -903,15 +892,6 @@ public final class CatacombsCalculatorScreen extends Screen {
         return format(Math.round(value));
     }
 
-    private static DungeonClass classFromLabel(String label) {
-        for (DungeonClass dungeonClass : CLASSES) {
-            if (dungeonClass.label().equals(label)) {
-                return dungeonClass;
-            }
-        }
-        return null;
-    }
-
     private enum LoadState {
         IDLE,
         LOADING,
@@ -920,66 +900,34 @@ public final class CatacombsCalculatorScreen extends Screen {
     }
 
     private enum FloorOption {
-        ENTRANCE("entrance", "Entrance", "E", "0", 55.0, false),
-        F1("f1", "Floor 1", "F1", "1", 110.0, false),
-        F2("f2", "Floor 2", "F2", "2", 220.0, false),
-        F3("f3", "Floor 3", "F3", "3", 560.0, false),
-        F4("f4", "Floor 4", "F4", "4", 1_420.0, false),
-        F5("f5", "Floor 5", "F5", "5", 2_400.0, false),
-        F6("f6", "Floor 6", "F6", "6", 4_880.0, false),
-        F7("f7", "Floor 7", "F7", "7", 28_000.0, false),
-        M1("m1", "Master 1", "M1", "1", 15_000.0, true),
-        M2("m2", "Master 2", "M2", "2", 20_000.0, true),
-        M3("m3", "Master 3", "M3", "3", 35_000.0, true),
-        M4("m4", "Master 4", "M4", "4", 55_000.0, true),
-        M5("m5", "Master 5", "M5", "5", 70_000.0, true),
-        M6("m6", "Master 6", "M6", "6", 100_000.0, true),
-        M7("m7", "Master 7", "M7", "7", 300_000.0, true);
+        ENTRANCE("Entrance", "E", "0", 55.0, false),
+        F1("Floor 1", "F1", "1", 110.0, false),
+        F2("Floor 2", "F2", "2", 220.0, false),
+        F3("Floor 3", "F3", "3", 560.0, false),
+        F4("Floor 4", "F4", "4", 1_420.0, false),
+        F5("Floor 5", "F5", "5", 2_400.0, false),
+        F6("Floor 6", "F6", "6", 4_880.0, false),
+        F7("Floor 7", "F7", "7", 28_000.0, false),
+        M1("Master 1", "M1", "1", 15_000.0, true),
+        M2("Master 2", "M2", "2", 20_000.0, true),
+        M3("Master 3", "M3", "3", 35_000.0, true),
+        M4("Master 4", "M4", "4", 55_000.0, true),
+        M5("Master 5", "M5", "5", 70_000.0, true),
+        M6("Master 6", "M6", "6", 100_000.0, true),
+        M7("Master 7", "M7", "7", 300_000.0, true);
 
-        private final String id;
         private final String label;
         private final String shortLabel;
         private final String floorNumber;
         private final double baseXp;
         private final boolean masterMode;
 
-        FloorOption(String id, String label, String shortLabel, String floorNumber, double baseXp, boolean masterMode) {
-            this.id = id;
+        FloorOption(String label, String shortLabel, String floorNumber, double baseXp, boolean masterMode) {
             this.label = label;
             this.shortLabel = shortLabel;
             this.floorNumber = floorNumber;
             this.baseXp = baseXp;
             this.masterMode = masterMode;
-        }
-
-        String label() {
-            return label;
-        }
-
-        String shortLabel() {
-            return shortLabel;
-        }
-
-        String floorNumber() {
-            return floorNumber;
-        }
-
-        double baseXp() {
-            return baseXp;
-        }
-
-        boolean masterMode() {
-            return masterMode;
-        }
-
-        FloorOption previous() {
-            FloorOption[] values = values();
-            return values[Math.floorMod(ordinal() - 1, values.length)];
-        }
-
-        FloorOption next() {
-            FloorOption[] values = values();
-            return values[Math.floorMod(ordinal() + 1, values.length)];
         }
     }
 
@@ -996,24 +944,6 @@ public final class CatacombsCalculatorScreen extends Screen {
             this.label = label;
             this.bonus = bonus;
         }
-
-        String label() {
-            return label;
-        }
-
-        double bonus() {
-            return bonus;
-        }
-
-        ScarfAccessory previous() {
-            ScarfAccessory[] values = values();
-            return values[Math.floorMod(ordinal() - 1, values.length)];
-        }
-
-        ScarfAccessory next() {
-            ScarfAccessory[] values = values();
-            return values[Math.floorMod(ordinal() + 1, values.length)];
-        }
     }
 
     private enum MayorBoost {
@@ -1027,24 +957,6 @@ public final class CatacombsCalculatorScreen extends Screen {
         MayorBoost(String label, double multiplier) {
             this.label = label;
             this.multiplier = multiplier;
-        }
-
-        String label() {
-            return label;
-        }
-
-        double multiplier() {
-            return multiplier;
-        }
-
-        MayorBoost previous() {
-            MayorBoost[] values = values();
-            return values[Math.floorMod(ordinal() - 1, values.length)];
-        }
-
-        MayorBoost next() {
-            MayorBoost[] values = values();
-            return values[Math.floorMod(ordinal() + 1, values.length)];
         }
     }
 

@@ -56,7 +56,7 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
         DungeonServerTickEvents.register(() -> {
             if (ready() && tracker.advance()) {
                 var selected = tracker.displayedDragons(DragonDebuffScope.NEAREST_STATUE);
-                trace("statue-selection target=" + (selected.isEmpty() ? "unknown" : selected.getFirst().name));
+                trace("statue-selection target=" + (selected.isEmpty() ? "unknown" : selected.getFirst().statue.label()));
             }
         });
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
@@ -104,14 +104,14 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
 
     public void observeSpawn(Entity entity) {
         if (!(entity instanceof EnderDragon dragon) || !ready() || !trackingDragons()) return;
-        String name = DungeonDebuffTracker.dragonName(entity.position());
-        if (name == null) return;
+        var statue = DungeonDebuffTracker.statueAt(entity.position());
+        if (statue == null) return;
         var player = Minecraft.getInstance().player;
-        var observation = tracker.spawn(entity.getUUID(), name,
+        var observation = tracker.spawn(entity.getUUID(), statue,
             player != null && HypixelInstanceTracker.INSTANCE.positionKnown() ? player.position() : null);
         if (observation == null || observation.ended) return;
         dragons.put(entity.getUUID(), dragon);
-        trace("spawn name=" + name + " id=" + entity.getId() + " uuid=" + entity.getUUID()
+        trace("spawn name=" + statue.label() + " id=" + entity.getId() + " uuid=" + entity.getUUID()
             + " player=" + (player == null ? "unknown" : player.position()));
     }
 
@@ -121,7 +121,7 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
         Entity entity = Minecraft.getInstance().level.getEntity(packet.getEntity());
         trace("ice-equipment id=" + packet.getEntity() + " entity=" + (entity == null ? "missing" : entity.getType())
             + " position=" + (entity == null ? "unknown" : entity.position())
-            + " matchPosition=" + (entity == null ? "unknown" : matchingPosition(entity)));
+            + " matchPosition=" + (entity == null ? "unknown" : McCompat.interpolatedPosition(entity)));
         if (!(entity instanceof ArmorStand stand)) return;
         if (markers.containsKey(stand.getUUID()) || markers.size() >= DungeonDebuffTracker.MAX_MARKERS) return;
         IceMarker marker = new IceMarker(stand, tracker.tick());
@@ -241,17 +241,13 @@ public final class DungeonDebuffFeature extends ConfigurableFeature<DungeonConfi
     private static String describeTarget(Entity entity) {
         if (entity == null) return "entity=missing";
         return "entity=" + entity.getId() + ":" + entity.getType() + " name=\"" + entity.getName().getString()
-            + "\" position=" + entity.position() + " matchPosition=" + matchingPosition(entity) + " bounds=" + entity.getBoundingBox()
+            + "\" position=" + entity.position() + " matchPosition=" + McCompat.interpolatedPosition(entity) + " bounds=" + entity.getBoundingBox()
             + (entity instanceof LivingEntity living ? " health=" + living.getHealth() : "");
     }
 
-    static Vec3 matchingPosition(Entity entity) {
-        // Packet observations must not compare a new marker with a mob still interpolating behind it.
-        return McCompat.interpolatedPosition(entity);
-    }
-
     static DungeonDebuffTracker.Target matchingTarget(Entity entity) {
-        Vec3 position = matchingPosition(entity);
+        // Packet observations must not compare a new marker with a mob still interpolating behind it.
+        Vec3 position = McCompat.interpolatedPosition(entity);
         return new DungeonDebuffTracker.Target(entity.getUUID(), position,
             entity.getBoundingBox().move(position.subtract(entity.position())), entity instanceof EnderDragon);
     }

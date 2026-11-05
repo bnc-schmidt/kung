@@ -22,18 +22,18 @@ public final class DungeonLifecycleSignals {
     }
 
     public static boolean isRunStart(String message) {
-        return message != null && RUN_START.matcher(clean(message)).matches();
+        return message != null && RUN_START.matcher(HypixelLocation.clean(message)).matches();
     }
 
     public static boolean isRunFinished(String message) {
         if (message == null) return false;
-        String text = clean(message);
+        String text = HypixelLocation.clean(message);
         return RUN_FINISHED.matcher(text).matches() || TEAM_SCORE.matcher(text).matches();
     }
 
     /** A score may also describe a wipe; only the matching victory banner confirms the boss. */
     public static boolean isVictoryForFloor(String message, int floor, boolean masterMode) {
-        var victory = RUN_FINISHED.matcher(clean(message));
+        var victory = RUN_FINISHED.matcher(HypixelLocation.clean(message));
         if (!victory.matches()) return false;
         String boss = victory.group(1);
         if (boss.startsWith("The ")) boss = boss.substring(4);
@@ -57,7 +57,7 @@ public final class DungeonLifecycleSignals {
 
     /** The boss and run time of a "Defeated ... in ..." line, or null for any other line. */
     public static FloorFinish parseFloorFinish(String message) {
-        var finish = FLOOR_FINISH.matcher(clean(message));
+        var finish = FLOOR_FINISH.matcher(HypixelLocation.clean(message));
         if (!finish.matches()) return null;
         long millis = 0L;
         boolean any = false;
@@ -71,9 +71,5 @@ public final class DungeonLifecycleSignals {
             };
         }
         return any ? new FloorFinish(finish.group(1), millis, finish.group(3) != null) : null;
-    }
-
-    public static String clean(String message) {
-        return HypixelLocation.clean(message);
     }
 }

@@ -23,6 +23,10 @@ final class M7DragonTracker {
         "[BOSS] Wither King: I am not impressed.",
         "[BOSS] Wither King: Your skills have faded humans.",
         "[BOSS] Wither King: Your skills have faded, humans.");
+    private static final java.util.Set<String> COUNT_LINES = java.util.Set.of(
+        "[BOSS] Wither King: Oh, this one hurts!",
+        "[BOSS] Wither King: I have more of those.",
+        "[BOSS] Wither King: My soul is disposable.");
     private final Map<UUID, Attempt> attempts = new LinkedHashMap<>();
     private final Map<UUID, Long> unknownDeaths = new LinkedHashMap<>();
     private final EnumSet<Statue> brokenStatues = EnumSet.noneOf(Statue.class);
@@ -120,9 +124,7 @@ final class M7DragonTracker {
     List<Result> confirmMessage(String message) {
         if (message == null) return List.of();
         if (MISS_LINES.contains(message)) return missed(message);
-        if (!"[BOSS] Wither King: Oh, this one hurts!".equals(message)
-            && !"[BOSS] Wither King: I have more of those.".equals(message)
-            && !"[BOSS] Wither King: My soul is disposable.".equals(message)) return List.of();
+        if (!COUNT_LINES.contains(message)) return List.of();
         if (!unknownDeaths.isEmpty()) return List.of(new Result(null, Outcome.COUNTS, message, null));
         Attempt candidate = null;
         for (Attempt attempt : attempts.values()) {

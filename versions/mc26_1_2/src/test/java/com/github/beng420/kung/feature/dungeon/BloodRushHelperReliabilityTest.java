@@ -58,7 +58,7 @@ public final class BloodRushHelperReliabilityTest {
 
             helper.clear(100);
             helper.scheduleInitial(101);
-            assertTrue(helper.doorTitlePending(101));
+            assertTrue(helper.doorTitlePending());
             helper.observeProgress(null, tracker);
             assertTrue("A new run must accept progress again", KungDebugRecorder.dump().contains("baseline opened=1"));
         });
@@ -68,12 +68,12 @@ public final class BloodRushHelperReliabilityTest {
     public void bloodOpenCancelsAnInitialTitleStillWaitingForScans() throws Exception {
         withBloodRush(tracker -> {
             var helper = BloodRushHelperFeature.INSTANCE;
-            assertTrue(helper.doorTitlePending(0));
+            assertTrue(helper.doorTitlePending());
             helper.observeMessage(null, "The BLOOD DOOR has been opened!", false, tracker);
-            assertTrue("Messages before the run must not finish it", helper.doorTitlePending(0));
+            assertTrue("Messages before the run must not finish it", helper.doorTitlePending());
             helper.observeMessage(null, "§cThe BLOOD DOOR has been opened!", true, tracker);
-            assertFalse(helper.doorTitlePending(0));
-            assertFalse(helper.shouldFastScanDoors(0));
+            assertFalse(helper.doorTitlePending());
+            assertFalse(tracker.shouldFastScanDoors());
             KungDebugRecorder.clear();
             helper.maybeShowDoorTitle(null, tracker);
             assertFalse(KungDebugRecorder.dump().contains("[door-title]"));

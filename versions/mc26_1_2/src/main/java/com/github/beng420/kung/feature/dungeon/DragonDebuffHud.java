@@ -44,8 +44,8 @@ public final class DragonDebuffHud {
 
     public static void drawPreview(GuiGraphicsExtractor graphics, DungeonConfig config) {
         List<DungeonDebuffTracker.Dragon> examples = new ArrayList<>();
-        for (String name : List.of("Red", "Orange", "Green", "Blue", "Purple")) {
-            var dragon = new DungeonDebuffTracker.Dragon(name, 0);
+        for (var statue : M7DragonTracker.Statue.values()) {
+            var dragon = new DungeonDebuffTracker.Dragon(statue, 0);
             for (int offset : new int[] {2, 2, 3, 4, 5}) dragon.arrows.add(offset);
             dragon.nearestInWave = true;
             dragon.sprayTick = 6;

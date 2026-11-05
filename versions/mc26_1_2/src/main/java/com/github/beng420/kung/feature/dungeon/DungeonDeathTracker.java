@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.dungeon;
 
+import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.UUID;
@@ -26,7 +27,7 @@ public final class DungeonDeathTracker {
     public DeathEvent observeMessage(String raw, MessageSource source, UUID self,
         Function<String, UUID> knownRosterLookup, long nowTick) {
         if (source != MessageSource.SYSTEM) return null;
-        Matcher matcher = DEATH.matcher(DungeonLifecycleSignals.clean(raw));
+        Matcher matcher = DEATH.matcher(HypixelLocation.clean(raw));
         if (!matcher.matches()) return null;
         String name = matcher.group("name");
         UUID uuid = name.equalsIgnoreCase("You") ? self : knownRosterLookup.apply(name);
@@ -82,7 +83,7 @@ public final class DungeonDeathTracker {
     }
 
     public static int teamTotal(String line) {
-        Matcher matcher = TEAM_TOTAL.matcher(DungeonLifecycleSignals.clean(line));
+        Matcher matcher = TEAM_TOTAL.matcher(HypixelLocation.clean(line));
         return matcher.matches() ? Integer.parseInt(matcher.group(1)) : -1;
     }
 

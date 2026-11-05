@@ -50,7 +50,7 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
             return false;
         }
 
-        String message = DungeonLifecycleSignals.clean(component.getString());
+        String message = HypixelLocation.clean(component.getString());
         if (message.isEmpty() || message.startsWith("[Kung")) {
             return false;
         }
@@ -61,10 +61,11 @@ public final class DungeonChatFilterFeature extends ConfigurableFeature<DungeonC
         if (config.lootSpam() && isLootSpamMessage(message)) {
             return true;
         }
-        if (config.watcher() && "the watcher".equals(bossName(message))) {
+        String boss = bossName(message);
+        if (config.watcher() && "the watcher".equals(boss)) {
             return true;
         }
-        return config.bossMessages() && bossMessageEnabled(config, bossName(message));
+        return config.bossMessages() && bossMessageEnabled(config, boss);
     }
 
     private static boolean isBlessingMessage(String message) {

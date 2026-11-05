@@ -67,7 +67,6 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     private List<BlockPos> mimicChestPositions = List.of();
     private List<BlockPos> lastKnownMimicChestPositions = List.of();
     private Set<Integer> observedMimicEntityIds = Set.of();
-    private ScanStats lastScanStats = ScanStats.empty();
     private Object observedLevel;
     private long observedMapGeneration = Long.MIN_VALUE;
     private DungeonLiveMapWriter.CellKey lastPlayerRoom;
@@ -206,8 +205,6 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         for (BlockPos pos : chestScanner.positions()) {
             if (isMimicChest(client, renderPlan, pos)) result.add(pos);
         }
-        lastScanStats = new ScanStats(chestScanner.cachedChunks(), chestScanner.checkedBlockEntityPositions(),
-            chestScanner.fallbackScans());
         return List.copyOf(result);
     }
 
@@ -247,15 +244,15 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     }
 
     private boolean isAllowedMimicPosition(Minecraft client, DungeonLiveMapWriter.MatchRenderPlan renderPlan, BlockPos pos) {
-        DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(pos);
-        if (!isInsideDungeonGrid(grid)) return reject(pos, "outside-grid");
-        if (renderPlan.roomTypeAt(grid.gridX(), grid.gridZ()) == RoomType.TRAP) return reject(pos, "trap-room");
+        DungeonLiveMapWriter.CellKey cell = cellOf(pos);
+        if (cell == null) return reject(pos, "outside-grid");
+        if (renderPlan.roomTypeAt(cell.x(), cell.z()) == RoomType.TRAP) return reject(pos, "trap-room");
         var decision = staticChests.check(tracker, client.level, pos, tracker.dungeonTick());
         if (decision.fixed()) return reject(pos, "fixed-static");
         // Existing room-wide exclusions remain only for variants without confirmed positions.
         // Once a variant has a template, an additional chest in Buttons/Slime is a candidate too.
-        if (!decision.hasPattern() && isKnownStaticTrappedChestRoom(renderPlan, grid.gridX(), grid.gridZ())) {
-            return reject(pos, "static-room:" + canonicalRoomName(roomName(renderPlan, grid.gridX(), grid.gridZ())));
+        if (!decision.hasPattern() && isKnownStaticTrappedChestRoom(renderPlan, cell.x(), cell.z())) {
+            return reject(pos, "static-room:" + canonicalRoomName(roomName(renderPlan, cell.x(), cell.z())));
         }
         return true;
     }
@@ -266,22 +263,15 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return false;
     }
 
-    private static boolean isInsideDungeonGrid(DungeonScanUtils.GridPosition grid) {
-        return grid.gridX() >= 0
-            && grid.gridZ() >= 0
-            && grid.gridX() <= DungeonScanUtils.SCAN_GRID_SIZE / 2
-            && grid.gridZ() <= DungeonScanUtils.SCAN_GRID_SIZE / 2;
+    /** The room cell holding this block, or null outside the dungeon grid. */
+    private static DungeonLiveMapWriter.CellKey cellOf(BlockPos pos) {
+        DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(pos);
+        return DungeonScanUtils.isValidRoomGrid(grid.gridX(), grid.gridZ())
+            ? new DungeonLiveMapWriter.CellKey(grid.gridX(), grid.gridZ()) : null;
     }
 
     private static DungeonLiveMapWriter.CellKey currentPlayerRoom(Minecraft client) {
-        if (client.player == null) {
-            return null;
-        }
-        DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        if (!isInsideDungeonGrid(grid)) {
-            return null;
-        }
-        return new DungeonLiveMapWriter.CellKey(grid.gridX(), grid.gridZ());
+        return client.player == null ? null : cellOf(client.player.blockPosition());
     }
 
     private void forgetTrapMimicRooms(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -453,10 +443,13 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     private static final java.util.regex.Pattern FORMAT_CODE = java.util.regex.Pattern.compile("(?:\\u00a7|\\u00c2\\u00a7).");
     private static final java.util.regex.Pattern NOT_ALPHANUMERIC = java.util.regex.Pattern.compile("[^a-z0-9]+");
 
+    private static String clean(String text) {
+        return HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(text).replaceAll(""));
+    }
+
     private static String entityName(Entity entity) {
         net.minecraft.network.chat.Component customName = entity.getCustomName();
-        return HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(
-            customName != null ? customName.getString() : entity.getName().getString()).replaceAll(""));
+        return clean(customName != null ? customName.getString() : entity.getName().getString());
     }
 
     private void observeMessage(Minecraft client, String rawMessage) {
@@ -464,7 +457,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             return;
         }
 
-        String message = HypixelLocation.collapseSpaces(FORMAT_CODE.matcher(rawMessage).replaceAll(""));
+        String message = clean(rawMessage);
         if (message.isBlank()) {
             return;
         }
@@ -518,16 +511,11 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         DungeonLiveMapWriter.MatchRenderPlan renderPlan,
         BlockPos mimicPos
     ) {
-        if (client.player == null) {
+        DungeonLiveMapWriter.CellKey playerCell = currentPlayerRoom(client);
+        DungeonLiveMapWriter.CellKey mimicCell = cellOf(mimicPos);
+        if (playerCell == null || mimicCell == null) {
             return null;
         }
-        DungeonScanUtils.GridPosition playerGrid = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
-        DungeonScanUtils.GridPosition mimicGrid = DungeonScanUtils.getRoomGridPosition(mimicPos);
-        if (!isInsideDungeonGrid(playerGrid) || !isInsideDungeonGrid(mimicGrid)) {
-            return null;
-        }
-        DungeonLiveMapWriter.CellKey playerCell = new DungeonLiveMapWriter.CellKey(playerGrid.gridX(), playerGrid.gridZ());
-        DungeonLiveMapWriter.CellKey mimicCell = new DungeonLiveMapWriter.CellKey(mimicGrid.gridX(), mimicGrid.gridZ());
         if (playerCell.equals(mimicCell)) return "cell";
         if (renderPlan.sameRoomOwner(playerCell, mimicCell)) return "owner";
         return sameRoomCells(renderPlan, mimicCell).contains(playerCell) ? "cells" : null;
@@ -588,11 +576,10 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
     }
 
     private static String roomKey(DungeonLiveMapWriter.MatchRenderPlan renderPlan, BlockPos pos) {
-        DungeonScanUtils.GridPosition grid = DungeonScanUtils.getRoomGridPosition(pos);
-        if (!isInsideDungeonGrid(grid)) {
+        DungeonLiveMapWriter.CellKey cell = cellOf(pos);
+        if (cell == null) {
             return null;
         }
-        DungeonLiveMapWriter.CellKey cell = new DungeonLiveMapWriter.CellKey(grid.gridX(), grid.gridZ());
         String owner = renderPlan.roomOwners().get(cell);
         if (owner != null) {
             return owner;
@@ -640,18 +627,17 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         int markerSize = 18;
         int half = markerSize / 2;
         int labelWidth = client.font.width(label);
-        int labelX = clampInt(screenX - labelWidth / 2, 2, Math.max(2, graphics.guiWidth() - labelWidth - 2));
-        int markerX = clampInt(screenX - half, 2, Math.max(2, graphics.guiWidth() - markerSize - 2));
-        int markerY = clampInt(screenY - half, 2, Math.max(2, graphics.guiHeight() - markerSize - client.font.lineHeight - 6));
+        int labelX = Math.clamp(screenX - labelWidth / 2, 2, Math.max(2, graphics.guiWidth() - labelWidth - 2));
+        int markerX = Math.clamp(screenX - half, 2, Math.max(2, graphics.guiWidth() - markerSize - 2));
+        int markerY = Math.clamp(screenY - half, 2, Math.max(2, graphics.guiHeight() - markerSize - client.font.lineHeight - 6));
         int labelY = markerY + markerSize + 2;
 
         graphics.fill(markerX - 2, markerY - 2, markerX + markerSize + 2, markerY + markerSize + 2, WAYPOINT_BACKGROUND);
         graphics.fill(markerX + 4, markerY + 4, markerX + markerSize - 4, markerY + markerSize - 4, WAYPOINT_FILL);
         graphics.outline(markerX, markerY, markerSize, markerSize, WAYPOINT_OUTLINE);
         graphics.text(client.font, label, labelX, labelY, TEXT_RED, true);
-        String projection = String.format(Locale.ROOT, "ndc=%.2f,%.2f,%.3f depth=%.1f yaw=%.0f pitch=%.0f fov=%.0f gui=%dx%d",
-            screen.x, screen.y, screen.z, depth, camera.yRot(), camera.xRot(), camera.getFov(),
-            graphics.guiWidth(), graphics.guiHeight());
+        Projection projection = new Projection(screen.x, screen.y, screen.z, depth, camera.yRot(), camera.xRot(),
+            camera.getFov(), graphics.guiWidth(), graphics.guiHeight());
         return new Marker(pos, match, screenX, screenY, markerX != screenX - half || markerY != screenY - half, projection);
     }
 
@@ -673,7 +659,6 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         observedMimicEntityIds = Set.of();
         observedLevel = null;
         observedMapGeneration = Long.MIN_VALUE;
-        lastScanStats = ScanStats.empty();
         lastPlayerRoom = null;
         mimicEncounterActive = false;
         mimicChestOpenedTick = Long.MIN_VALUE;
@@ -787,9 +772,9 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
             + " entities=" + observedMimicEntityIds.size()
             + " room=" + (lastPlayerRoom == null ? "none" : lastPlayerRoom.x() + "," + lastPlayerRoom.z())
             + " active=" + mimicEncounterActive
-            + " chunks=" + lastScanStats.checkedChunks()
-            + " indexedPositionsThisTick=" + lastScanStats.checkedBlockEntityPositions()
-            + " blockStateChunks=" + lastScanStats.blockStateScannedChunks();
+            + " chunks=" + chestScanner.cachedChunks()
+            + " indexedPositionsThisTick=" + chestScanner.checkedBlockEntityPositions()
+            + " blockStateChunks=" + chestScanner.fallbackScans();
         if (state.equals(lastLoggedState)) {
             return;
         }
@@ -808,10 +793,6 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return count;
     }
 
-    private static int clampInt(int value, int min, int max) {
-        return Math.max(min, Math.min(max, value));
-    }
-
     private static String xyz(BlockPos pos) {
         return pos.getX() + "," + pos.getY() + "," + pos.getZ();
     }
@@ -827,12 +808,16 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         return hint != null ? hint.name() : "unknown";
     }
 
-    private record Marker(BlockPos pos, String match, int x, int y, boolean clamped, String projection) {
+    private record Marker(BlockPos pos, String match, int x, int y, boolean clamped, Projection projection) {
     }
 
-    private record ScanStats(int checkedChunks, int checkedBlockEntityPositions, int blockStateScannedChunks) {
-        static ScanStats empty() {
-            return new ScanStats(0, 0, 0);
+    /** Camera and screen numbers of one marker; formatted only when a trace line prints them. */
+    private record Projection(double ndcX, double ndcY, double ndcZ, double depth, float yaw, float pitch, float fov,
+                              int guiWidth, int guiHeight) {
+        @Override
+        public String toString() {
+            return String.format(Locale.ROOT, "ndc=%.2f,%.2f,%.3f depth=%.1f yaw=%.0f pitch=%.0f fov=%.0f gui=%dx%d",
+                ndcX, ndcY, ndcZ, depth, yaw, pitch, fov, guiWidth, guiHeight);
         }
     }
 }
