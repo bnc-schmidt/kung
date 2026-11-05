@@ -15,8 +15,6 @@ import com.github.beng420.kung.ui.UiTextField;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.ui.UiScale;
 import com.github.beng420.kung.ui.UiScrollList;
-import com.github.beng420.kung.ui.UiSpacing;
-import com.github.beng420.kung.ui.UiTextStyle;
 import com.github.beng420.kung.ui.UiTooltip;
 import com.github.beng420.kung.ui.UiMenuFont;
 import com.github.beng420.kung.ui.UiShapes;
@@ -45,11 +43,9 @@ import net.minecraft.util.FormattedCharSequence;
 
 public final class KungConfigScreen extends Screen {
     private static final UiTheme THEME = UiTheme.menu();
-    private static final UiTextStyle TEXT_STYLE = UiTextStyle.normal(THEME);
-    private static final UiTextStyle MUTED_STYLE = UiTextStyle.muted(THEME);
 
     private static final float MENU_SCALE = 0.8F;
-    private static final int LEFT = UiSpacing.MD;
+    private static final int LEFT = 8;
     private static final int COLUMN_WIDTH = 171;
     private static final int ROW_HEIGHT = 18;
     private static final int SETTING_HEIGHT = 16;
@@ -398,8 +394,8 @@ public final class KungConfigScreen extends Screen {
 
     private void drawTitle(GuiGraphicsExtractor graphics) {
         String title = getTitle().getString();
-        graphics.text(menuFont, title, menuWidth() / 2 - menuFont.width(title) / 2, UiSpacing.MD,
-            TEXT_STYLE.color(), TEXT_STYLE.shadow());
+        graphics.text(menuFont, title, menuWidth() / 2 - menuFont.width(title) / 2, 8,
+            THEME.text(), true);
     }
 
     private void drawColumns(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
@@ -549,7 +545,7 @@ public final class KungConfigScreen extends Screen {
         if (setting.kind() == SettingKind.LABEL) {
             int lineY = rowY + 4;
             for (var line : labelLines(setting)) {
-                graphics.text(menuFont, line, labelX, lineY, MUTED_STYLE.color(), MUTED_STYLE.shadow());
+                graphics.text(menuFont, line, labelX, lineY, THEME.muted(), true);
                 lineY += menuFont.lineHeight + 1;
             }
             return;

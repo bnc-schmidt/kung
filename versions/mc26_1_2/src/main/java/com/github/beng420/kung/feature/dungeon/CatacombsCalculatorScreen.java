@@ -17,8 +17,6 @@ import com.github.beng420.kung.ui.UiBounds;
 import com.github.beng420.kung.ui.UiTextField;
 import com.github.beng420.kung.ui.UiScrollList;
 import com.github.beng420.kung.ui.UiTheme;
-import com.github.beng420.kung.ui.UiSpacing;
-import com.github.beng420.kung.ui.UiTextStyle;
 import com.github.beng420.kung.ui.UiNumberField;
 import com.github.beng420.kung.ui.UiToggle;
 import com.github.beng420.kung.util.KeyCodes;
@@ -38,12 +36,11 @@ import net.minecraft.network.chat.Component;
 
 public final class CatacombsCalculatorScreen extends Screen {
     private static final UiTheme THEME = UiTheme.catacombsCalculator();
-    private static final UiTextStyle TEXT_STYLE = UiTextStyle.normal(THEME);
 
     private static final int TOP = 28;
     private static final int GAP = 10;
     private static final int ROW = 19;
-    private static final int CONTROL_HEIGHT = UiSpacing.XL;
+    private static final int CONTROL_HEIGHT = 16;
     private static final int CONTENT_HEIGHT = 838;
     private static final int SCROLL_STEP = 36;
     private static final UiNumberField HECATOMB_LEVEL = new UiNumberField(0, 10, 1);
@@ -196,8 +193,8 @@ public final class CatacombsCalculatorScreen extends Screen {
 
     private void drawTopBar(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         String title = "Kung Catacombs Calculator";
-        graphics.text(font, title, width / 2 - font.width(title) / 2, UiSpacing.MD,
-            TEXT_STYLE.color(), TEXT_STYLE.shadow());
+        graphics.text(font, title, width / 2 - font.width(title) / 2, 8,
+            THEME.text(), true);
         graphics.text(font, "Username:", usernameBox.x() - 58, TOP + 5, THEME.text(), true);
         usernameBox.extractRenderState(graphics, mouseX, mouseY, partialTick);
         drawButton(graphics, usernameBox.x() + usernameBox.width() + 8, TOP, 54, 20, "Load", mouseX, mouseY,

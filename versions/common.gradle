@@ -27,6 +27,10 @@ sourceSets {
     // src/version/java is the project's own McCompat: API that differs between Minecraft versions.
     java.srcDirs = [new File(sharedSrc, "main/java"), new File(sharedSrc, "${flavor}/java"), file("src/version/java")]
     resources.srcDirs = [new File(sharedSrc, "main/resources")]
+    // McInput for GLFW input; a version with its own src/version McInput (26.3, SDL3) does not get it.
+    if (!file("src/version/java/com/github/beng420/kung/compat/McInput.java").exists()) {
+      java.srcDir(new File(sharedSrc, "glfw/java"))
+    }
   }
 }
 

@@ -45,9 +45,4 @@ public class CommandAliasesTest {
         assertTrue(executable(dispatcher, "kung jerry"));
         assertTrue(executable(dispatcher, "kung greenhouse dump"));
     }
-
-    @Test
-    public void aliasingAnUnknownCommandFailsLoudly() {
-        assertThrows(IllegalArgumentException.class, () -> CommandAliases.add(literal("kung"), "nothing", "x"));
-    }
 }

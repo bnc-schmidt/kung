@@ -18,9 +18,6 @@
     "kung.mixins.json"
   ],
   "entrypoints": {
-    "main": [
-      "com.github.beng420.kung.KungMod"
-    ],
     "client": [
       "com.github.beng420.kung.KungClient"
     ],

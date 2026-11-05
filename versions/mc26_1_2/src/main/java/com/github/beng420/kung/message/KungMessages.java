@@ -65,10 +65,6 @@ public final class KungMessages {
         return component(Type.DEBUG, area, message);
     }
 
-    public static Component detail(String message) {
-        return highlight(message);
-    }
-
     /** Shared semantic colors for local informational text; never modifies the actual text. */
     public static MutableComponent highlight(String message) {
         String text = message == null ? "" : message;

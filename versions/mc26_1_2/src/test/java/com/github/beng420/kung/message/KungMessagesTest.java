@@ -65,7 +65,7 @@ public final class KungMessagesTest {
     @Test
     public void sharedColorsPreserveCommandsPathsAndSeverity() {
         String text = "Trace saved: C:\\profiles\\Dungeons 26.1.2\\logs\\kung.log | /kung hud";
-        assertEquals(text, KungMessages.detail(text).getString());
+        assertEquals(text, KungMessages.highlight(text).getString());
         assertEquals(0xFF5555, colorAt(KungMessages.error("Test", "enabled 42"), "enabled"));
         assertEquals(0xFFFF55, colorAt(KungMessages.warning("Test", "3"), "3"));
     }

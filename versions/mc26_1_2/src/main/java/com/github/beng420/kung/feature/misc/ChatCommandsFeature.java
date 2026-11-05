@@ -50,7 +50,6 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     private static long lastSendMillis;
     private static String lastCommandSignature = "";
     private static long lastCommandMillis;
-    private static HypixelChatSender chatSender;
 
     private ChatCommandsFeature() {
         super(config -> config.misc);
@@ -58,7 +57,6 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
 
     @Override
     protected void onInitialize() {
-        chatSender = services().hypixelChat();
         ClientReceiveMessageEvents.GAME.register((message, overlay) ->
             observeMessage(Minecraft.getInstance(), message.getString(), overlay ? "game-overlay" : "game"));
         ClientReceiveMessageEvents.CHAT.register((message, signedMessage, sender, params, receptionTimestamp) ->
@@ -79,7 +77,6 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
     @Override
     protected void onShutdown() {
         onReset();
-        chatSender = null;
     }
 
     @Override
@@ -365,9 +362,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         if (commandPrefix.isBlank()) {
             return;
         }
-        if (chatSender != null) {
-            chatSender.send(client, commandPrefix, response.message());
-        }
+        HypixelChatSender.send(client, commandPrefix, response.message());
         lastSendMillis = now;
     }
 

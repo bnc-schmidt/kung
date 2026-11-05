@@ -22,15 +22,6 @@ public record KungFileLayout(Path gameDirectory, Path configDirectory) {
     public Path updateDirectory() { return settingsDirectory().resolve("updates"); }
     public Path logDirectory() { return gameDirectory.resolve("logs/kung"); }
 
-    /** Resume old pending updates after their download directory has moved. */
-    public Path relocatedUpdateSource(Path source) {
-        Path normalized = source.toAbsolutePath().normalize();
-        Path legacy = gameDirectory.resolve("kung-updates");
-        if (!normalized.startsWith(legacy) || Files.exists(normalized)) return source;
-        Path relocated = updateDirectory().resolve(legacy.relativize(normalized));
-        return Files.isRegularFile(relocated) ? relocated : source;
-    }
-
     public List<String> migrateLegacyDirectories() {
         var warnings = new ArrayList<String>();
         migrateLegacy("kung-dungeon-scans", dungeonDataDirectory(), warnings);

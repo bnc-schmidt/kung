@@ -4,6 +4,7 @@ import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
+import com.mojang.brigadier.Command;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -21,7 +22,6 @@ final class UserCommandGroup {
                         StringArgumentType.getString(context, "username")
                     ))))
             .then(literal("settings").executes(KungCommandActions::openSettings))
-            .then(literal("splits").executes(context -> KungCommandActions.openSplitPersonalBests(context, tracker)))
             .then(literal("updates").executes(KungCommandActions::openUpdates))
             .then(literal("greenhouse").executes(KungCommandActions::openGreenhouse)
                 .then(literal("dump").executes(KungCommandActions::dumpGreenhouse))
@@ -34,8 +34,11 @@ final class UserCommandGroup {
             .then(literal("preview")
                 .then(literal("updates").executes(KungCommandActions::previewUpdateNotification)))
             .then(literal("hud").executes(context -> KungCommandActions.openHudEditor(context, tracker)));
-        // More names for a command: /kung pbs and /kung personalbests open the same screen as /kung splits.
-        CommandAliases.add(root, "splits", "pbs", "personalbests");
+        // /kung pbs and /kung personalbests are more names for /kung splits.
+        Command<FabricClientCommandSource> openSplits = context -> KungCommandActions.openSplitPersonalBests(context, tracker);
+        for (String name : new String[] {"splits", "pbs", "personalbests"}) {
+            root.then(literal(name).executes(openSplits));
+        }
     }
 
     /** The greenhouse hologram commands; "holo" is a second name for "blueprint". */

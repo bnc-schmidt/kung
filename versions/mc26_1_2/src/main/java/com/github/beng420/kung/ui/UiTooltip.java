@@ -6,6 +6,10 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.network.chat.Component;
 
 public final class UiTooltip {
+    private static final int XS = 2;
+    private static final int SM = 4;
+    private static final int MD = 8;
+
     private UiTooltip() {
     }
 
@@ -33,18 +37,18 @@ public final class UiTooltip {
         if (lines == null || lines.isEmpty()) {
             return;
         }
-        int textWidth = Math.min(260, viewportWidth - UiSpacing.MD * 2 - 2);
-        int maxLines = (viewportHeight - UiSpacing.SM * 2 - 2) / (font.lineHeight + UiSpacing.XS);
+        int textWidth = Math.min(260, viewportWidth - MD * 2 - 2);
+        int maxLines = (viewportHeight - SM * 2 - 2) / (font.lineHeight + XS);
         if (textWidth <= 0 || maxLines <= 0) return;
         var wrapped = lines.stream().flatMap(line -> font.split(Component.literal(line), textWidth).stream())
             .limit(maxLines).toList();
-        int width = wrapped.stream().mapToInt(font::width).max().orElse(0) + UiSpacing.MD * 2;
-        int height = wrapped.size() * (font.lineHeight + UiSpacing.XS) + UiSpacing.SM * 2;
+        int width = wrapped.stream().mapToInt(font::width).max().orElse(0) + MD * 2;
+        int height = wrapped.size() * (font.lineHeight + XS) + SM * 2;
         // Beside a row (x < 0 encodes its left edge): right of it, or left of it when the screen ends first.
-        if (x < 0 && rowRight + UiSpacing.SM + width + 1 <= viewportWidth) x = rowRight + UiSpacing.SM;
-        else if (x < 0) x = -x - UiSpacing.SM - width;
+        if (x < 0 && rowRight + SM + width + 1 <= viewportWidth) x = rowRight + SM;
+        else if (x < 0) x = -x - SM - width;
         x = Math.clamp(x, 1, Math.max(1, viewportWidth - width - 1));
-        if (y + height + 1 > viewportHeight) y -= height + UiSpacing.MD * 2;
+        if (y + height + 1 > viewportHeight) y -= height + MD * 2;
         y = Math.clamp(y, 1, Math.max(1, viewportHeight - height - 1));
         graphics.fill(x - 1, y - 1, x + width + 1, y + height + 1, theme.border());
         graphics.fill(x, y, x + width, y + height, theme.panelDark());
@@ -52,8 +56,8 @@ public final class UiTooltip {
             graphics.text(
                 font,
                 wrapped.get(index),
-                x + UiSpacing.MD,
-                y + UiSpacing.SM + index * (font.lineHeight + UiSpacing.XS),
+                x + MD,
+                y + SM + index * (font.lineHeight + XS),
                 theme.text(),
                 true
             );

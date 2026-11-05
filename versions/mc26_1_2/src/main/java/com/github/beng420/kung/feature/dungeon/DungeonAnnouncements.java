@@ -16,7 +16,6 @@ public final class DungeonAnnouncements {
     private static final long PARTY_COOLDOWN_MILLIS = 300L;
 
     private final Queue<String> pendingPartyMessages = new ArrayDeque<>();
-    private final HypixelChatSender chatSender = HypixelChatSender.INSTANCE;
     private long lastPartyMessageMillis;
 
     public void reset() {
@@ -72,7 +71,7 @@ public final class DungeonAnnouncements {
         }
         long now = System.currentTimeMillis();
         if (pendingPartyMessages.isEmpty() && now - lastPartyMessageMillis >= PARTY_COOLDOWN_MILLIS) {
-            chatSender.sendParty(client, message);
+            HypixelChatSender.sendParty(client, message);
             lastPartyMessageMillis = now;
             return;
         }
@@ -85,7 +84,7 @@ public final class DungeonAnnouncements {
         }
         long now = System.currentTimeMillis();
         while (!pendingPartyMessages.isEmpty() && now - lastPartyMessageMillis >= PARTY_COOLDOWN_MILLIS) {
-            chatSender.sendParty(client, pendingPartyMessages.remove());
+            HypixelChatSender.sendParty(client, pendingPartyMessages.remove());
             lastPartyMessageMillis = now;
         }
     }

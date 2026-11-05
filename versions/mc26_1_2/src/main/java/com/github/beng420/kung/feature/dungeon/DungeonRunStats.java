@@ -719,18 +719,18 @@ public final class DungeonRunStats {
         try {
             if (KungConfig.get().dungeon.runStatsReportEnabled()) {
                 output.accept(KungMessages.info("Run Stats"));
-                output.accept(KungMessages.detail(roomProgressSummary(renderPlan)));
-                output.accept(KungMessages.detail(
+                output.accept(KungMessages.highlight(roomProgressSummary(renderPlan)));
+                output.accept(KungMessages.highlight(
                     "Score " + score(renderPlan, 0)
                         + " | Secrets " + unknownDash(totalFoundSecrets) + "/" + unknownPositive(availableSecrets)
                         + " | Crypts " + cryptsOpened + "/?"
                 ));
-                output.accept(KungMessages.detail("Party Secrets: " + unknownDash(totalFoundSecrets)));
+                output.accept(KungMessages.highlight("Party Secrets: " + unknownDash(totalFoundSecrets)));
             }
             if (KungConfig.get().dungeon.playerStatsReportEnabled()) {
                 output.accept(KungMessages.info("Player Stats"));
                 String availability = personalSecretAvailability(sortedPlayers, HypixelSkyBlockProfileClient.secretsSourceAvailable());
-                if (!availability.isEmpty()) output.accept(KungMessages.detail(availability));
+                if (!availability.isEmpty()) output.accept(KungMessages.highlight(availability));
                 DungeonRunSummaryLayout.lines(sortedPlayers.stream().map(stats -> new DungeonRunSummaryLayout.Row(
                     stats.name(), dungeonClass(stats.uuid()).argb(), playerStatsCells(stats, totalFoundSecrets))).toList(),
                     textWidth).forEach(output);

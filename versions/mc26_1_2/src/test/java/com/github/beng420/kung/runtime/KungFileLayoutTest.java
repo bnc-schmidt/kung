@@ -85,13 +85,22 @@ public final class KungFileLayoutTest {
         var layout = layout();
         var oldSource = layout.gameDirectory().resolve("kung-updates/kung-new.jar");
         put(oldSource, "downloaded jar");
-        assertEquals(oldSource, layout.relocatedUpdateSource(oldSource));
+        assertEquals(oldSource, relocatedUpdateSource(layout, oldSource));
         assertTrue(layout.migrateLegacyDirectories().isEmpty());
-        assertEquals(layout.updateDirectory().resolve("kung-new.jar"), layout.relocatedUpdateSource(oldSource));
+        assertEquals(layout.updateDirectory().resolve("kung-new.jar"), relocatedUpdateSource(layout, oldSource));
         var otherSource = layout.gameDirectory().resolve("other/kung-new.jar");
-        assertEquals(otherSource, layout.relocatedUpdateSource(otherSource));
+        assertEquals(otherSource, relocatedUpdateSource(layout, otherSource));
         var escaped = layout.gameDirectory().resolve("kung-updates/../other/kung-new.jar");
-        assertEquals(escaped, layout.relocatedUpdateSource(escaped));
+        assertEquals(escaped, relocatedUpdateSource(layout, escaped));
+    }
+
+    /** Where a pending update download is after the move out of kung-updates. */
+    private static Path relocatedUpdateSource(KungFileLayout layout, Path source) {
+        Path normalized = source.toAbsolutePath().normalize();
+        Path legacy = layout.gameDirectory().resolve("kung-updates");
+        if (!normalized.startsWith(legacy) || Files.exists(normalized)) return source;
+        Path relocated = layout.updateDirectory().resolve(legacy.relativize(normalized));
+        return Files.isRegularFile(relocated) ? relocated : source;
     }
 
     private KungFileLayout layout() throws Exception {

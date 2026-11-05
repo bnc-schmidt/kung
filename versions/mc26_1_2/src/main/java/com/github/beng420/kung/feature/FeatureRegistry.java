@@ -48,16 +48,11 @@ import java.util.List;
 
 public final class FeatureRegistry {
     private static final List<ConfigurableFeature<?>> FEATURES = new ArrayList<>();
-    private static boolean bootstrapped;
 
     private FeatureRegistry() {
     }
 
     public static void initializeClient(AppServices services) {
-        if (bootstrapped) {
-            return;
-        }
-
         DungeonStateTracker tracker = services.dungeonStateTracker();
         register(new DungeonMapFeature(tracker));
         if (!KungBuild.MODRINTH) register(new DungeonMimicEspFeature(tracker));
@@ -100,7 +95,6 @@ public final class FeatureRegistry {
         register(WaypointsFeature.INSTANCE);
         GreenhouseHologram.initialize();
 
-        bootstrapped = true;
         FEATURES.forEach(feature -> feature.initialize(services));
     }
 
@@ -109,7 +103,6 @@ public final class FeatureRegistry {
             FEATURES.get(index).shutdown();
         }
         FEATURES.clear();
-        bootstrapped = false;
     }
 
     private static void register(ConfigurableFeature<?> feature) {

@@ -6,22 +6,20 @@ import static org.junit.Assert.assertThrows;
 import org.junit.Test;
 
 public final class HypixelChatSenderTest {
-    private final HypixelChatSender sender = HypixelChatSender.INSTANCE;
-
     @Test
     public void addsKungPrefixExactlyOnce() {
-        assertEquals("[Kung] hello", sender.prefixedMessage(" hello "));
-        assertEquals("[Kung] hello", sender.prefixedMessage("[Kung] hello"));
+        assertEquals("[Kung] hello", HypixelChatSender.prefixedMessage(" hello "));
+        assertEquals("[Kung] hello", HypixelChatSender.prefixedMessage("[Kung] hello"));
     }
 
     @Test
     public void buildsHypixelChatCommands() {
-        assertEquals("pc [Kung] ready", sender.command("/pc", "ready"));
-        assertEquals("msg Steve [Kung] ready", sender.command("msg Steve", "ready"));
+        assertEquals("pc [Kung] ready", HypixelChatSender.command("/pc", "ready"));
+        assertEquals("msg Steve [Kung] ready", HypixelChatSender.command("msg Steve", "ready"));
     }
 
     @Test
     public void rejectsMissingChannels() {
-        assertThrows(IllegalArgumentException.class, () -> sender.command("", "hello"));
+        assertThrows(IllegalArgumentException.class, () -> HypixelChatSender.command("", "hello"));
     }
 }

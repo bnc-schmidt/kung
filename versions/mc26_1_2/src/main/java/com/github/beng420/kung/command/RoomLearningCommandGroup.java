@@ -3,6 +3,7 @@ package com.github.beng420.kung.command;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.argument;
 import static net.fabricmc.fabric.api.client.command.v2.ClientCommands.literal;
 
+import com.github.beng420.kung.command.KungCommandActions.LearnMode;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.mojang.brigadier.arguments.BoolArgumentType;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
@@ -38,9 +39,9 @@ final class RoomLearningCommandGroup {
                 .then(literal("undo").executes(KungCommandActions::undoLastRoomLearn))
                 .then(literal("delete").then(roomInput().executes(KungCommandActions::deleteRoomInput)))
                 .then(literal("export").then(roomInput().executes(context -> KungCommandActions.exportRoomInput(context, tracker))))
-                .then(literal("look").then(roomInput().executes(context -> KungCommandActions.learnLookedRoomInput(context, tracker))))
-                .then(literal("learnmulti").then(roomInput().executes(context -> KungCommandActions.learnMultiRoomInput(context, tracker))))
-                .then(literal("learn").then(roomInput().executes(context -> KungCommandActions.learnRoomInput(context, tracker)))))
+                .then(literal("look").then(roomInput().executes(context -> KungCommandActions.learnRoomInput(context, tracker, LearnMode.LOOKED))))
+                .then(literal("learnmulti").then(roomInput().executes(context -> KungCommandActions.learnRoomInput(context, tracker, LearnMode.MULTI))))
+                .then(literal("learn").then(roomInput().executes(context -> KungCommandActions.learnRoomInput(context, tracker, LearnMode.HERE)))))
             .then(literal("roomdata")
                 .executes(context -> KungCommandActions.copyRoomData(context, tracker))
                 .then(roomInput().executes(context -> KungCommandActions.exportRoomInput(context, tracker))))

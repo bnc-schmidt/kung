@@ -47,7 +47,7 @@ public final class DungeonQuizReminderFeature extends ConfigurableFeature<Dungeo
         sendLocal(client);
         // The party hears it once per question, whatever the repeat setting says.
         if (action == QuizReminderState.Action.FIRST && config().quizReminderPartyEnabled()) {
-            HypixelChatSender.INSTANCE.sendParty(client, config().quizReminderMessage());
+            HypixelChatSender.sendParty(client, config().quizReminderMessage());
         }
     }
 
