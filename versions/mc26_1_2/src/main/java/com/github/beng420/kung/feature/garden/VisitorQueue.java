@@ -58,7 +58,7 @@ final class VisitorQueue {
         return title.startsWith("SKYBLOCK") && !title.contains("GUEST");
     }
 
-    private static String clean(String text) {
+    static String clean(String text) {
         return HypixelLocation.clean(text.replace('\u00a0', ' ').replace('\u202f', ' '));
     }
 }

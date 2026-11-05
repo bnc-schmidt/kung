@@ -46,8 +46,6 @@ final class InvisibugTracker {
     record End(float x, float y, boolean onScreen) {
     }
 
-    private final Map<Integer, Long> lastCrit = new HashMap<>();
-
     /** The stand a crit particle comes from: the nearest one it appears right above, or null. */
     static Stand source(double x, double y, double z, Collection<Stand> stands) {
         Stand best = null;
@@ -112,28 +110,11 @@ final class InvisibugTracker {
         return new End(ndcX / edge, ndcY / edge, false);
     }
 
-    void seen(int id, long tick) {
-        lastCrit.put(id, tick);
-    }
-
-    boolean isEmpty() {
-        return lastCrit.isEmpty();
-    }
-
-    boolean contains(int id) {
-        return lastCrit.containsKey(id);
-    }
-
-    Set<Integer> ids() {
-        return lastCrit.keySet();
-    }
-
-    void clear() {
-        lastCrit.clear();
-    }
-
-    /** Drops bugs that stopped giving off crits or whose stand is gone; the keys are the dropped ids, the values the reason. */
-    Map<Integer, String> prune(long tick, IntPredicate present) {
+    /**
+     * Drops bugs that stopped giving off crits or whose stand is gone, from the tick of each bug's last crit by stand id;
+     * the keys returned are the dropped ids, the values the reason.
+     */
+    static Map<Integer, String> prune(Map<Integer, Long> lastCrit, long tick, IntPredicate present) {
         Map<Integer, String> dropped = new HashMap<>();
         for (var entry : new ArrayList<>(lastCrit.entrySet())) {
             if (!present.test(entry.getKey())) dropped.put(entry.getKey(), "gone");

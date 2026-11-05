@@ -4,6 +4,7 @@ import static org.junit.Assert.*;
 
 import com.github.beng420.kung.feature.hunting.InvisibugTracker.End;
 import com.github.beng420.kung.feature.hunting.InvisibugTracker.Stand;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import org.junit.Test;
@@ -41,18 +42,18 @@ public final class InvisibugTrackerTest {
 
     @Test
     public void aStandStaysFoundWhileCritsComeAndWhileItExists() {
-        InvisibugTracker tracker = new InvisibugTracker();
-        tracker.seen(7, 0);
-        tracker.seen(8, 0);
-        assertEquals(Map.of(), tracker.prune(InvisibugTracker.EXPIRE_TICKS, id -> true));
-        tracker.seen(7, 60);
+        Map<Integer, Long> lastCrit = new HashMap<>();
+        lastCrit.put(7, 0L);
+        lastCrit.put(8, 0L);
+        assertEquals(Map.of(), InvisibugTracker.prune(lastCrit, InvisibugTracker.EXPIRE_TICKS, id -> true));
+        lastCrit.put(7, 60L);
         // 8 had no crit for more than the expiry; 7 had one recently.
-        assertEquals(Map.of(8, "expired"), tracker.prune(InvisibugTracker.EXPIRE_TICKS + 1, id -> true));
-        assertTrue(tracker.contains(7));
-        assertFalse(tracker.contains(8));
+        assertEquals(Map.of(8, "expired"), InvisibugTracker.prune(lastCrit, InvisibugTracker.EXPIRE_TICKS + 1, id -> true));
+        assertTrue(lastCrit.containsKey(7));
+        assertFalse(lastCrit.containsKey(8));
         // A stand that vanished is dropped at once, however fresh its last crit.
-        assertEquals(Map.of(7, "gone"), tracker.prune(61, id -> false));
-        assertTrue(tracker.isEmpty());
+        assertEquals(Map.of(7, "gone"), InvisibugTracker.prune(lastCrit, 61, id -> false));
+        assertTrue(lastCrit.isEmpty());
     }
 
     @Test

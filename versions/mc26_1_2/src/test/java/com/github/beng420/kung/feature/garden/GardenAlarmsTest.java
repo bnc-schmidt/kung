@@ -59,12 +59,11 @@ public class GardenAlarmsTest {
     }
 
     @Test
-    public void greenhouseBarnGuestGardenAndMissingPlotNeverCountAsFarmingInAPlot() {
-        assertTrue(FarmingActivity.farmingInPlot(true, false, "5", true));
-        assertFalse(FarmingActivity.farmingInPlot(true, true, "5", true));
-        assertFalse(FarmingActivity.farmingInPlot(true, false, null, true));
-        assertFalse(FarmingActivity.farmingInPlot(false, false, "5", true));
-        assertFalse(FarmingActivity.farmingInPlot(true, false, "5", false));
+    public void greenhouseAndMissingPlotNeverCountAsFarmingInAPlot() {
+        assertTrue(FarmingActivity.farmingInPlot(false, "5", true));
+        assertFalse(FarmingActivity.farmingInPlot(true, "5", true));
+        assertFalse(FarmingActivity.farmingInPlot(false, null, true));
+        assertFalse(FarmingActivity.farmingInPlot(false, "5", false));
     }
 
     @Test
@@ -125,7 +124,7 @@ public class GardenAlarmsTest {
         var alarm = new MissingEffectAlarm();
         for (int i = 0; i < 3; i++) run.harvest(i * 300L);
         var reading = GardenEffects.read(SIDEBAR_PLOT, NO_EFFECTS);
-        boolean farming = FarmingActivity.farmingInPlot(true, false, reading.plot(), run.active(1_000));
+        boolean farming = FarmingActivity.farmingInPlot(false, reading.plot(), run.active(1_000));
         assertFalse(alarm.update(farming, reading.sprayed()));
     }
 
@@ -135,10 +134,10 @@ public class GardenAlarmsTest {
         var reading = GardenEffects.read(SIDEBAR_PLOT, NO_EFFECTS);
         var inGreenhouse = new MissingEffectAlarm();
         assertFalse(inGreenhouse.update(
-            FarmingActivity.farmingInPlot(true, true, reading.plot(), run.active(30_000)), reading.sprayed()));
+            FarmingActivity.farmingInPlot(true, reading.plot(), run.active(30_000)), reading.sprayed()));
         var inPlot = new MissingEffectAlarm();
         assertTrue(inPlot.update(
-            FarmingActivity.farmingInPlot(true, false, reading.plot(), run.active(30_000)), reading.sprayed()));
+            FarmingActivity.farmingInPlot(false, reading.plot(), run.active(30_000)), reading.sprayed()));
     }
 
     @Test

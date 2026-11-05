@@ -9,6 +9,7 @@ import com.github.beng420.kung.util.ServerTickPacketContext;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.ToIntFunction;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
@@ -174,16 +175,19 @@ public final class BeaconSolverFeature extends ConfigurableFeature<ForagingConfi
     private static int clicksAt(int slotIndex) {
         for (Controls set : sets) {
             if (slotIndex == set.color) return colorClicks(set);
-            if (slotIndex == set.speed) return linearClicks(set.timing.referenceSpeed(), ownSpeed(set), false);
-            if (slotIndex == set.pitch) return linearClicks(set.timing.referencePitch(), ownPitch(set), true);
+            if (slotIndex == set.speed) {
+                return linearClicks(set.timing.referenceSpeed(), own(set.speed, "speed", BeaconTuning::speedOfName), false);
+            }
+            if (slotIndex == set.pitch) {
+                return linearClicks(set.timing.referencePitch(), own(set.pitch, "pitch", BeaconTuning::pitchOfName), true);
+            }
         }
         return NONE;
     }
 
     private static int colorClicks(Controls set) {
         int reference = referenceColor(set.enchanted);
-        String ours = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.color).getItem()), "color");
-        int own = ours == null ? -1 : BeaconTuning.colorOfName(ours);
+        int own = own(set.color, "color", BeaconTuning::colorOfName);
         return reference < 0 || own < 0 ? NONE : BeaconTuning.clicks(reference, own, BeaconTuning.COLORS.size());
     }
 
@@ -197,14 +201,10 @@ public final class BeaconSolverFeature extends ConfigurableFeature<ForagingConfi
         return reference < 0 ? UNKNOWN : reference - own;
     }
 
-    private static int ownSpeed(Controls set) {
-        String value = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.speed).getItem()), "speed");
-        return value == null ? -1 : BeaconTuning.speedOfName(value);
-    }
-
-    private static int ownPitch(Controls set) {
-        String value = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(set.pitch).getItem()), "pitch");
-        return value == null ? -1 : BeaconTuning.pitchOfName(value);
+    /** What the button in this slot shows now for its kind ("color", "speed" or "pitch"), -1 when it cannot be read. */
+    private static int own(int slot, String kind, ToIntFunction<String> parse) {
+        String value = BeaconTuning.current(MenuItems.lore(activeMenu.slots.get(slot).getItem()), kind);
+        return value == null ? -1 : parse.applyAsInt(value);
     }
 
     /** The color of the marker pane of this set in the reference row, -1 when none is showing. */

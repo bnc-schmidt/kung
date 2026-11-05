@@ -2,7 +2,6 @@ package com.github.beng420.kung.feature.screen;
 
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
-
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.NpcDialogueTrace;
 import com.github.beng420.kung.message.KungMessages;
@@ -25,50 +24,29 @@ public final class ScreenTracker {
     }
 
     private static void tick(Minecraft client) {
-        NpcDialogueTrace.screen(McCompat.screen(client));
-        OpenScreen nextScreen = openScreen(McCompat.screen(client));
-        String nextKey = nextScreen == null ? "" : nextScreen.key();
-        if (nextKey.equals(lastScreenKey)) {
+        Screen screen = McCompat.screen(client);
+        NpcDialogueTrace.screen(screen);
+        boolean container = screen instanceof AbstractContainerScreen<?>;
+        Component titleComponent = screen == null ? null : screen.getTitle();
+        String title = titleComponent == null ? "" : titleComponent.getString().trim();
+        String key = screen == null ? ""
+            : screen.getClass().getName() + "|" + container + "|" + title.toLowerCase(Locale.ROOT);
+        if (key.equals(lastScreenKey)) {
             return;
         }
 
-        lastScreenKey = nextKey;
-        LoadoutsAutoCloseFeature.observeScreenChange(McCompat.screen(client));
-        KungDebugRecorder.event("screen", nextScreen == null
-            ? "closed"
-            : "opened title=\"" + nextScreen.title() + "\" class=" + nextScreen.simpleClassName()
-                + " container=" + nextScreen.container());
-        if (nextScreen != null
-            && nextScreen.container()
-            && KungConfig.get().debug.interfaceMessagesEnabled()
-            && client.player != null) {
-            client.player.sendSystemMessage(KungMessages.debug(
-                "Debug",
-                "Opened interface: "
-                    + nextScreen.title()
-                    + " ("
-                    + nextScreen.simpleClassName()
-                    + ")"
-            ));
-        }
-    }
-
-    private static OpenScreen openScreen(Screen screen) {
+        lastScreenKey = key;
+        LoadoutsAutoCloseFeature.observeScreenChange(screen);
         if (screen == null) {
-            return null;
+            KungDebugRecorder.event("screen", "closed");
+            return;
         }
-
-        Component titleComponent = screen.getTitle();
-        String title = titleComponent == null ? "" : titleComponent.getString().trim();
-        String className = screen.getClass().getName();
         String simpleClassName = screen.getClass().getSimpleName();
-        boolean container = screen instanceof AbstractContainerScreen<?>;
-        return new OpenScreen(title, className, simpleClassName, container);
-    }
-
-    public record OpenScreen(String title, String className, String simpleClassName, boolean container) {
-        String key() {
-            return className + "|" + container + "|" + title.toLowerCase(Locale.ROOT);
+        KungDebugRecorder.event("screen",
+            "opened title=\"" + title + "\" class=" + simpleClassName + " container=" + container);
+        if (container && KungConfig.get().debug.interfaceMessagesEnabled() && client.player != null) {
+            client.player.sendSystemMessage(KungMessages.debug(
+                "Debug", "Opened interface: " + title + " (" + simpleClassName + ")"));
         }
     }
 }

@@ -13,7 +13,7 @@ public class FeastSessionTest {
     public void liveMenuEstablishesBaselineAndSeasoningAdvancesIt() throws IOException {
         var session = new FeastSession();
         session.select(EVENT, true);
-        var snapshot = FeastProgress.readMenu("Grand Feast", FeastProgressTest.liveGrandMenu());
+        var snapshot = FeastProgress.inspectMenu("Grand Feast", FeastProgressTest.liveGrandMenu()).snapshot();
         assertTrue(session.observeMenu(new Object(), snapshot));
         assertEquals(25, session.snapshot().donations());
         assertEquals(750, session.snapshot().goal());

@@ -74,14 +74,14 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
     @Override
     public boolean isEnabled() {
         // Part of the Superpairs Helper: its switch turns on the add-on solvers too.
-        return config().superpairsHelperEnabled();
+        return initialized() && config().superpairsHelperEnabled();
     }
 
     private static void tick(Minecraft client) {
-        if (INSTANCE.initialized() && INSTANCE.isEnabled()) {
+        if (INSTANCE.isEnabled()) {
             observeStakes(client);
         }
-        if (!INSTANCE.initialized() || !INSTANCE.isEnabled() || !ensureSession(client)) {
+        if (!INSTANCE.isEnabled() || !ensureSession(client)) {
             resetState("closed-or-disabled");
             return;
         }
@@ -108,7 +108,7 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
     /** Called from the applied ClientPacketListener slot hooks, never Netty receipt. */
     public static void observeMenuPacket(int containerId) {
         Minecraft client = Minecraft.getInstance();
-        if (!INSTANCE.initialized() || !INSTANCE.isEnabled() || client.player == null
+        if (!INSTANCE.isEnabled() || client.player == null
             || client.player.containerMenu.containerId != containerId || !ensureSession(client)) {
             return;
         }
@@ -131,8 +131,8 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
         int y = slot.y;
         if (chronomatron != null && chronomatron.colorAt(slot.index) != null) {
             String color = chronomatron.colorAt(slot.index);
-            boolean now = color != null && color.equals(chronomatron.expectedColor());
-            boolean after = color != null && color.equals(chronomatron.followingColor());
+            boolean now = color.equals(chronomatron.expectedColor());
+            boolean after = color.equals(chronomatron.followingColor());
             if (now || after) {
                 graphics.fill(x, y, x + 16, y + 16, now ? NOW : AFTER);
                 ItemStack shown = slot.getItem();
@@ -185,10 +185,6 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
                 KungDebugRecorder.event(AREA, "stakes " + key + " rounds=" + needed);
             }
         }
-    }
-
-    static boolean isGameTitle(String title) {
-        return TITLE.matcher(title.trim()).matches();
     }
 
     private static boolean ensureSession(Minecraft client) {

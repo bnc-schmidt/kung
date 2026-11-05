@@ -49,10 +49,7 @@ public final class WaypointShare {
             if (trimmed.startsWith("<Skytils-Waypoint-Data>(V")) {
                 int version = Integer.parseInt(trimmed.substring(25, trimmed.indexOf(')')));
                 if (version != 1) throw new IllegalArgumentException("Unknown Skytils waypoint data version " + version);
-                try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(
-                    Base64.getDecoder().decode(trimmed.substring(trimmed.indexOf(':') + 1).replaceAll("\\s+", ""))))) {
-                    bytes = gzip.readAllBytes();
-                }
+                bytes = gunzip(trimmed.substring(trimmed.indexOf(':') + 1).replaceAll("\\s+", ""));
             } else {
                 bytes = Base64.getDecoder().decode(trimmed.replaceAll("\\s+", ""));
             }
@@ -125,7 +122,13 @@ public final class WaypointShare {
     }
 
     private static int channel(JsonObject json, String key, int fallback) {
-        return json.has(key) ? Math.round(Math.clamp(json.get(key).getAsFloat(), 0F, 1F) * 255F) : fallback;
+        return json.has(key) ? WaypointCodec.channel(json.get(key)) : fallback;
+    }
+
+    private static byte[] gunzip(String base64) throws IOException {
+        try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(base64)))) {
+            return gzip.readAllBytes();
+        }
     }
 
     /** Reads a share string; {@link IllegalArgumentException} carries the reason it is not one. */
@@ -135,8 +138,8 @@ public final class WaypointShare {
             throw new IllegalArgumentException("Not a Skyblocker waypoint string (it must start with " + PREFIX + ")");
         }
         String body = trimmed.substring(PREFIX.length()).replaceAll("\\s+", "");
-        try (GZIPInputStream gzip = new GZIPInputStream(new ByteArrayInputStream(Base64.getDecoder().decode(body)))) {
-            JsonArray array = JsonParser.parseString(new String(gzip.readAllBytes(), StandardCharsets.UTF_8)).getAsJsonArray();
+        try {
+            JsonArray array = JsonParser.parseString(new String(gunzip(body), StandardCharsets.UTF_8)).getAsJsonArray();
             WaypointCodec.Skipped skipped = new WaypointCodec.Skipped();
             List<WaypointGroup> groups = WaypointCodec.readGroups(array, skipped);
             return new Imported(groups, skipped.total());

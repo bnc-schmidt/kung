@@ -42,10 +42,10 @@ public class FeastContextTest {
     public void visibilityRequiresHypixelGardenAndActiveEvent() {
         var context = new FeastContext();
         var event = context.event(true, 513);
-        assertTrue(FeastOverlayFeature.visible(true, true, event));
-        assertFalse(FeastOverlayFeature.visible(false, true, event));
-        assertFalse(FeastOverlayFeature.visible(true, false, event));
-        assertFalse(FeastOverlayFeature.visible(true, true, null));
+        assertTrue(FeastOverlayFeature.visible(true, true, false, false, event));
+        assertFalse(FeastOverlayFeature.visible(false, true, false, false, event));
+        assertFalse(FeastOverlayFeature.visible(true, false, false, false, event));
+        assertFalse(FeastOverlayFeature.visible(true, true, false, false, null));
         assertTrue(HypixelLocation.isHypixelAddress("mc.hypixel.net:25565"));
         assertFalse(HypixelLocation.isHypixelAddress("hypixel.net.example.com"));
     }

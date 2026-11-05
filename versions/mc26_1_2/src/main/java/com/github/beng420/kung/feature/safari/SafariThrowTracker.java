@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.safari;
 
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
@@ -52,7 +53,7 @@ public final class SafariThrowTracker {
             if (level.isClientSide()) use(player, hand);
             return InteractionResult.PASS;
         });
-        SafariOverlayFeature.registerMessageObserver(message -> {
+        KungMessages.onGameText(message -> {
             if (on) RECORDER.message(message);
         });
     }

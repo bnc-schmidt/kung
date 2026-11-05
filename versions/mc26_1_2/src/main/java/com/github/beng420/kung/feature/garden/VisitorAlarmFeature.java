@@ -12,7 +12,6 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.PlayerInfo;
@@ -57,9 +56,8 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
     protected void onInitialize() {
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (!overlay && initialized() && isEnabled()) observeMessage(message.getString());
-            return true;
+        KungMessages.onGameText(text -> {
+            if (initialized() && isEnabled()) observeMessage(text);
         });
     }
 
@@ -96,7 +94,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         if (state.ringing()) {
             if (!announced && client.player != null) {
                 announced = true;
-                record("started", now);
+                record("started");
             }
             if (client.player != null && state.reminderDue(now)) {
                 reminderMessage = KungMessages.replaceLocal(client, reminderMessage, alarmMessage());
@@ -110,7 +108,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
                 nextTone = now + 500;
             }
         } else {
-            if (announced) record("visitor-served", now);
+            if (announced) record("visitor-served");
             announced = false;
             nextTone = 0;
             stopSound(client);
@@ -134,7 +132,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         var previous = state.queue();
         boolean changed = previous == null || !previous.visitors().equals(snapshot.visitors()) || previous.full() != snapshot.full();
         state.observe(snapshot);
-        if (changed) record("queue", now);
+        if (changed) record("queue");
     }
 
     private void observeMessage(String message) {
@@ -180,7 +178,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         stopSound(client);
         announced = false;
         nextTone = 0;
-        record(reason, now());
+        record(reason);
         return true;
     }
 
@@ -197,7 +195,7 @@ public final class VisitorAlarmFeature extends ConfigurableFeature<GardenAlarmsC
         sound = null;
     }
 
-    private void record(String reason, long now) {
+    private void record(String reason) {
         KungDebugRecorder.event("visitor-alarm", reason + " visitors="
             + (state.queue() == null ? List.of() : state.queue().visitors())
             + " full=" + (state.queue() != null && state.queue().full()) + " ringing=" + state.ringing());

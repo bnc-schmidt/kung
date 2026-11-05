@@ -1,6 +1,5 @@
 package com.github.beng420.kung.feature.garden;
 
-import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.List;
 import java.util.regex.Pattern;
 
@@ -20,12 +19,12 @@ final class GardenEffects {
     static Reading read(List<String> sidebar, List<String> tab) {
         String plot = plot(sidebar);
         if (plot == null) plot = plot(tab);
-        boolean pests = tab.stream().map(GardenEffects::clean).anyMatch(line -> PESTS_HEADER.matcher(line).matches());
+        boolean pests = tab.stream().map(VisitorQueue::clean).anyMatch(line -> PESTS_HEADER.matcher(line).matches());
         Boolean sprayed = null;
         Boolean ffBuff = null;
         if (pests) {
             for (String raw : tab) {
-                String line = clean(raw);
+                String line = VisitorQueue.clean(raw);
                 var spray = SPRAY.matcher(line);
                 if (spray.matches()) sprayed = !spray.group(1).equalsIgnoreCase("None");
                 var bonus = BONUS.matcher(line);
@@ -37,13 +36,9 @@ final class GardenEffects {
 
     private static String plot(List<String> lines) {
         for (String raw : lines) {
-            var match = PLOT.matcher(clean(raw));
+            var match = PLOT.matcher(VisitorQueue.clean(raw));
             if (match.matches()) return match.group(1);
         }
         return null;
-    }
-
-    private static String clean(String text) {
-        return HypixelLocation.clean(text.replace(' ', ' ').replace(' ', ' '));
     }
 }

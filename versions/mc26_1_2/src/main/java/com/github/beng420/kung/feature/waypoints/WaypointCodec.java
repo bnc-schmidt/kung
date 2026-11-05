@@ -111,7 +111,7 @@ final class WaypointCodec {
         return new int[] {object.get("x").getAsInt(), object.get("y").getAsInt(), object.get("z").getAsInt()};
     }
 
-    private static int channel(JsonElement element) {
+    static int channel(JsonElement element) {
         return Math.round(Math.clamp(element.getAsFloat(), 0F, 1F) * 255F);
     }
 

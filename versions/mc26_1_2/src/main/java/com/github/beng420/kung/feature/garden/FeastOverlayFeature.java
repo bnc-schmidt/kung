@@ -7,6 +7,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.FeastConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.runtime.KungPaths;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
@@ -19,9 +20,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.Executors;
-import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -83,17 +82,9 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
         persistence = new FeastPersistence(store, session, kernels, kernelRate);
         ClientTickEvents.END_CLIENT_TICK.register(this::tick);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
-        registerMessageObserver(this::observeMessage);
+        KungMessages.onGameText(this::observeMessage);
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST, HUD_ID,
             (graphics, delta) -> render(graphics));
-    }
-
-    static void registerMessageObserver(Consumer<String> observer) {
-        // ALLOW_GAME calls every listener even when another mod hides the message, before MODIFY_GAME.
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (!overlay) observer.accept(message.getString());
-            return true;
-        });
     }
 
     private void observeMessage(String text) {
@@ -382,10 +373,6 @@ public final class FeastOverlayFeature extends ConfigurableFeature<FeastConfig> 
         updateContext();
         if (!visible(hypixel, inGarden, inHubFarm, config().showInHubFarm(), session.event())) return;
         draw(graphics, config(), session.event().kind(), session.snapshot(), kernels.balance(), kernelRate.snapshot(now()));
-    }
-
-    static boolean visible(boolean hypixel, boolean garden, FeastContext.Event event) {
-        return visible(hypixel, garden, false, false, event);
     }
 
     static boolean visible(boolean hypixel, boolean garden, boolean hubFarm, boolean showInHubFarm,

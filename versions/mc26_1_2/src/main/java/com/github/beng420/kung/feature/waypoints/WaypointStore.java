@@ -43,8 +43,6 @@ public final class WaypointStore {
         this.file = file;
     }
 
-    public Path file() { return file; }
-
     public synchronized LoadReport load() {
         groups.clear();
         saveBlocked = false;
@@ -123,7 +121,7 @@ public final class WaypointStore {
     public synchronized String saveError() { return saveError; }
 
     /** All groups, in the order they were made. */
-    public synchronized List<WaypointGroup> groups() { return List.copyOf(groups); }
+    synchronized List<WaypointGroup> groups() { return List.copyOf(groups); }
 
     /** The groups of one island, in order. */
     public synchronized List<WaypointGroup> groupsOn(String islandId) {

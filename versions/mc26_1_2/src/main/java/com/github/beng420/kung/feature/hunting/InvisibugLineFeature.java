@@ -7,6 +7,7 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.slayer.BlazeSlayerFeature;
 import com.github.beng420.kung.feature.hunting.InvisibugTracker.Stand;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
+import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -57,7 +58,8 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
     /** Particles within this many blocks of a found bug are counted by type in the trace. */
     private static final double NEAR_BUG_RANGE = 3.0;
 
-    private final InvisibugTracker tracker = new InvisibugTracker();
+    /** The tick of each found bug's last crit particle, by stand id. */
+    private final Map<Integer, Long> lastCrit = new HashMap<>();
     private ClientLevel trackedLevel;
     private long ticks;
     /** Read from the sidebar and tab list twice a second, not per particle. */
@@ -94,7 +96,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
 
     @Override
     protected void onReset() {
-        tracker.clear();
+        lastCrit.clear();
         frame = Frame.EMPTY;
     }
 
@@ -106,7 +108,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
             return;
         }
         boolean crit = McCompat.particleOptions(packet).getType() == ParticleTypes.CRIT;
-        if (!crit && tracker.isEmpty()) {
+        if (!crit && lastCrit.isEmpty()) {
             return;
         }
         if (!marsh) {
@@ -145,8 +147,8 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         double distance = hit.distanceTo(x, y, z);
         minStandDistance = Math.min(minStandDistance, distance);
         maxStandDistance = Math.max(maxStandDistance, distance);
-        boolean first = !tracker.contains(hit.id());
-        tracker.seen(hit.id(), ticks);
+        boolean first = !lastCrit.containsKey(hit.id());
+        lastCrit.put(hit.id(), ticks);
         if (first) {
             Entity entity = level.getEntity(hit.id());
             KungDebugRecorder.event("invisibug", String.format(Locale.ROOT,
@@ -154,7 +156,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
                     + " count=%d spread=%.2f,%.2f,%.2f speed=%.2f bugs=%d",
                 hit.id(), hit.x(), hit.y(), hit.z(), entity == null ? -1.0 : entity.getBbHeight(), x, y, z, distance,
                 McCompat.particleCount(packet), McCompat.particleXDist(packet), McCompat.particleYDist(packet), McCompat.particleZDist(packet), McCompat.particleMaxSpeed(packet),
-                tracker.ids().size()));
+                lastCrit.size()));
         }
     }
 
@@ -184,7 +186,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
     }
 
     private void noteNearBug(ClientLevel level, String type, double x, double y, double z) {
-        for (int id : tracker.ids()) {
+        for (int id : lastCrit.keySet()) {
             Entity entity = level.getEntity(id);
             if (entity != null && entity.distanceToSqr(x, y, z) <= NEAR_BUG_RANGE * NEAR_BUG_RANGE) {
                 nearBug.merge(type, 1, Integer::sum);
@@ -205,7 +207,7 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
 
     private void tick(Minecraft client) {
         if (!isEnabled() || client.level == null) {
-            tracker.clear();
+            lastCrit.clear();
             frame = Frame.EMPTY;
             marsh = false;
             return;
@@ -217,21 +219,21 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
             var instance = HypixelInstanceTracker.INSTANCE;
             marsh = instance.tracking() && InvisibugTracker.inMarsh(instance.instanceLine(), instance.visibleLines());
         }
-        tracker.prune(ticks, id -> level.getEntity(id) instanceof ArmorStand stand && stand.isAlive())
+        InvisibugTracker.prune(lastCrit, ticks, id -> level.getEntity(id) instanceof ArmorStand stand && stand.isAlive())
             .forEach((id, reason) -> KungDebugRecorder.event("invisibug",
-                "lost id=" + id + " " + reason + " bugs=" + tracker.ids().size()));
+                "lost id=" + id + " " + reason + " bugs=" + lastCrit.size()));
         if (ticks % 20 == 0) {
             flushTrace();
         }
     }
 
     private void flushTrace() {
-        if (critPackets > 0 || !nearBug.isEmpty() || !tracker.isEmpty()) {
+        if (critPackets > 0 || !nearBug.isEmpty() || !lastCrit.isEmpty()) {
             KungDebugRecorder.event("invisibug", String.format(Locale.ROOT,
                 "per second: crit packets=%d particles=%d withStand=%d withoutStand=%d standDistance=%s bugs=%d near=%s",
                 critPackets, critParticles, withStand, withoutStand,
                 withStand == 0 ? "-" : String.format(Locale.ROOT, "%.2f..%.2f", minStandDistance, maxStandDistance),
-                tracker.ids().size(), nearBug));
+                lastCrit.size(), nearBug));
         }
         critPackets = 0;
         critParticles = 0;
@@ -244,12 +246,12 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
 
     private void extract(LevelExtractionContext context) {
         List<Vec3> target = List.of();
-        if (isEnabled() && !tracker.isEmpty() && Minecraft.getInstance().player != null) {
+        if (isEnabled() && !lastCrit.isEmpty() && Minecraft.getInstance().player != null) {
             var camera = context.camera();
             Vec3 eye = camera.position();
             float partialTick = camera.getCameraEntityPartialTicks(context.deltaTracker());
             List<Stand> stands = new ArrayList<>();
-            for (int id : tracker.ids()) {
+            for (int id : lastCrit.keySet()) {
                 Entity entity = context.level().getEntity(id);
                 if (entity != null && !entity.isRemoved()) {
                     Vec3 at = entity.getPosition(partialTick);
@@ -296,23 +298,9 @@ public final class InvisibugLineFeature extends ConfigurableFeature<InvisibugCon
         float centerY = graphics.guiHeight() / 2F;
         float endX = (end.x() * 0.5F + 0.5F) * graphics.guiWidth();
         float endY = (0.5F - end.y() * 0.5F) * graphics.guiHeight();
-        float length = (float) Math.hypot(endX - centerX, endY - centerY);
-        if (length < 1F) {
-            return;
-        }
-
         int color = config().color();
-        int thickness = config().thickness();
-        graphics.pose().pushMatrix();
-        try {
-            // A unit square stretched to the line's length and thickness, turned toward the target.
-            graphics.pose().translate(centerX, centerY);
-            graphics.pose().rotate((float) Math.atan2(endY - centerY, endX - centerX));
-            graphics.pose().translate(0F, -thickness / 2F);
-            graphics.pose().scale(length, thickness);
-            graphics.fill(0, 0, 1, 1, color);
-        } finally {
-            graphics.pose().popMatrix();
+        if (!UiShapes.bar(graphics, centerX, centerY, endX, endY, config().thickness(), color)) {
+            return;
         }
         if (end.onScreen()) {
             int dotX = Math.round(endX);

@@ -25,12 +25,11 @@ public class FeastProgressTest {
         assertEquals(750, value.goal());
         assertEquals(50, value.toNext());
         assertEquals(List.of(5, 25, 75, 150, 250, 350, 450, 550, 750), value.goals());
-        assertEquals(2 / 9.0, value.fraction(), 0.00001);
     }
 
     @Test
     public void acceptsRomanHarvestMilestones() throws IOException {
-        var value = FeastProgress.readMenu("Harvest Feast", liveGrandMenu().subList(0, 5));
+        var value = readMenu("Harvest Feast", liveGrandMenu().subList(0, 5));
         assertNotNull(value);
         assertEquals(25, value.donations());
         assertEquals(250, value.goal());
@@ -52,27 +51,25 @@ public class FeastProgressTest {
         var first = items.getFirst();
         for (String numeral : List.of("IIII", "IIX", "VX", "X", "0")) {
             items.set(0, new FeastProgress.MenuItem("Feast Milestone " + numeral, first.lore()));
-            assertNull(numeral, FeastProgress.readMenu("Grand Feast", items));
+            assertNull(numeral, readMenu("Grand Feast", items));
         }
     }
 
     @Test
     public void readsCappedCompletedTiersAndUncappedUpcomingTiersFromScreenshots() {
-        var value = FeastProgress.readMenu("§dGrand Feast", menu(5, GRAND));
+        var value = readMenu("§dGrand Feast", menu(5, GRAND));
         assertNotNull(value);
         assertEquals(5, value.donations());
         assertEquals(750, value.goal());
         assertEquals(20, value.toNext());
         assertEquals(GRAND, value.goals());
-        assertEquals(1 / 9.0, value.fraction(), 0.00001);
     }
 
     @Test
     public void followsMenuGoalsAndCalculatesNextTierInsteadOfRemainingToMaximum() {
-        var value = FeastProgress.readMenu("Grand Feast", menu(234, GRAND));
+        var value = readMenu("Grand Feast", menu(234, GRAND));
         assertEquals(16, value.toNext());
-        assertEquals((4 + 84 / 100.0) / 9, value.fraction(), 0.00001);
-        assertEquals(75, FeastProgress.readMenu("Harvest Feast", menu(75, HARVEST)).toNext());
+        assertEquals(75, readMenu("Harvest Feast", menu(75, HARVEST)).toNext());
     }
 
     @Test
@@ -80,7 +77,7 @@ public class FeastProgressTest {
         var items = menu(5, GRAND);
         items.set(8, new FeastProgress.MenuItem("§cFeast\u00a0Milestone\u00a09",
             List.of("§a|||||§f||||||||§e5/750\u00a0Donations")));
-        var result = FeastProgress.readMenu("Grand Feast", items);
+        var result = readMenu("Grand Feast", items);
         assertNotNull(result);
         assertEquals(5, result.donations());
         assertEquals(20, result.toNext());
@@ -152,7 +149,6 @@ public class FeastProgressTest {
         assertTrue(progress.donate("RARE CROP! Seasoning x3 (+148%) (automatically donated!)"));
         assertEquals(750, progress.snapshot().donations());
         assertEquals(0, progress.snapshot().toNext());
-        assertEquals(1, progress.snapshot().fraction(), 0);
         assertTrue(progress.snapshot().complete());
     }
 
@@ -161,23 +157,23 @@ public class FeastProgressTest {
         var progress = new FeastProgress();
         assertFalse(progress.donate("RARE CROP! Seasoning (+148%) (automatically donated!)"));
         assertNull(progress.snapshot());
-        progress.synchronize(FeastProgress.readMenu("Grand Feast", menu(234, GRAND)));
+        progress.synchronize(readMenu("Grand Feast", menu(234, GRAND)));
         progress.reset();
         assertNull(progress.snapshot());
     }
 
     @Test
     public void ignoresOtherMenusAndPartialOrInconsistentPacketBatches() {
-        assertNull(FeastProgress.readMenu("Grand Bakery", menu(5, GRAND)));
-        assertNull(FeastProgress.readMenu("Grand Feast Rewards", menu(5, GRAND)));
-        assertNull(FeastProgress.readMenu("Harvest Feast", menu(5, GRAND)));
-        assertNull(FeastProgress.readMenu("Grand Feast", menu(5, GRAND).subList(0, 8)));
+        assertNull(readMenu("Grand Bakery", menu(5, GRAND)));
+        assertNull(readMenu("Grand Feast Rewards", menu(5, GRAND)));
+        assertNull(readMenu("Harvest Feast", menu(5, GRAND)));
+        assertNull(readMenu("Grand Feast", menu(5, GRAND).subList(0, 8)));
         var mixed = menu(5, GRAND);
         mixed.set(8, item(9, 6, 750));
-        assertNull(FeastProgress.readMenu("Grand Feast", mixed));
+        assertNull(readMenu("Grand Feast", mixed));
         var duplicate = menu(5, GRAND);
         duplicate.add(item(2, 5, 25));
-        assertNull(FeastProgress.readMenu("Grand Feast", duplicate));
+        assertNull(readMenu("Grand Feast", duplicate));
     }
 
     @Test
@@ -186,11 +182,11 @@ public class FeastProgressTest {
             "1/999999999999999999999 Donations", "99999999999999999999/750 Donations")) {
             var items = menu(5, GRAND);
             items.set(8, new FeastProgress.MenuItem("Feast Milestone 9", List.of(line)));
-            assertNull(line, FeastProgress.readMenu("Grand Feast", items));
+            assertNull(line, readMenu("Grand Feast", items));
         }
         var items = menu(5, GRAND);
         items.set(8, item(9, 5, 600));
-        assertNull(FeastProgress.readMenu("Grand Feast", items));
+        assertNull(readMenu("Grand Feast", items));
     }
 
     @Test
@@ -199,7 +195,7 @@ public class FeastProgressTest {
         var items = menu(750, goals);
         items.set(8, new FeastProgress.MenuItem("§cFeast Milestone 9",
             List.of("Progress: 75%", "§a━━━━━━━━§f━━━━ §e750/1,000 Donations")));
-        var result = FeastProgress.readMenu("Grand Feast", items);
+        var result = readMenu("Grand Feast", items);
         assertEquals(1_000, result.goal());
         assertEquals(250, result.toNext());
     }
@@ -214,9 +210,13 @@ public class FeastProgressTest {
         }
     }
 
+    private static FeastProgress.Snapshot readMenu(String title, List<FeastProgress.MenuItem> items) {
+        return FeastProgress.inspectMenu(title, items).snapshot();
+    }
+
     private static FeastProgress synced(int total, List<Integer> goals) {
         var progress = new FeastProgress();
-        progress.synchronize(FeastProgress.readMenu("Grand Feast", menu(total, goals)));
+        progress.synchronize(readMenu("Grand Feast", menu(total, goals)));
         return progress;
     }
 

@@ -35,8 +35,8 @@ final class FarmingActivity {
         harvests = 0;
     }
 
-    /** Farming a garden plot of the own Garden: the Barn, the Greenhouse and guest Gardens never count. */
-    static boolean farmingInPlot(boolean ownGarden, boolean greenhouse, String plot, boolean runActive) {
-        return ownGarden && !greenhouse && plot != null && runActive;
+    /** Farming a garden plot: the Barn and the Greenhouse never count. */
+    static boolean farmingInPlot(boolean greenhouse, String plot, boolean runActive) {
+        return !greenhouse && plot != null && runActive;
     }
 }

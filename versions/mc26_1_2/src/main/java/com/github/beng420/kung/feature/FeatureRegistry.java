@@ -47,7 +47,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class FeatureRegistry {
-    private static final List<Feature> FEATURES = new ArrayList<>();
+    private static final List<ConfigurableFeature<?>> FEATURES = new ArrayList<>();
     private static boolean bootstrapped;
 
     private FeatureRegistry() {
@@ -112,7 +112,7 @@ public final class FeatureRegistry {
         bootstrapped = false;
     }
 
-    private static void register(Feature feature) {
+    private static void register(ConfigurableFeature<?> feature) {
         FEATURES.add(feature);
     }
 }

@@ -53,8 +53,6 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
     /** The island the tab list names, or {@link WaypointIsland#UNKNOWN} before it has. */
     public WaypointIsland island() { return island; }
 
-    public boolean inSkyBlock() { return inSkyBlock; }
-
     /** The waypoints to draw now: the enabled ones of this island's groups, and only the near three of a route. */
     public List<Shown> shown() {
         List<Shown> shown = new ArrayList<>();

@@ -92,7 +92,7 @@ public final class EffectAlarmsFeature extends ConfigurableFeature<GardenAlarmsC
             sprayAlarm.rearm();
         }
         greenhouse = GreenhouseLocator.current(client, false).isPresent();
-        boolean active = FarmingActivity.farmingInPlot(true, greenhouse, plot, farming.active(now));
+        boolean active = FarmingActivity.farmingInPlot(greenhouse, plot, farming.active(now));
         if (config().noFfBuff() && ffAlarm.update(active, reading.ffBuff())) {
             ring(client, "No Farming Fortune buff: the Pesthunter bonus is inactive.", "ff-buff");
         }

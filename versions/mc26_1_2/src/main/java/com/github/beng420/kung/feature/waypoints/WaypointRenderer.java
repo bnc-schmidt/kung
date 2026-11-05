@@ -4,6 +4,7 @@ import com.github.beng420.kung.KungMod;
 import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.config.category.WaypointsConfig;
+import com.github.beng420.kung.ui.UiShapes;
 import com.github.beng420.kung.util.LineBoxes;
 import java.util.ArrayList;
 import java.util.List;
@@ -148,21 +149,8 @@ final class WaypointRenderer {
 
     /** A bar from the crosshair to the point, as the Invisibug line draws it. */
     private static void drawRouteLine(GuiGraphicsExtractor graphics, int endX, int endY, WaypointsConfig config) {
-        float centerX = graphics.guiWidth() / 2F;
-        float centerY = graphics.guiHeight() / 2F;
-        float length = (float) Math.hypot(endX - centerX, endY - centerY);
-        if (length < 1F) return;
-        int thickness = config.lineThickness();
-        graphics.pose().pushMatrix();
-        try {
-            graphics.pose().translate(centerX, centerY);
-            graphics.pose().rotate((float) Math.atan2(endY - centerY, endX - centerX));
-            graphics.pose().translate(0F, -thickness / 2F);
-            graphics.pose().scale(length, thickness);
-            graphics.fill(0, 0, 1, 1, config.lineColor());
-        } finally {
-            graphics.pose().popMatrix();
-        }
+        UiShapes.bar(graphics, graphics.guiWidth() / 2F, graphics.guiHeight() / 2F, endX, endY,
+            config.lineThickness(), config.lineColor());
     }
 
     /** The GUI position of a world point, or null while it is behind the camera or the projection is not finite. */

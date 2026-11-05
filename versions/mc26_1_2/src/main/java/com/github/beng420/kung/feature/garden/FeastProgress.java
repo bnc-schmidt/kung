@@ -31,7 +31,8 @@ public final class FeastProgress {
         }
     }
 
-    private static final Pattern MILESTONE = Pattern.compile(
+    private static final Pattern SPACES = Pattern.compile("[\\p{Zs}\\t]+");
+    private static final Pattern MILESTONE =Pattern.compile(
         "^Feast Milestone ([1-9][0-9]?|I|II|III|IV|V|VI|VII|VIII|IX)$");
     private static final Pattern DONATIONS = Pattern.compile(
         "(?<![\\p{L}\\p{N},/.-])([0-9][0-9,]*)\\s*/\\s*([0-9][0-9,]*)\\s+Donations$");
@@ -57,19 +58,6 @@ public final class FeastProgress {
             return 0;
         }
         public boolean complete() { return donations >= goal(); }
-
-        /** Equal-width milestone segments keep even the first five-donation tier visible. */
-        public double fraction() {
-            int previous = 0;
-            for (int index = 0; index < goals.size(); index++) {
-                int goal = goals.get(index);
-                if (donations < goal) {
-                    return (index + (donations - previous) / (double) (goal - previous)) / goals.size();
-                }
-                previous = goal;
-            }
-            return 1.0;
-        }
     }
 
     public Snapshot snapshot() {
@@ -100,10 +88,6 @@ public final class FeastProgress {
         if (!matcher.matches() || matcher.group(1) != null && matcher.group(2) != null) return 0;
         String amount = matcher.group(1) != null ? matcher.group(1) : matcher.group(2);
         return amount == null ? 1 : Integer.parseInt(amount);
-    }
-
-    public static Snapshot readMenu(String title, List<MenuItem> items) {
-        return inspectMenu(title, items).snapshot();
     }
 
     public static MenuRead inspectMenu(String title, List<MenuItem> items) {
@@ -176,7 +160,7 @@ public final class FeastProgress {
     }
 
     static String cleanMenuText(String text) {
-        return HypixelLocation.clean(text == null ? "" : text.replaceAll("[\\p{Zs}\\t]+", " "));
+        return HypixelLocation.clean(text == null ? "" : SPACES.matcher(text).replaceAll(" "));
     }
 
     private static int number(String value) {

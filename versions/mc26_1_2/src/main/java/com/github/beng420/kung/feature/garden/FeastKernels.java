@@ -43,7 +43,7 @@ final class FeastKernels {
         Long found = null;
         for (var item : items) {
             for (String raw : item.lore().stream().limit(40).toList()) {
-                var matcher = BALANCE.matcher(HypixelLocation.clean(raw.replaceAll("[\\p{Zs}\\t]+", " ")));
+                var matcher = BALANCE.matcher(FeastProgress.cleanMenuText(raw));
                 if (!matcher.matches()) continue;
                 try {
                     long amount = Long.parseLong(matcher.group(1).replace(",", ""));
@@ -115,7 +115,7 @@ final class FeastKernels {
     boolean observeSidebar(List<String> lines) {
         Long found = null;
         for (String raw : lines) {
-            String clean = HypixelLocation.clean(raw.replaceAll("[\\p{Zs}\\t]+", " "));
+            String clean = FeastProgress.cleanMenuText(raw);
             var matcher = SIDEBAR_BALANCE.matcher(clean);
             if (!matcher.matches()) matcher = SIDEBAR_SUFFIX_BALANCE.matcher(clean);
             if (!matcher.matches()) continue;

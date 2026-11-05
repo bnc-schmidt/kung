@@ -4,7 +4,7 @@ import com.github.beng420.kung.config.KungConfig;
 import com.github.beng420.kung.runtime.AppServices;
 import java.util.function.Function;
 
-public abstract class ConfigurableFeature<C> implements Feature {
+public abstract class ConfigurableFeature<C> {
     private final Function<KungConfig, C> configSelector;
     private AppServices services;
     private boolean initialized;
@@ -13,7 +13,6 @@ public abstract class ConfigurableFeature<C> implements Feature {
         this.configSelector = java.util.Objects.requireNonNull(configSelector);
     }
 
-    @Override
     public final void initialize(AppServices services) {
         if (initialized) return;
         this.services = java.util.Objects.requireNonNull(services);
@@ -23,6 +22,8 @@ public abstract class ConfigurableFeature<C> implements Feature {
 
     protected abstract void onInitialize();
 
+    public abstract boolean isEnabled();
+
     protected void onReset() {
     }
 
@@ -31,14 +32,12 @@ public abstract class ConfigurableFeature<C> implements Feature {
         onReset();
     }
 
-    @Override
     public final void reset() {
         if (initialized) {
             onReset();
         }
     }
 
-    @Override
     public final void shutdown() {
         if (!initialized) {
             return;

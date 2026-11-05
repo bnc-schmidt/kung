@@ -1,6 +1,7 @@
 package com.github.beng420.kung.feature.safari;
 
 import com.github.beng420.kung.config.category.SafariConfig;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -58,7 +59,7 @@ public class SafariOverlayTest {
         SafariSession session = new SafariSession();
         session.select(1, "Critter Safari");
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> !testing.get());
-        SafariOverlayFeature.registerMessageObserver(text -> {
+        KungMessages.onGameText(text -> {
             if (testing.get()) {
                 observed.incrementAndGet();
                 session.observeMessage(text, "Beng114");

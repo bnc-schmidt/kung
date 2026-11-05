@@ -12,6 +12,26 @@ public final class UiShapes {
         graphics.outline(x + 1, y + 1, 14, 14, color);
     }
 
+    /** A bar of the given thickness between two points; false, with nothing drawn, when they are under 1 px apart. */
+    public static boolean bar(GuiGraphicsExtractor graphics, float fromX, float fromY, float toX, float toY,
+                              int thickness, int color) {
+        float length = (float) Math.hypot(toX - fromX, toY - fromY);
+        if (length < 1F) return false;
+        var pose = graphics.pose();
+        pose.pushMatrix();
+        try {
+            // A unit square stretched to the bar's length and thickness, turned toward the end point.
+            pose.translate(fromX, fromY);
+            pose.rotate((float) Math.atan2(toY - fromY, toX - fromX));
+            pose.translate(0F, -thickness / 2F);
+            pose.scale(length, thickness);
+            graphics.fill(0, 0, 1, 1, color);
+        } finally {
+            pose.popMatrix();
+        }
+        return true;
+    }
+
     public static void rounded(GuiGraphicsExtractor graphics, int x, int y, int width, int height, int radius, int color) {
         rounded(graphics, x, y, width, height, radius, radius, color);
     }

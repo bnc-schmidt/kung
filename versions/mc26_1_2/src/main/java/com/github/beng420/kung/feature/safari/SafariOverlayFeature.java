@@ -7,6 +7,7 @@ import com.github.beng420.kung.config.KungHudEditorState;
 import com.github.beng420.kung.config.KungHudLayout;
 import com.github.beng420.kung.config.category.SafariConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.ui.HudPose;
@@ -15,9 +16,7 @@ import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.function.Consumer;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
-import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
@@ -49,20 +48,12 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
 
     @Override
     protected void onInitialize() {
-        ClientTickEvents.END_CLIENT_TICK.register(this::tick);
+        ClientTickEvents.END_CLIENT_TICK.register(this::updateContext);
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> reset());
-        registerMessageObserver(this::observeMessage);
+        KungMessages.onGameText(this::observeMessage);
         SafariThrowTracker.register();
         HudElementRegistry.attachElementBefore(VanillaHudElements.PLAYER_LIST, HUD_ID,
             (graphics, delta) -> render(graphics));
-    }
-
-    static void registerMessageObserver(Consumer<String> observer) {
-        // Observe before chat mods cancel or rewrite a catch; never change message visibility.
-        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
-            if (!overlay) observer.accept(message.getString());
-            return true;
-        });
     }
 
     @Override
@@ -74,11 +65,7 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
     }
 
     private boolean updateContext(Minecraft client) {
-        if (!isEnabled()) {
-            onReset();
-            return false;
-        }
-        if (!HypixelLocation.onHypixel(client)) {
+        if (!isEnabled() || !HypixelLocation.onHypixel(client)) {
             onReset();
             return false;
         }
@@ -86,10 +73,6 @@ public final class SafariOverlayFeature extends ConfigurableFeature<SafariConfig
         var tracker = HypixelInstanceTracker.INSTANCE;
         session.select(tracker.instanceEpoch(), tracker.instanceLine());
         return client.player != null && client.level != null;
-    }
-
-    private void tick(Minecraft client) {
-        updateContext(client);
     }
 
     private void observeMessage(String message) {

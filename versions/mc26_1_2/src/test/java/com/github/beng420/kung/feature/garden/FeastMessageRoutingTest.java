@@ -1,5 +1,6 @@
 package com.github.beng420.kung.feature.garden;
 
+import com.github.beng420.kung.message.KungMessages;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -27,7 +28,7 @@ public class FeastMessageRoutingTest {
         var observed = new ArrayList<String>();
         // Register a canceling mod first: Feast must still receive the message.
         ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> !active.get() || !hidden.get());
-        FeastOverlayFeature.registerMessageObserver(text -> {
+        KungMessages.onGameText(text -> {
             if (active.get()) {
                 observed.add(text);
                 session.donate(text);

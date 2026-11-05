@@ -19,7 +19,7 @@ public class FeastMilestoneClaimsTest {
             try (var reader = new InputStreamReader(stream, StandardCharsets.UTF_8)) {
                 var items = List.of(new Gson().fromJson(reader, FeastProgress.MenuItem[].class));
                 assertEquals(8, items.size());
-                assertNull(FeastProgress.readMenu("Grand Feast", items));
+                assertNull(FeastProgress.inspectMenu("Grand Feast", items).snapshot());
                 assertEquals(new FeastMilestoneClaims.Milestone(1, 25, false), read(items.get(0), false));
                 assertEquals(new FeastMilestoneClaims.Milestone(2, 50, false), read(items.get(1), false));
                 assertEquals(new FeastMilestoneClaims.Milestone(4, 100, true), read(items.get(2), false));

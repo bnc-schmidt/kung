@@ -5,6 +5,7 @@ import com.github.beng420.kung.mixin.ChatComponentAccessor;
 import java.util.List;
 import java.util.Locale;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
 import java.util.regex.Pattern;
 import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.minecraft.ChatFormatting;
@@ -133,6 +134,17 @@ public final class KungMessages {
         ClientReceiveMessageEvents.GAME.register(listener::accept);
         ClientReceiveMessageEvents.CHAT.register((message, signed, sender, params, timestamp) ->
             listener.accept(message, false));
+    }
+
+    /**
+     * Game text lines (never action-bar lines), heard before another mod can hide or rewrite them. Never changes
+     * message visibility.
+     */
+    public static void onGameText(Consumer<String> listener) {
+        ClientReceiveMessageEvents.ALLOW_GAME.register((message, overlay) -> {
+            if (!overlay) listener.accept(message.getString());
+            return true;
+        });
     }
 
     /** Client-thread only. Retain the returned component to replace this local message next time. */
