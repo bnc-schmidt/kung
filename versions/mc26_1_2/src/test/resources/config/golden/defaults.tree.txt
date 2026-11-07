@@ -68,7 +68,7 @@
     TEXT Message visible=true dev=false value=Quiz is waiting for an answer! tip=[] resettable=false
     TOGGLE Repeat visible=true dev=false value=false tip=[Remind again and again until the question is answered.] resettable=false
     SLIDER Repeat Every (s) visible=true dev=false value=0 [0..60 step 1] 0 tip=[0 repeats at the Delay., Below 5 seconds counts as 5.] resettable=false
-    TOGGLE Party Chat visible=true dev=false value=false tip=[Also tell the party, once per question., The reminder always shows in your own chat.] resettable=false
+    TOGGLE Party Chat visible=true dev=false value=false tip=[Also tell the party, at every reminder., The reminder always shows in your own chat.] resettable=false
     BUTTON Test visible=true dev=false value=Show tip=[] resettable=false
   * Blood rush helper enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[]
     SLIDER Title Time visible=true dev=false value=5 [1..50 step 1] 0.5s tip=[] resettable=false
@@ -220,7 +220,7 @@
       TOGGLE Co-op visible=false dev=false value=true tip=[] resettable=false
       TOGGLE All Chat visible=false dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=false dev=false value=false tip=[] resettable=false
-    TOGGLE Class Level visible=true dev=false value=true tip=[!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50., Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else., Any level from 1 to 200 works: !a60 for Archer 60.] resettable=false
+    TOGGLE Class Level visible=true dev=false value=true tip=[!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50., Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else., Any level from 1 to 200 works: !a60 for Archer 60., Hypixel and other mods use !m1-!m7 and !t1-!t5 alone: type !mage1 or !tank1 for those.] resettable=false
       TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
@@ -318,6 +318,8 @@
     SLIDER Click Delay (ms) visible=true dev=false value=250 [100..1000 step 25] 250 tip=[Average wait before each automatic click, for Auto Click Main Game and Auto Click Add-ons., Every click varies by up to a quarter either way; the first of a round waits twice.] resettable=false
   * Waypoints enabled=false clickable=true actionOnly=false pinned=false dev=true tip=[Saves waypoints and routes per island and shows them in the world., They are kept in config/kung/waypoints.json, also across restarts., A route is a group whose waypoints show one after the other., Share groups as a Skyblocker waypoint string with /kung waypoints export and import., Beng114 only for now: it is at an early stage.]
     BUTTON Editor visible=true dev=false value=Open tip=[Opens the waypoint editor. /kung waypoints does the same.] resettable=false
+    KEYBIND Add Waypoint Key visible=true dev=false value=None raw= tip=[Adds a waypoint at the block you look at to every marked group of this island., Mark a group with the * in the waypoint editor. Works in the world with no menu open., Unbound by default.] resettable=false
+    TOGGLE Auto Save visible=true dev=false value=false tip=[Saves every change in the waypoint editor at once., Off: Done saves, and closing the editor any other way discards your changes.] resettable=false
     CHOICE Default Type visible=true dev=false value=Waypoint of [Waypoint, Outlined Waypoint, Highlight, Outlined Highlight, Outline] tip=[The draw type a new group starts with. Change a group's type with /kung waypoints group type.] resettable=false
     TOGGLE Route Line visible=true dev=false value=true tip=[Draws a line from your crosshair to the next waypoint of a route.] resettable=false
     COLOR Line Color visible=true dev=false value=#00FF00 tip=[] resettable=false

@@ -177,7 +177,7 @@ public final class KungSettings {
                                     + DungeonConfig.QUIZ_REMINDER_MIN_SECONDS + "."),
                         SettingEntry.toggle("Party Chat", config.dungeon::quizReminderPartyEnabled,
                             config.dungeon::setQuizReminderPartyEnabled)
-                            .withTooltip("Also tell the party, once per question.",
+                            .withTooltip("Also tell the party, at every reminder.",
                                 "The reminder always shows in your own chat."),
                         SettingEntry.button("Test", "Show",
                             () -> DungeonQuizReminderFeature.INSTANCE.sendTest(Minecraft.getInstance()))
@@ -646,6 +646,14 @@ public final class KungSettings {
                         SettingEntry.button("Editor", "Open", () -> McCompat.setScreen(Minecraft.getInstance(),
                             new WaypointsScreen(McCompat.screen(Minecraft.getInstance()))))
                             .withTooltip("Opens the waypoint editor. /kung waypoints does the same."),
+                        SettingEntry.keybind("Add Waypoint Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.waypoints.addKeybind()),
+                            config.waypoints::addKeybind, config.waypoints::setAddKeybind)
+                            .withTooltip("Adds a waypoint at the block you look at to every marked group of this island.",
+                                "Mark a group with the * in the waypoint editor. Works in the world with no menu open.",
+                                "Unbound by default."),
+                        SettingEntry.toggle("Auto Save", config.waypoints::autoSave, config.waypoints::setAutoSave)
+                            .withTooltip("Saves every change in the waypoint editor at once.",
+                                "Off: Done saves, and closing the editor any other way discards your changes."),
                         SettingEntry.choice("Default Type", WaypointType.values(), config.waypoints::defaultType,
                             config.waypoints::setDefaultType, WaypointType::label)
                             .withTooltip("The draw type a new group starts with. Change a group's type with /kung waypoints group type."),
@@ -845,7 +853,8 @@ public final class KungSettings {
             chatCommand(misc, ChatCommandSetting.CLASS_LEVEL, "Class Level",
                 "!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50.",
                 "Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else.",
-                "Any level from 1 to 200 works: !a60 for Archer 60."),
+                "Any level from 1 to 200 works: !a60 for Archer 60.",
+                "Hypixel and other mods use !m1-!m7 and !t1-!t5 alone: type !mage1 or !tank1 for those."),
             chatCommand(misc, ChatCommandSetting.TPS, "!tps"),
             SettingEntry.toggle("Special Mayors", misc::specialMayorsChatCommandsEnabled,
                     misc::setSpecialMayorsChatCommandsEnabled)
