@@ -164,6 +164,57 @@ public final class WaypointStoreTest {
     }
 
     @Test
+    public void aGroupShowsOnEveryAreaTickedForItAndNoTickMeansEverywhere() {
+        WaypointStore store = new WaypointStore(file);
+        WaypointGroup two = new WaypointGroup("Two areas", "hub", WaypointType.HIGHLIGHT);
+        two.setOnIsland("garden", true);
+        two.setWallStyle(WaypointWallStyle.WAYPOINT);
+        store.add(two);
+        store.add(new WaypointGroup("Nowhere ticked", WaypointIsland.UNKNOWN.id(), WaypointType.WAYPOINT));
+
+        assertEquals(List.of("Two areas", "Nowhere ticked"), store.visibleOn("hub", true).stream().map(WaypointGroup::name).toList());
+        assertEquals(List.of("Two areas", "Nowhere ticked"), store.visibleOn("garden", true).stream().map(WaypointGroup::name).toList());
+        assertEquals(List.of("Nowhere ticked"), store.visibleOn("dynamic", true).stream().map(WaypointGroup::name).toList());
+        assertEquals("listed under Everywhere only when nothing is ticked", List.of("Nowhere ticked"),
+            store.groupsOn(WaypointIsland.UNKNOWN.id()).stream().map(WaypointGroup::name).toList());
+
+        WaypointStore restarted = new WaypointStore(file);
+        assertTrue(restarted.load().clean());
+        WaypointGroup loaded = restarted.groupsOn("garden").get(0);
+        assertEquals(List.of("hub", "garden"), loaded.islands());
+        assertEquals(WaypointWallStyle.WAYPOINT, loaded.wallStyle());
+        assertEquals(WaypointWallStyle.ICON, restarted.groupsOn(WaypointIsland.UNKNOWN.id()).get(0).wallStyle());
+
+        loaded.setOnIsland("hub", false);
+        loaded.setOnIsland("garden", false);
+        assertTrue("with the last tick gone it shows everywhere", loaded.shownOn("crimson_isle"));
+    }
+
+    @Test
+    public void aFileWithOnlyTheSingleIslandFieldStillLoadsOnThatIsland() throws IOException {
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, "{\"version\":1,\"groups\":[{\"name\":\"Old\",\"island\":\"hub\",\"waypoints\":[]}]}", StandardCharsets.UTF_8);
+        WaypointStore store = new WaypointStore(file);
+        assertTrue(store.load().clean());
+        assertEquals(List.of("hub"), store.groupsOn("hub").get(0).islands());
+        assertEquals(WaypointWallStyle.ICON, store.groupsOn("hub").get(0).wallStyle());
+    }
+
+    @Test
+    public void theIconWallLookDrawsNoBlockAndTheWaypointWallLookDrawsItsType() {
+        for (WaypointType type : WaypointType.values()) {
+            assertFalse(type.name(), WaypointWallStyle.ICON.fill(type) || WaypointWallStyle.ICON.outline(type));
+            assertEquals(type.name(), type.fill(), WaypointWallStyle.WAYPOINT.fill(type));
+            assertEquals(type.name(), type.outline(), WaypointWallStyle.WAYPOINT.outline(type));
+        }
+        assertEquals("a group starts with the icon, as Walls always did", WaypointWallStyle.ICON,
+            new WaypointGroup("New", "hub", WaypointType.WAYPOINT).wallStyle());
+        assertEquals(WaypointWallStyle.WAYPOINT, WaypointWallStyle.ICON.next());
+        assertEquals(WaypointWallStyle.ICON, WaypointWallStyle.WAYPOINT.next());
+        assertEquals("an unknown stored name gives the icon", WaypointWallStyle.ICON, WaypointWallStyle.parse("nonsense"));
+    }
+
+    @Test
     public void anIslandKungDoesNotListKeepsItsGroupsAcrossARestart() {
         WaypointIsland modern = WaypointIsland.fromAreaName("Brand New Island");
         WaypointStore store = new WaypointStore(file);

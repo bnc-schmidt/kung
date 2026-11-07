@@ -1,7 +1,9 @@
 package com.github.beng420.kung.feature.waypoints;
 
+import com.github.beng420.kung.compat.McCompat;
 import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
+import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.message.KungMessages;
 import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
@@ -10,6 +12,9 @@ import java.util.ArrayList;
 import java.util.List;
 import net.fabricmc.fabric.api.client.event.lifecycle.v1.ClientTickEvents;
 import net.minecraft.client.Minecraft;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 
 /**
@@ -26,10 +31,12 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
     public record Shown(WaypointGroup group, Waypoint waypoint, int index, WaypointRoute.Role role) { }
 
     private final WaypointStore store = WaypointStore.INSTANCE;
+    private final WaypointEditor editor = new WaypointEditor(store);
     private WaypointIsland island = WaypointIsland.UNKNOWN;
     private boolean inSkyBlock;
     private long epoch = -1;
     private int ticks;
+    private boolean addKeyDown;
     private WaypointStore.LoadReport pendingNotice;
 
     private WaypointsFeature() {
@@ -97,11 +104,26 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
         }
         if (!isEnabled()) return;
         WaypointsConfig config = config();
+        // One press per push, in the world with no screen open, so typing never adds a waypoint.
+        boolean held = McCompat.screen(client) == null && LoadoutsAutoCloseFeature.keybindHeld(config.addKeybind());
+        if (held && !addKeyDown && inSkyBlock) addAtCrosshair(client);
+        addKeyDown = held;
         Vec3 at = client.player.position();
         for (WaypointGroup group : store.visibleOn(island.id(), inSkyBlock)) {
             if (!group.ordered() || group.waypoints().isEmpty()) continue;
             group.setCurrentIndex(WaypointRoute.advance(group.waypoints(), group.currentIndex(), at.x, at.y, at.z,
                 config.activationRadius(), config.allowGoingBackwards(), config.allowSkipping()));
+        }
+    }
+
+    /** The Add Waypoint Key: the looked-at block, else the player's own, goes into every marked group of this island. */
+    private void addAtCrosshair(Minecraft client) {
+        BlockPos pos = client.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
+            ? hit.getBlockPos() : client.player.blockPosition();
+        try {
+            client.player.sendSystemMessage(KungMessages.info("Waypoints", editor.addToMarked(pos, island, inSkyBlock)));
+        } catch (IllegalArgumentException refused) {
+            client.player.sendSystemMessage(KungMessages.warning("Waypoints", refused.getMessage()));
         }
     }
 

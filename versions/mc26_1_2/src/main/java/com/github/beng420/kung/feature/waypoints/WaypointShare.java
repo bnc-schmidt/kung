@@ -142,6 +142,8 @@ public final class WaypointShare {
             JsonArray array = JsonParser.parseString(new String(gunzip(body), StandardCharsets.UTF_8)).getAsJsonArray();
             WaypointCodec.Skipped skipped = new WaypointCodec.Skipped();
             List<WaypointGroup> groups = WaypointCodec.readGroups(array, skipped);
+            // A mark is the sender's choice of where their key adds waypoints, not the receiver's.
+            groups.forEach(group -> group.setMarked(false));
             return new Imported(groups, skipped.total());
         } catch (IOException | RuntimeException exception) {
             throw new IllegalArgumentException("The waypoint string is damaged", exception);

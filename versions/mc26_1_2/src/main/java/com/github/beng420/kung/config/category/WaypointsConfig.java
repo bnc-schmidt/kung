@@ -11,6 +11,8 @@ public final class WaypointsConfig extends ConfigCategory {
     private static final int RGB = 0xFFFFFF;
 
     private boolean enabled;
+    private boolean autoSave;
+    private String addKeybind = "";
     private WaypointType defaultType = WaypointType.WAYPOINT;
     private boolean routeLine = true;
     private int lineColor = DEFAULT_LINE_COLOR;
@@ -22,6 +24,12 @@ public final class WaypointsConfig extends ConfigCategory {
     public boolean enabled() { return enabled; }
     public void setEnabled(boolean value) { enabled = value; save(); }
     /** The draw type a new group starts with. */
+    /** The key that adds a waypoint at the looked-at block to every marked group; empty when unbound. */
+    public String addKeybind() { return addKeybind == null ? "" : addKeybind; }
+    public void setAddKeybind(String value) { addKeybind = value == null ? "" : value; save(); }
+    /** True when the editor writes every change at once, with no Done to press and nothing to discard. */
+    public boolean autoSave() { return autoSave; }
+    public void setAutoSave(boolean value) { autoSave = value; save(); }
     public WaypointType defaultType() { return defaultType == null ? WaypointType.WAYPOINT : defaultType; }
     public void setDefaultType(WaypointType value) { defaultType = value; save(); }
     public boolean routeLine() { return routeLine; }

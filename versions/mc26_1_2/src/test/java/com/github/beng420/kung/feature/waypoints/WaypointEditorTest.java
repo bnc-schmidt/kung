@@ -157,4 +157,26 @@ public final class WaypointEditorTest {
         String message = broken.newGroup("G", WaypointType.WAYPOINT, HUB);
         assertTrue(message, message.contains("Not saved"));
     }
+
+    @Test
+    public void theAddKeyPutsAWaypointInEveryMarkedGroupOfTheIslandAndNowhereElse() {
+        editor.newGroup("Marked", WaypointType.HIGHLIGHT, HUB);
+        editor.newGroup("Plain", WaypointType.HIGHLIGHT, HUB);
+        editor.newGroup("Other island", WaypointType.WAYPOINT, PRIVATE);
+        store.groupsOn("hub").get(0).setMarked(true);
+        store.groupsOn("dynamic").get(0).setMarked(true);
+        BlockPos pos = new BlockPos(4, 5, 6);
+
+        String message = editor.addToMarked(pos, HUB, true);
+
+        assertTrue(message, message.contains("\"Marked\"") && !message.contains("Plain") && !message.contains("Other island"));
+        WaypointStore saved = reloaded();
+        assertEquals(List.of(new Waypoint(4, 5, 6, "Waypoint 1", Waypoint.DEFAULT_RGB, Waypoint.DEFAULT_ALPHA, true)),
+            saved.groupsOn("hub").get(0).waypoints());
+        assertTrue("the mark is saved", saved.groupsOn("hub").get(0).marked());
+        assertTrue(saved.groupsOn("hub").get(1).waypoints().isEmpty());
+        assertTrue(saved.groupsOn("dynamic").get(0).waypoints().isEmpty());
+        assertThrows(IllegalArgumentException.class, () -> editor.addToMarked(pos, WaypointIsland.fromId("crimson_isle"), true));
+        assertThrows("not in SkyBlock", IllegalArgumentException.class, () -> editor.addToMarked(pos, HUB, false));
+    }
 }

@@ -198,8 +198,18 @@ _Avoid_: current chat, active channel
 One marked block with a name, a color and an on/off state, drawn in the world.
 
 **Waypoint group**:
-The waypoints of one island that share a draw type and a through-walls choice. Always say "waypoint group": a bare "group" is the Group setting.
+The waypoints that share their areas, a draw type and a through-walls choice. Always say "waypoint group": a bare "group" is the Group setting.
 _Avoid_: category, folder
+
+**Area**:
+An island a waypoint group shows on. A waypoint group with no area ticked shows on every island. The Show All tab of the editor lists every waypoint group with its areas to tick.
+_Avoid_: location
+
+**Marked group**:
+A waypoint group the player starred in the editor. The Add Waypoint Key puts a new waypoint at the looked-at block into every marked group that shows on the current island.
+
+**Walls**:
+The waypoint group choice to show its waypoints through blocks. The wall look says what shows: the Icon, a small square at the waypoint, or the Waypoint itself drawn in its type's look.
 
 **Route**:
 A waypoint group whose waypoints show one after the other, with the previous, current and next one colored. Skyblocker calls it an ordered group.

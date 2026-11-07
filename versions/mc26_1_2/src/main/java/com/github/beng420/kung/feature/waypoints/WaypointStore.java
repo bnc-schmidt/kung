@@ -123,19 +123,19 @@ public final class WaypointStore {
     /** All groups, in the order they were made. */
     synchronized List<WaypointGroup> groups() { return List.copyOf(groups); }
 
-    /** The groups of one island, in order. */
+    /** The groups listed under one island, in order. The "unknown" id lists the groups that show everywhere. */
     public synchronized List<WaypointGroup> groupsOn(String islandId) {
-        return groups.stream().filter(group -> group.islandId().equals(islandId)).toList();
+        return groups.stream().filter(group -> group.listedOn(islandId)).toList();
     }
 
     /**
-     * What shows on an island: its own groups, then the groups that belong to no island. Those show on every island,
+     * What shows on an island: the groups ticked for it, then the groups ticked nowhere. Those show on every island,
      * but only once the player is in SkyBlock, so they are left out when {@code inSkyBlock} is false.
      */
     public synchronized List<WaypointGroup> visibleOn(String islandId, boolean inSkyBlock) {
         if (!inSkyBlock) return List.of();
         List<WaypointGroup> visible = new ArrayList<>(groupsOn(islandId));
-        if (!islandId.equals(WaypointIsland.UNKNOWN.id())) visible.addAll(groupsOn(WaypointIsland.UNKNOWN.id()));
+        if (!WaypointIsland.fromId(islandId).isUnknown()) visible.addAll(groupsOn(WaypointIsland.UNKNOWN.id()));
         return visible;
     }
 

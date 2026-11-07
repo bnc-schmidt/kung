@@ -25,7 +25,7 @@ public final class WaypointsSettingsTest {
         assertTrue(waypoints.developerOnly());
         assertFalse(KungSettings.categories(config, () -> { }, false).stream().flatMap(category -> category.features().stream())
             .anyMatch(feature -> feature.name().equals("Waypoints")));
-        assertEquals(List.of("Editor", "Default Type", "Route Line", "Line Color", "Line Thickness",
+        assertEquals(List.of("Editor", "Add Waypoint Key", "Auto Save", "Default Type", "Route Line", "Line Color", "Line Thickness",
                 "Activation Radius", "Allow Skipping Waypoints", "Allow Going Backwards"),
             waypoints.settings().stream().map(SettingEntry::label).toList());
     }
@@ -44,6 +44,7 @@ public final class WaypointsSettingsTest {
         config.waypoints.setDefaultType(WaypointType.OUTLINE);
         config.waypoints.setAllowGoingBackwards(false);
         config.waypoints.setLineColor(0x123456);
+        config.waypoints.setAutoSave(true);
         config.waypoints.setEnabled(true);
         config.save();
 
@@ -54,12 +55,14 @@ public final class WaypointsSettingsTest {
         assertEquals(WaypointType.OUTLINE, reloaded.waypoints.defaultType());
         assertFalse(reloaded.waypoints.allowGoingBackwards());
         assertEquals(0xFF123456, reloaded.waypoints.lineColor());
+        assertTrue(reloaded.waypoints.autoSave());
     }
 
     @Test
     public void aConfigWithoutAWaypointsSectionGetsTheDefaults() {
         var config = KungConfig.read(new StringReader("{}"));
         assertFalse(config.waypoints.enabled());
+        assertFalse("the editor asks nothing and saves on Done unless the player opts in", config.waypoints.autoSave());
         assertEquals(WaypointType.WAYPOINT, config.waypoints.defaultType());
         assertTrue(config.waypoints.routeLine());
         assertTrue(config.waypoints.allowSkipping());

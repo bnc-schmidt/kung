@@ -127,4 +127,11 @@ public final class WaypointShareTest {
             + Base64.getEncoder().encodeToString("plain, not gzip".getBytes(StandardCharsets.UTF_8))));
         assertThrows(IllegalArgumentException.class, () -> WaypointShare.decode(null));
     }
+
+    @Test
+    public void anImportTakesTheSendersMarkOff() {
+        WaypointGroup group = new WaypointGroup("Shared", "hub", WaypointType.WAYPOINT);
+        group.setMarked(true);
+        org.junit.Assert.assertFalse(WaypointShare.decode(WaypointShare.encode(List.of(group))).groups().get(0).marked());
+    }
 }

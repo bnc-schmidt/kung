@@ -106,6 +106,23 @@ public final class WaypointEditor {
             + pos.getX() + " " + pos.getY() + " " + pos.getZ() + ".");
     }
 
+    /**
+     * The Add Waypoint Key: a waypoint at {@code pos} in every marked group that shows on the island, named as the
+     * editor names a new one. Throws when no group is marked there.
+     */
+    public String addToMarked(BlockPos pos, WaypointIsland current, boolean inSkyBlock) {
+        List<WaypointGroup> marked = store.visibleOn(current.id(), inSkyBlock).stream().filter(WaypointGroup::marked).toList();
+        if (marked.isEmpty()) {
+            throw new IllegalArgumentException("No marked group on " + current.name() + ". Mark one with the * in the waypoint editor.");
+        }
+        List<String> names = new ArrayList<>();
+        for (WaypointGroup group : marked) {
+            group.waypoints().add(Waypoint.at(pos, "Waypoint " + (group.waypoints().size() + 1)));
+            names.add("\"" + group.name() + "\"");
+        }
+        return saved("Waypoint added at " + pos.getX() + " " + pos.getY() + " " + pos.getZ() + " to " + String.join(", ", names) + ".");
+    }
+
     public String removeWaypoint(int g, int w, WaypointIsland current) {
         WaypointGroup group = group(g, current);
         Waypoint removed = group.waypoints().remove(index(group, w));

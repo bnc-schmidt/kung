@@ -34,12 +34,21 @@ final class WaypointCodec {
         JsonObject json = new JsonObject();
         json.addProperty("name", group.name());
         json.addProperty("island", group.islandId());
+        // Skyblocker knows one island per group; the rest of a multi-island group is Kung's own field.
+        if (group.islands().size() > 1) {
+            JsonArray islands = new JsonArray();
+            group.islands().forEach(islands::add);
+            json.add("islands", islands);
+        }
         JsonArray waypoints = new JsonArray();
         for (Waypoint waypoint : group.waypoints()) waypoints.add(writeWaypoint(waypoint));
         json.add("waypoints", waypoints);
         json.addProperty("ordered", group.ordered());
         json.addProperty("renderThroughWalls", group.throughWalls());
         json.addProperty("waypointType", group.type().serialName());
+        // Kung's own, like wallStyle: Skyblocker ignores it, and an import takes it off again.
+        if (group.marked()) json.addProperty("marked", true);
+        if (group.wallStyle() != WaypointWallStyle.ICON) json.addProperty("wallStyle", group.wallStyle().serialName());
         return json;
     }
 
@@ -76,8 +85,15 @@ final class WaypointCodec {
     private static WaypointGroup readGroup(JsonObject json, Skipped skipped) {
         WaypointGroup group = new WaypointGroup(Json.string(json, "name", ""), WaypointIsland.fromId(Json.string(json, "island", "")).id(),
             WaypointType.parse(Json.string(json, "waypointType", ""), WaypointType.WAYPOINT));
+        if (json.has("islands") && json.get("islands").isJsonArray()) {
+            List<String> ids = new ArrayList<>();
+            for (JsonElement id : json.getAsJsonArray("islands")) ids.add(id.getAsString());
+            if (!ids.isEmpty()) group.setIslands(ids);
+        }
         group.setOrdered(Json.bool(json, "ordered", false));
         group.setThroughWalls(Json.bool(json, "renderThroughWalls", true));
+        group.setMarked(Json.bool(json, "marked", false));
+        group.setWallStyle(WaypointWallStyle.parse(Json.string(json, "wallStyle", "")));
         for (JsonElement element : json.has("waypoints") ? json.getAsJsonArray("waypoints") : new JsonArray()) {
             try {
                 group.waypoints().add(readWaypoint(element.getAsJsonObject()));

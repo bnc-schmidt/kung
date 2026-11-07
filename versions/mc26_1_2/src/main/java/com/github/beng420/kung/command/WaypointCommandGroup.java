@@ -20,6 +20,7 @@ import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.builder.RequiredArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.tree.LiteralCommandNode;
 import java.util.Arrays;
 import java.util.stream.Collectors;
 import net.fabricmc.fabric.api.client.command.v2.FabricClientCommandSource;
@@ -44,7 +45,7 @@ final class WaypointCommandGroup {
     }
 
     static void register(LiteralArgumentBuilder<FabricClientCommandSource> root) {
-        root.then(literal("waypoints")
+        LiteralCommandNode<FabricClientCommandSource> waypoints = literal("waypoints")
             .executes(context -> openEditor(context))
             .then(literal("list").executes(context -> list(context)))
             .then(literal("island")
@@ -80,7 +81,13 @@ final class WaypointCommandGroup {
                 .then(groupNumber().executes(context -> export(context, number(context, "group")))))
             .then(literal("import")
                 .executes(context -> importClipboard(context, false))
-                .then(literal("here").executes(context -> importClipboard(context, true)))));
+                .then(literal("here").executes(context -> importClipboard(context, true))))
+            .build();
+        root.then(waypoints);
+        // /kung wp and /kung wps do exactly what /kung waypoints does, subcommands and suggestions included.
+        for (String alias : new String[] {"wp", "wps"}) {
+            root.then(literal(alias).executes(context -> openEditor(context)).redirect(waypoints));
+        }
     }
 
     private static LiteralArgumentBuilder<FabricClientCommandSource> group() {
