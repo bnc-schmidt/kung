@@ -17,14 +17,12 @@ public final class WaypointsSettingsTest {
     @Test
     public void waypointsSitsInUtilAndIsOffByDefault() {
         var config = new KungConfig(temporary.getRoot().toPath().resolve("kung.json"));
-        // Developer only: the row exists for the developer account and for nobody else.
-        var util = KungSettings.categories(config, () -> { }, true).stream()
+        // Everyone has the row, not only the developer account.
+        var util = KungSettings.categories(config, () -> { }, false).stream()
             .filter(category -> category.name().equals("Util")).findFirst().orElseThrow();
         var waypoints = util.features().stream().filter(feature -> feature.name().equals("Waypoints")).findFirst().orElseThrow();
         assertFalse(waypoints.enabled());
-        assertTrue(waypoints.developerOnly());
-        assertFalse(KungSettings.categories(config, () -> { }, false).stream().flatMap(category -> category.features().stream())
-            .anyMatch(feature -> feature.name().equals("Waypoints")));
+        assertFalse(waypoints.developerOnly());
         assertEquals(List.of("Editor", "Add Waypoint Key", "Auto Save", "Default Type", "Route Line", "Line Color", "Line Thickness",
                 "Activation Radius", "Allow Skipping Waypoints", "Allow Going Backwards"),
             waypoints.settings().stream().map(SettingEntry::label).toList());

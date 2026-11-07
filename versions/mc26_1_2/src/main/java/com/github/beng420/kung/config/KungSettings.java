@@ -676,8 +676,7 @@ public final class KungSettings {
                 ).withTooltip("Saves waypoints and routes per island and shows them in the world.",
                     "They are kept in config/kung/waypoints.json, also across restarts.",
                     "A route is a group whose waypoints show one after the other.",
-                    "Share groups as a Skyblocker waypoint string with /kung waypoints export and import.",
-                    "Beng114 only for now: it is at an early stage.").forDeveloper()
+                    "Share groups as a Skyblocker waypoint string with /kung waypoints export and import.")
             )),
             new CategoryEntry("Debug", List.of(
                 new FeatureEntry(

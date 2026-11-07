@@ -5,7 +5,6 @@ import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.message.KungMessages;
-import com.github.beng420.kung.runtime.KungDeveloperAccess;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import java.util.ArrayList;
@@ -53,8 +52,7 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
 
     @Override
     public boolean isEnabled() {
-        // Developer only for now; a copied config does nothing for anyone else.
-        return initialized() && config().enabled() && KungDeveloperAccess.allowed();
+        return initialized() && config().enabled();
     }
 
     /** The island the tab list names, or {@link WaypointIsland#UNKNOWN} before it has. */
