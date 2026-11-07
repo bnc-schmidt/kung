@@ -50,7 +50,8 @@ public final class DungeonRunStats {
     private static final int MAX_DUNGEON_PLAYERS = 5;
     private static final int TARGET_CRYPTS = 5;
     private static final long ROOM_CLEAR_PLAYER_STALE_TICKS = 40;
-    private static final long RUN_SECRET_FINAL_TIMEOUT_TICKS = 60;
+    /** The summary waits this long for the end values (a slow answer printed "?" at 3 s), then shows what it has. */
+    private static final long RUN_SECRET_FINAL_TIMEOUT_TICKS = 200;
     private static final long SCORE_CALC_LOG_INTERVAL_MILLIS = 1_000L;
     // Found and percent come from separate tab lines; a pair caught between two updates must last this long to count.
     private static final long SECRET_TOTAL_CONFLICT_TICKS = 20L;
@@ -729,7 +730,8 @@ public final class DungeonRunStats {
             }
             if (KungConfig.get().dungeon.playerStatsReportEnabled()) {
                 output.accept(KungMessages.info("Player Stats"));
-                String availability = personalSecretAvailability(sortedPlayers, HypixelSkyBlockProfileClient.secretsSourceAvailable());
+                String availability = personalSecretAvailability(sortedPlayers,
+                    HypixelSkyBlockProfileClient.secretsSourceAvailable(), apiEnrichment.problem());
                 if (!availability.isEmpty()) output.accept(KungMessages.highlight(availability));
                 DungeonRunSummaryLayout.lines(sortedPlayers.stream().map(stats -> new DungeonRunSummaryLayout.Row(
                     stats.name(), dungeonClass(stats.uuid()).argb(), playerStatsCells(stats, totalFoundSecrets))).toList(),
@@ -788,10 +790,16 @@ public final class DungeonRunStats {
     }
 
     static String personalSecretAvailability(List<DungeonPlayerStats> players, boolean apiConfigured) {
+        return personalSecretAvailability(players, apiConfigured, "");
+    }
+
+    /** {@code problem} is why the data is missing, when the lookups know it. */
+    static String personalSecretAvailability(List<DungeonPlayerStats> players, boolean apiConfigured, String problem) {
         long known = players.stream().filter(DungeonPlayerStats::hasSecretsFound).count();
         if (known == players.size()) return "";
         return "Personal secrets: " + known + "/" + players.size() + " available. "
-            + (apiConfigured ? "Missing player data was not received." : "No Hypixel API key or Kung server set.");
+            + (apiConfigured ? "Missing player data was not received" + (problem.isEmpty() ? "." : " (" + problem + ").")
+                : "No Hypixel API key or Kung server set.");
     }
 
     /** The details line in pieces: every number is a column that the layout right-aligns across the players. */
@@ -2227,36 +2235,34 @@ public final class DungeonRunStats {
         KungDebugRecorder.event("player-stats", "bonus contributor=" + stats.name() + " bonus=" + bonus.marker());
     }
 
+    /**
+     * A report from chat or Skyblocker only marks the kill; only your own detection announces it. Whether a teammate
+     * reported the kill first is no business of the announcement, so it never stops it.
+     */
     private void markMimicKilled(Minecraft client, boolean announce, String source) {
         var config = KungConfig.get().dungeon;
-        String suppressed = mimicKilled ? "already-killed" : !announce ? "reported-kill"
+        String suppressed = !announce ? "reported-kill" : mimicMessageSent ? "already-announced"
             : !config.extraScoreMessagesEnabled() ? "extra-score-messages-off"
             : !config.mimicMessageEnabled() ? "mimic-message-off" : "none";
         KungDebugRecorder.event("mimic-kill", "evidence source=" + source + " first=" + !mimicKilled
             + " extraScoreMessages=" + config.extraScoreMessagesEnabled()
             + " mimicMessage=" + config.mimicMessageEnabled() + " suppressed=" + suppressed);
-        if (mimicKilled) {
+        mimicKilled = true;
+        if (!suppressed.equals("none")) {
             return;
         }
-        mimicKilled = true;
-        announce &= config.extraScoreMessagesEnabled() && config.mimicMessageEnabled();
-        if (announce && client != null && client.player != null) {
-            client.player.sendSystemMessage(KungMessages.info("Dungeon", "mimic killed"));
+        if (client != null && client.player != null) {
+            client.player.sendSystemMessage(KungMessages.info("Dungeon", "Mimic killed"));
         }
-        if (announce && !mimicMessageSent) {
-            announcements.sendPartyAfterCooldown(client, "Mimic dead!");
-            mimicMessageSent = true;
-        }
+        announcements.sendPartyAfterCooldown(client, "Mimic dead!");
+        mimicMessageSent = true;
     }
 
+    /** Hypixel's own line goes to the killer alone, so it is the evidence that announces; a teammate's report is not. */
     private void markPrinceKilled(Minecraft client, boolean announce) {
-        if (princeKilled) {
-            return;
-        }
         princeKilled = true;
         var config = KungConfig.get().dungeon;
-        announce &= config.extraScoreMessagesEnabled() && config.princeMessageEnabled();
-        if (announce && !princeMessageSent) {
+        if (announce && config.extraScoreMessagesEnabled() && config.princeMessageEnabled() && !princeMessageSent) {
             announcements.sendPartyAfterCooldown(client, "Prince dead!");
             princeMessageSent = true;
         }

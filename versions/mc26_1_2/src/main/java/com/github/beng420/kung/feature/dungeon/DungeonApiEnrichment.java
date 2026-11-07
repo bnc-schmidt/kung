@@ -8,11 +8,23 @@ import java.util.HashSet;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
+import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
 import net.minecraft.client.Minecraft;
 
 public final class DungeonApiEnrichment {
+    /**
+     * A failed start value is asked again after these pauses (3 + 10 + 30 s). A later value would miss the secrets
+     * found meanwhile, so the run gives up after that. The end value has only the summary's wait.
+     */
+    private static final long[] BASELINE_RETRY_MS = {3_000L, 10_000L, 30_000L};
+    private static final long[] FINAL_RETRY_MS = {1_500L, 4_000L};
+    private static final long[] NO_RETRY = {};
+    private static final int MAX_PROBLEM_LENGTH = 80;
+
     private final Set<String> requestedTotals = new HashSet<>();
     private final Set<String> requestedBaselines = new HashSet<>();
     private final Set<String> requestedFinals = new HashSet<>();
@@ -21,6 +33,8 @@ public final class DungeonApiEnrichment {
     private long finalFetchStartTick = Long.MIN_VALUE;
     private int pendingFinalFetches;
     private long generation;
+    /** Why a number is missing: the first problem of this run, shown in the summary. */
+    private String problem = "";
 
     public void reset() {
         generation++;
@@ -31,10 +45,15 @@ public final class DungeonApiEnrichment {
         finalFetchStarted = false;
         finalFetchStartTick = Long.MIN_VALUE;
         pendingFinalFetches = 0;
+        problem = "";
     }
 
     public boolean finalFetchStarted() {
         return finalFetchStarted;
+    }
+
+    public String problem() {
+        return problem;
     }
 
     public void startFinalFetch(long nowTick) {
@@ -44,7 +63,9 @@ public final class DungeonApiEnrichment {
     }
 
     public boolean finalFetchCompleteOrTimedOut(long nowTick, long timeoutTicks) {
-        return pendingFinalFetches <= 0 || nowTick - finalFetchStartTick >= timeoutTicks;
+        boolean timedOut = nowTick - finalFetchStartTick >= timeoutTicks;
+        if (pendingFinalFetches > 0 && timedOut) note("the answers came too late");
+        return pendingFinalFetches <= 0 || timedOut;
     }
 
     public boolean hasPendingFinalFetches() {
@@ -57,10 +78,11 @@ public final class DungeonApiEnrichment {
         Consumer<HypixelSkyBlockProfileClient.SecretResult> onSuccess
     ) {
         String requestedName = key(name);
-        if (!requestedTotals.add(requestedName)) {
+        // The end value of the run already is the total: asking again spends the server's limit for nothing.
+        if (requestedFinals.contains(requestedName) || !requestedTotals.add(requestedName)) {
             return;
         }
-        request(client, name, "total-secrets", onSuccess, () -> { });
+        request(client, name, "total-secrets", NO_RETRY, 0, () -> false, onSuccess, () -> { });
     }
 
     public void requestBaseline(
@@ -72,7 +94,7 @@ public final class DungeonApiEnrichment {
         if (finalFetchStarted || !requestedBaselines.add(requestedName)) {
             return;
         }
-        request(client, name, "run-secret baseline", result -> {
+        request(client, name, "run-secret baseline", BASELINE_RETRY_MS, 0, () -> !finalFetchStarted, result -> {
             if (finalFetchStarted) {
                 KungDebugRecorder.event("player-stats", "run-secret baseline ignored after finish player=" + name);
                 return;
@@ -94,41 +116,82 @@ public final class DungeonApiEnrichment {
         }
         // Only a start snapshot established before the final request can be compared.
         Integer baseline = baselines.get(requestedName);
+        if (baseline == null) {
+            KungDebugRecorder.event("player-stats", "run-secret final without start value player=" + name);
+            note("no start value for " + name);
+        }
         pendingFinalFetches++;
-        request(client, name, "run-secret final",
+        request(client, name, "run-secret final", FINAL_RETRY_MS, 0, () -> true,
             result -> onSuccess.accept(result, runSecretDelta(baseline, result.secretsFound())),
             () -> pendingFinalFetches = Math.max(0, pendingFinalFetches - 1));
     }
 
+    /**
+     * One lookup. A transport or HTTP failure (not a 429: that window lasts minutes) is asked again after the next
+     * pause while {@code wanted} holds; {@code onDone} runs once, after the answer or the last failure.
+     */
     private void request(
         Minecraft client,
         String name,
         String operation,
+        long[] retryPausesMs,
+        int attempt,
+        BooleanSupplier wanted,
         Consumer<HypixelSkyBlockProfileClient.SecretResult> onSuccess,
-        Runnable onComplete
+        Runnable onDone
     ) {
         long requestedGeneration = generation;
         HypixelSkyBlockProfileClient.INSTANCE.loadTotalSecrets(name).whenComplete((result, throwable) ->
             client.execute(() -> {
                 if (requestedGeneration != generation) return;
-                try {
-                    if (throwable != null) {
-                        KungDebugRecorder.event("player-stats", operation + " failed player=" + name
-                            + " error=" + throwable.getClass().getSimpleName());
-                        return;
+                String error = errorOf(result, throwable);
+                if (error == null) {
+                    try {
+                        onSuccess.accept(result);
+                    } finally {
+                        onDone.run();
                     }
-                    if (result == null || !result.success() || result.secretsFound() < 0) {
-                        KungDebugRecorder.event("player-stats", operation + " failed player=" + name
-                            + " error=" + (result == null ? "empty response"
-                                : !result.success() ? result.error() : "total secrets unavailable"));
-                        return;
-                    }
-                    onSuccess.accept(result);
-                } finally {
-                    onComplete.run();
+                    return;
                 }
+                boolean retry = retryable(result, throwable, error) && attempt < retryPausesMs.length && wanted.getAsBoolean();
+                KungDebugRecorder.event("player-stats", operation + " failed player=" + name + " error=" + error
+                    + (retry ? " retry in " + retryPausesMs[attempt] + " ms" : ""));
+                if (!retry) {
+                    note(operation + " " + error);
+                    onDone.run();
+                    return;
+                }
+                CompletableFuture.delayedExecutor(retryPausesMs[attempt], TimeUnit.MILLISECONDS).execute(() ->
+                    client.execute(() -> {
+                        if (requestedGeneration != generation) return;
+                        if (wanted.getAsBoolean()) {
+                            request(client, name, operation, retryPausesMs, attempt + 1, wanted, onSuccess, onDone);
+                        } else {
+                            onDone.run();
+                        }
+                    }));
             })
         );
+    }
+
+    /** Null for a usable answer, else what went wrong. */
+    private static String errorOf(HypixelSkyBlockProfileClient.SecretResult result, Throwable throwable) {
+        if (throwable != null) return throwable.getClass().getSimpleName();
+        if (result == null) return "empty response";
+        if (!result.success()) return result.error() == null || result.error().isBlank() ? "request failed" : result.error();
+        return result.secretsFound() < 0 ? "total secrets unavailable" : null;
+    }
+
+    /** A hidden counter ("unavailable") or a limit window (429) stays the same on the next ask. */
+    private static boolean retryable(HypixelSkyBlockProfileClient.SecretResult result, Throwable throwable, String error) {
+        boolean answered = throwable == null && result != null && result.success();
+        return !answered && !error.contains("429");
+    }
+
+    private void note(String text) {
+        if (problem.isEmpty()) {
+            problem = text.length() > MAX_PROBLEM_LENGTH ? text.substring(0, MAX_PROBLEM_LENGTH) + "..." : text;
+        }
     }
 
     static int runSecretDelta(Integer baseline, int finalTotal) {

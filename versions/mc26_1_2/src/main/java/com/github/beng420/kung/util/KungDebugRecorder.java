@@ -32,7 +32,8 @@ public final class KungDebugRecorder {
     private static final long RATE_WINDOW_MILLIS = 60_000L;
     private static final Set<String> SPLIT_AREAS = Set.of("dungeon-splits", "necron-end");
     private static final Set<String> SCORE_AREAS = Set.of("score-calc", "score-bonus", "mimic-kill");
-    private static final Set<String> THROW_AREAS = Set.of("safari-throw", "sack-api", "beacon");
+    /** Low-volume evidence that the general ring would evict within one run (lookup failures show up minutes later). */
+    private static final Set<String> THROW_AREAS = Set.of("safari-throw", "sack-api", "beacon", "player-stats");
     private static final long DEFAULT_DEDUPE_MILLIS = 15_000L;
     private static final DateTimeFormatter CLOCK_FORMAT =
         DateTimeFormatter.ofPattern("HH:mm:ss.SSS", Locale.ROOT).withZone(ZoneId.systemDefault());

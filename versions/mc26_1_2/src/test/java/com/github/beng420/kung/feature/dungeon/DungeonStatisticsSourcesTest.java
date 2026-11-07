@@ -194,6 +194,16 @@ public final class DungeonStatisticsSourcesTest {
         assertEquals("", DungeonRunStats.personalSecretAvailability(stats.summaryPlayers(), true));
     }
 
+    @Test public void summaryNamesTheProblemWhenTheLookupsKnowIt() {
+        var stats = run();
+        assertEquals("Personal secrets: 0/2 available. Missing player data was not received"
+                + " (run-secret baseline Kung server returned HTTP 503).",
+            DungeonRunStats.personalSecretAvailability(stats.summaryPlayers(), true,
+                "run-secret baseline Kung server returned HTTP 503"));
+        assertEquals("Personal secrets: 0/2 available. No Hypixel API key or Kung server set.",
+            DungeonRunStats.personalSecretAvailability(stats.summaryPlayers(), false, "ignored"));
+    }
+
     @Test public void syncDecoderPreservesPersonalSourceAndKeepsLegacyReportsUnverified() throws Exception {
         var decode = DungeonRoomDataSyncClient.class.getDeclaredMethod("parseLiveSnapshot", String.class);
         decode.setAccessible(true);
