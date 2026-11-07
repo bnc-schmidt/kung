@@ -61,10 +61,14 @@ public final class UiTextField {
         // EditBox works out where its text and hint sit inside setX/setY and not again after setWidth/setHeight,
         // and starts 0 high (the (font, int, int, Component) constructor is width and height). Size first, or
         // the first frame draws the hint (height - 8) / 2 = -4 units from the top until the first click.
+        boolean resized = control.getWidth() != width;
         control.setWidth(width);
         control.setHeight(height);
         control.setX(x);
         control.setY(y);
+        // setValue scrolls the text to the cursor with the width the box had then. A value set before the first
+        // setBounds (width 0) is scrolled out of sight, so the field showed its hint until a click scrolled it again.
+        if (resized) control.moveCursorTo(control.getCursorPosition(), false);
     }
 
     public UiBounds bounds() {
