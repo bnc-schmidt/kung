@@ -114,7 +114,10 @@ public final class ChatCommandTest {
             assertLevel("!b" + level + " Beng114", ChatCommand.B, level);
             assertLevel("!h" + level, ChatCommand.H, level);
             if (level > 7) assertLevel("!m" + level, ChatCommand.M, level); // !m1 to !m7 start master mode floors
-            assertLevel("!t" + level + "\t", ChatCommand.T, level);
+            if (level > 5) assertLevel("!t" + level + "\t", ChatCommand.T, level); // !t1 to !t5 start Kuudra tiers
+            // The long names take every level, the floors and tiers included.
+            assertLevel("!mage" + level, ChatCommand.M, level);
+            assertLevel("!TANK" + level + " Beng114", ChatCommand.T, level);
         }
         for (int floor = 1; floor <= 7; floor++) {
             assertEquals("!m" + floor, List.of(), matching("!m" + floor));
@@ -122,13 +125,21 @@ public final class ChatCommandTest {
             // With a player name it is still a mage level question.
             assertLevel("!m" + floor + " Beng114", ChatCommand.M, floor);
         }
+        for (int tier = 1; tier <= 5; tier++) {
+            assertEquals("!t" + tier, List.of(), matching("!t" + tier));
+            assertEquals("!T" + tier + "\t", List.of(), matching("!T" + tier + "\t"));
+            // With a player name it is still a tank level question.
+            assertLevel("!t" + tier + " Beng114", ChatCommand.T, tier);
+        }
         assertLevel("!m8", ChatCommand.M, 8);
+        assertLevel("!t6", ChatCommand.T, 6);
+        assertLevel("!t15", ChatCommand.T, 15); // a longer number is no tier
         assertLevel("!c43", ChatCommand.C, 43);
         assertLevel("!c98 Beng114", ChatCommand.C, 98);
         assertLevel("!ca60 -tank", ChatCommand.CA_TANK, 60);
         // No level, level 0, a leading zero, or more than 200 is no command; the old names stay plain levels.
         for (String body : new String[] {"!c", "!ca", "!c0", "!c00", "!c050", "!c201", "!c1000", "!ca0", "!ca201 -arch",
-            "!a0", "!t999", "!c 50", "!c-5", "!c5.5", "!ca60x", "!c50Beng114"}) {
+            "!a0", "!t999", "!c 50", "!c-5", "!c5.5", "!ca60x", "!c50Beng114", "!mage", "!tank", "!mage0", "!tank201"}) {
             assertEquals(body, List.of(), matching(body));
         }
         var tps = ChatCommand.TPS.pattern.matcher("!tps");

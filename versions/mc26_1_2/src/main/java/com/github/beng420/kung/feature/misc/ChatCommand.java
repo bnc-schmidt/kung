@@ -13,10 +13,12 @@ import com.github.beng420.kung.util.CatacombsAverageCalculator.Goal;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import com.github.beng420.kung.util.KungTime;
 import com.github.beng420.kung.util.ServerTpsTracker;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.minecraft.client.Minecraft;
 
 enum ChatCommand {
@@ -31,10 +33,11 @@ enum ChatCommand {
     CA_ARCHER(Goal.CLASS_AVERAGE, DungeonClass.ARCHER, "ca"), CA_BERSERK(Goal.CLASS_AVERAGE, DungeonClass.BERSERK, "ca"),
     CA_HEALER(Goal.CLASS_AVERAGE, DungeonClass.HEALER, "ca"), CA_MAGE(Goal.CLASS_AVERAGE, DungeonClass.MAGE, "ca"),
     CA_TANK(Goal.CLASS_AVERAGE, DungeonClass.TANK, "ca"),
-    // "!a50 [name]": runs that class still needs for that level (!b !h !m !t for the others).
+    // "!a50 [name]": runs that class still needs for that level (!b !h !m !t for the others). Other mods and Hypixel
+    // use !m1-!m7 and !t1-!t5 themselves, so the mage and tank commands also answer to the long names !mage and !tank.
     A(Goal.CLASS_LEVEL, DungeonClass.ARCHER), B(Goal.CLASS_LEVEL, DungeonClass.BERSERK),
-    H(Goal.CLASS_LEVEL, DungeonClass.HEALER), M(Goal.CLASS_LEVEL, DungeonClass.MAGE),
-    T(Goal.CLASS_LEVEL, DungeonClass.TANK);
+    H(Goal.CLASS_LEVEL, DungeonClass.HEALER), M(Goal.CLASS_LEVEL, DungeonClass.MAGE, "m", "mage"),
+    T(Goal.CLASS_LEVEL, DungeonClass.TANK, "t", "tank");
 
     /** Levels 1 to 200 without leading zeros; a longer number is no command. */
     private static final String LEVEL = "(?<level>[1-9]|[1-9][0-9]|1[0-9]{2}|200)";
@@ -49,13 +52,20 @@ enum ChatCommand {
     ChatCommand(Goal goal, DungeonClass dungeonClass, String... names) {
         this.goal = goal;
         this.dungeonClass = dungeonClass;
-        String triggers = names.length == 0 ? name().toLowerCase(Locale.ROOT) : String.join("|", names);
+        String[] all = names.length == 0 ? new String[] {name().toLowerCase(Locale.ROOT)} : names;
+        // "!m1" to "!m7" alone start the master mode floors for the party, "!t1" to "!t5" the Kuudra tiers: the
+        // one-letter mage and tank commands leave them to Hypixel. The long names (the other alternatives) take them.
+        String hypixelStart = goal == Goal.CLASS_LEVEL ? switch (dungeonClass) {
+            case MAGE -> "(?![1-7]\\s*$)";
+            case TANK -> "(?![1-5]\\s*$)";
+            default -> "";
+        } : "";
+        String triggers = all[0] + hypixelStart
+            + Arrays.stream(all).skip(1).map(name -> "|" + name).collect(Collectors.joining());
         // Only the !ca variants take a "-class" flag, after the optional name.
         String classFlag = goal == Goal.CLASS_AVERAGE && dungeonClass != null
             ? "\\s+-(?:" + classFlags(dungeonClass) + ")" : "";
-        // "!m1" to "!m7" alone start the master mode floors for the party: the mage command leaves them to Hypixel.
-        String masterFloor = goal == Goal.CLASS_LEVEL && dungeonClass == DungeonClass.MAGE ? "(?![1-7]\\s*$)" : "";
-        pattern = Pattern.compile("^!(?:" + triggers + ")" + masterFloor
+        pattern = Pattern.compile("^!(?:" + triggers + ")"
             + (goal == null ? "" : LEVEL + "(?:\\s+(?<name>[A-Za-z0-9_]{1,16}))?") + classFlag + "\\s*$", Pattern.CASE_INSENSITIVE);
     }
 
