@@ -62,8 +62,8 @@ final class GreenhouseFocus {
                 if (keptBlocked != null) keptBlocked[kept] = i < blocked.length && blocked[i];
                 kept++;
             }
-            // The (0, 0) marker and the cell volumes belong to the whole layout, not to what is held.
-            return new View(new Layout(List.of(), List.copyOf(placements), List.of()),
+            // The cell volumes belong to the whole layout, not to what is held.
+            return new View(new Layout(List.copyOf(placements), List.of()),
                 keptStates == null ? null : List.copyOf(keptStates),
                 keptBlocked == null ? null : Arrays.copyOf(keptBlocked, kept), shownGhosts(ghosts));
         }

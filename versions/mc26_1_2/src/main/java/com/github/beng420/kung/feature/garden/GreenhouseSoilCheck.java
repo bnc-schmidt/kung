@@ -40,7 +40,7 @@ final class GreenhouseSoilCheck {
      * base crops the wiki is clear on. Everything else is an assumption in {@link GreenhouseSoils}.
      */
     private static final Set<String> TRUSTED_BASE = Set.of(
-        "Nether Wart", "Wheat Seeds", "Carrot", "Potato", "Melon Seeds", "Pumpkin Seeds");
+        "Nether Wart", "Wheat Seeds", "Carrot", "Potato", "Melon Seeds", "Pumpkin Seeds", "Cocoa Beans");
 
     /**
      * How a cell's real block differs from the soil it should have: nothing is there ({@code MISSING}, drawn as a

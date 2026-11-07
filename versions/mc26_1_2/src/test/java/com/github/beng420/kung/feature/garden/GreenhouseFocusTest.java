@@ -97,7 +97,7 @@ public final class GreenhouseFocusTest {
         GreenhouseFocus.View view = focus.narrow(layout, states, blocked, List.of());
         assertEquals(1, view.layout().placements().size());
         assertEquals("Wheat Seeds", view.layout().placements().get(0).crop());
-        assertTrue("the marker and cell volumes go with the rest", view.layout().shapes().isEmpty());
+        assertTrue("the cell volumes go with the rest", view.layout().cells().isEmpty());
         assertEquals(List.of(State.EMPTY), view.states());
         assertTrue(view.blocked()[0]); // the flags stay with their placement
         assertEquals(1, view.blocked().length);

@@ -12,8 +12,9 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * <p>Mutations take the first soil listed in {@code kung-greenhouse-mutations.json} (Lonelily: Farmland, Dirt;
  * Shadevine: the file says Farmland although some wiki pages also allow Sand). Base crops are only partly
- * known: Nether Wart on Soul Sand (low confidence), wheat, carrot, potato, melon and pumpkin on Farmland.
- * UNVERIFIED: every other base crop and item (cocoa, roses, flowers, cactus, mushrooms, sugar cane, fire and the
+ * known: Nether Wart on Soul Sand (low confidence), wheat, carrot, potato, melon, pumpkin and cocoa (the player's
+ * greenhouse, 2026-11-07: soul sand under cocoa is wrong) on Farmland.
+ * UNVERIFIED: every other base crop and item (roses, flowers, cactus, mushrooms, sugar cane, fire and the
  * drop items) is assumed to stand on Farmland because the wiki says nothing about it.
  */
 final class GreenhouseSoils {

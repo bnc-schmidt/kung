@@ -307,15 +307,12 @@ public final class GreenhouseHologram {
 
     static GreenhouseOrientation orientation() { return orientation; }
 
-    /** For the debug dump: whether something is shown, how it is turned and how many boxes it is. */
+    /** For the debug dump: whether something is shown, how it is turned and how many models it has. */
     static String stateSummary() {
         return "showing=" + isShowing() + " userVisible=" + visible + " complete=" + GreenhouseScanner.complete()
             + " orientation=" + orientation.describe()
-            + " boxes=" + shown.shapes().size() + " models=" + shown.placements().size();
+            + " models=" + shown.placements().size();
     }
-
-    /** Boxes relative to the greenhouse corner; empty while hidden. */
-    static List<GreenhouseHologramShapes.Shape> shapes() { return shown.shapes(); }
 
     /** The models to draw (crop heads and blocks, mutation heads), corner-relative; empty while hidden. */
     static List<GreenhouseHologramShapes.Placement> placements() { return shown.placements(); }
@@ -340,7 +337,7 @@ public final class GreenhouseHologram {
     /** Everything above in one piece. */
     static GreenhouseHologramShapes.Layout layout() { return shown; }
 
-    /** Changes whenever {@link #shapes()} does, so the renderer rebuilds its world boxes only then. */
+    /** Changes whenever the shown layout does, so the renderer rebuilds its world boxes only then. */
     static int version() { return version; }
 
     /** A snapshot: the planner keeps editing its own grid, which must not change a shown hologram on rotate. */

@@ -68,9 +68,9 @@ final class GreenhouseHologramShapes {
         }
     }
 
-    /** {@code shapes}: the (0, 0) frame and post; {@code placements}: models; {@code cells}: ray-test volumes. */
-    record Layout(List<Shape> shapes, List<Placement> placements, List<CellBox> cells) {
-        static final Layout EMPTY = new Layout(List.of(), List.of(), List.of());
+    /** {@code placements}: models; {@code cells}: ray-test volumes. */
+    record Layout(List<Placement> placements, List<CellBox> cells) {
+        static final Layout EMPTY = new Layout(List.of(), List.of());
     }
 
     /**
@@ -108,7 +108,6 @@ final class GreenhouseHologramShapes {
     static final double SLAB_HEIGHT = 0.15;
 
     private static final int GOLD = 0xFFD700;
-    private static final int WHITE = 0xFFFFFF;
     private static final int FILL_ALPHA = 0x4D; // ~30%
     private static final int OUTLINE_ALPHA = 0xE6; // ~90%
     private static final int TARGET_FILL_ALPHA = 0x2E; // ~18%
@@ -117,12 +116,10 @@ final class GreenhouseHologramShapes {
     private static final double CUBE_INSET = 0.12;
     private static final double CUBE_HEIGHT = 0.9;
     private static final double SLAB_INSET = 0.04;
-    private static final double POST_HEIGHT = 1.6;
 
     private GreenhouseHologramShapes() { }
 
     static Layout build(GreenhouseGrid grid, GreenhouseOrientation orientation) {
-        List<Shape> shapes = new ArrayList<>();
         List<Placement> placements = new ArrayList<>();
         List<CellBox> cells = new ArrayList<>();
         for (int row = 0; row < GreenhouseGrid.SIZE; row++) {
@@ -155,10 +152,7 @@ final class GreenhouseHologramShapes {
                 GreenhouseCropLook.of(block.mutation()), null, slab,
                 area(minX, minZ, maxX, maxZ)));
         }
-        // Cell (0, 0) is the grid's top-left, whatever it holds: a heavy white frame and a post on its outer corner.
-        shapes.add(flat(orientation, 0, 0, 1, 1, 0.02, 0.05, WHITE, 0x33, 4.0F));
-        shapes.add(post(orientation));
-        return new Layout(List.copyOf(shapes), List.copyOf(placements), List.copyOf(cells));
+        return new Layout(List.copyOf(placements), List.copyOf(cells));
     }
 
     /** The same hue as the planner's cell colour (GreenhouseGridPainter), brighter so it reads in the world. */
@@ -187,14 +181,5 @@ final class GreenhouseHologramShapes {
         return new Shape(Math.min(a.x(), b.x()) + inset, LIFT, Math.min(a.z(), b.z()) + inset,
             Math.max(a.x(), b.x()) - inset, LIFT + height, Math.max(a.z(), b.z()) - inset,
             rgb | fillAlpha << 24, rgb | 0xFF000000, width);
-    }
-
-    /** A thin white post hugging the outer corner of cell (0, 0), tall enough to spot from across the plot. */
-    private static Shape post(GreenhouseOrientation orientation) {
-        GreenhouseOrientation.Point a = orientation.point(0.04, 0.04);
-        GreenhouseOrientation.Point b = orientation.point(0.24, 0.24);
-        return new Shape(Math.min(a.x(), b.x()), LIFT, Math.min(a.z(), b.z()),
-            Math.max(a.x(), b.x()), LIFT + POST_HEIGHT, Math.max(a.z(), b.z()),
-            WHITE | 0x66 << 24, 0xFFFFFFFF, 2.0F);
     }
 }

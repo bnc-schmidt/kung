@@ -131,9 +131,8 @@ final class GreenhouseWorldRenderer {
         boolean[] blocked = hideOverWrongSoil && soilLayer >= 0
             ? GreenhouseSoilCheck.blocked(GreenhouseScanLogic.footprints(placements), ghosts) : null;
         var layout = GreenhouseHologram.layout();
-        var markers = GreenhouseHologram.shapes();
         List<GreenhouseScanLogic.Extra> extras = GreenhouseScanner.extras(version);
-        // The item in hand leaves out everything but its own spots and soil (and the marker with them).
+        // The item in hand leaves out everything but its own spots and soil.
         var focus = GreenhouseHologram.focus();
         if (focus.isPresent()) {
             GreenhouseFocus.View view = focus.get().narrow(layout, states, blocked, ghosts);
@@ -142,7 +141,6 @@ final class GreenhouseWorldRenderer {
             states = view.states();
             blocked = view.blocked();
             ghosts = view.ghosts();
-            markers = List.of();
             extras = List.of();
         }
         GreenhouseModels.Prepared prepared;
@@ -154,10 +152,9 @@ final class GreenhouseWorldRenderer {
             prepared = new GreenhouseModels.Prepared(GreenhouseModels.Models.EMPTY,
                 cubesOf(placements, blocked, corner, palette));
         }
-        // The (0, 0) marker, then the outlines, slabs, wrong and unplanned boxes, then the stand-in cubes.
-        List<Box> boxes = new ArrayList<>(worldBoxes(markers, corner));
-        boxes.addAll(worldBoxes(GreenhouseOverlay.boxes(layout, states, extras, ghosts, soilLayer, blocked, palette),
-            corner));
+        // The outlines, slabs, wrong and unplanned boxes, then the stand-in cubes.
+        List<Box> boxes = new ArrayList<>(worldBoxes(
+            GreenhouseOverlay.boxes(layout, states, extras, ghosts, soilLayer, blocked, palette), corner));
         boxes.addAll(prepared.cubes());
         return new Frame(List.copyOf(boxes), prepared.models());
     }

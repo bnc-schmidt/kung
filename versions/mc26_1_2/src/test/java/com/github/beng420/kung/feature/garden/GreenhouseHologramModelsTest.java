@@ -139,8 +139,7 @@ public final class GreenhouseHologramModelsTest {
         assertEquals(3, layout.placements().size());
         assertEquals(2, layout.placements().stream().filter(p -> !p.mutation()).count());
         assertEquals("every filled cell, targets included", 6, layout.cells().size());
-        // frame + post; the slab belongs to the mutation's placement
-        assertEquals(2, layout.shapes().size());
+        // the slab belongs to the mutation's placement
         assertNotNull(layout.placements().stream().filter(p -> p.mutation()).findFirst().orElseThrow().slab());
     }
 
@@ -264,6 +263,5 @@ public final class GreenhouseHologramModelsTest {
 
         assertTrue(layout.placements().isEmpty());
         assertTrue(layout.cells().isEmpty());
-        assertEquals(2, layout.shapes().size());
     }
 }

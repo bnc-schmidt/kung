@@ -30,10 +30,6 @@ public final class GreenhouseHologramTest {
         return grid;
     }
 
-    private static List<Shape> shapesOf(GreenhouseGrid grid, GreenhouseOrientation orientation) {
-        return GreenhouseHologramShapes.build(grid, orientation).shapes();
-    }
-
     @Test
     public void showReportsWhetherThePlayerIsInTheGreenhouse() {
         GreenhouseGrid grid = cropAt(1, 1, GreenhouseGrid.INGREDIENT, "Carrot");
@@ -53,12 +49,12 @@ public final class GreenhouseHologramTest {
     public void hideClearsTheShapesAndBumpsTheVersion() {
         GreenhouseHologram.show(cropAt(1, 1, GreenhouseGrid.INGREDIENT, "Carrot"), false);
         int shown = GreenhouseHologram.version();
-        assertFalse(GreenhouseHologram.shapes().isEmpty());
+        assertFalse(GreenhouseHologram.placements().isEmpty());
 
         GreenhouseHologram.hide();
 
         assertFalse(GreenhouseHologram.isShowing());
-        assertTrue(GreenhouseHologram.shapes().isEmpty());
+        assertTrue(GreenhouseHologram.placements().isEmpty());
         assertTrue(GreenhouseHologram.grid().isEmpty());
         assertNotEquals(shown, GreenhouseHologram.version());
     }
@@ -77,7 +73,7 @@ public final class GreenhouseHologramTest {
 
         assertTrue(message.orElseThrow().contains("unloaded"));
         assertFalse(GreenhouseHologram.isShowing());
-        assertTrue(GreenhouseHologram.shapes().isEmpty());
+        assertTrue(GreenhouseHologram.placements().isEmpty());
         assertTrue("the scan state goes too", GreenhouseScanner.ghosts(GreenhouseHologram.version()).isEmpty());
         assertEquals(-1, GreenhouseScanner.soilLayer(GreenhouseHologram.version()));
         assertNotEquals(shown, GreenhouseHologram.version());
@@ -97,9 +93,9 @@ public final class GreenhouseHologramTest {
 
         GreenhouseHologram.hide();
         assertEquals(new GreenhouseOrientation(1, true), GreenhouseHologram.orientation());
-        assertTrue(GreenhouseHologram.shapes().isEmpty());
+        assertTrue(GreenhouseHologram.placements().isEmpty());
         assertEquals("rotated 180 degrees clockwise, mirrored", GreenhouseHologram.rotate());
-        assertTrue("rotating while hidden shows nothing", GreenhouseHologram.shapes().isEmpty());
+        assertTrue("rotating while hidden shows nothing", GreenhouseHologram.placements().isEmpty());
     }
 
     @Test
@@ -182,7 +178,6 @@ public final class GreenhouseHologramTest {
         assertFalse(GreenhouseHologram.isShowing());
         assertFalse(GreenhouseHologram.isDrawn());
         assertTrue(GreenhouseHologram.grid().isEmpty());
-        assertTrue(GreenhouseHologram.shapes().isEmpty());
         assertTrue(GreenhouseHologram.placements().isEmpty());
         assertTrue("nothing is claimed", GreenhouseHologram.cellBoxes().isEmpty());
         assertTrue(GreenhouseHologram.soilGhosts().isEmpty());
@@ -395,7 +390,6 @@ public final class GreenhouseHologramTest {
         assertEquals(1, GreenhouseHologram.grid().orElseThrow().filled());
         assertEquals(1, GreenhouseHologram.placements().size());
         assertEquals(1, GreenhouseHologram.cellBoxes().size());
-        assertEquals(2, GreenhouseHologram.shapes().size());
     }
 
     @Test
@@ -415,8 +409,6 @@ public final class GreenhouseHologramTest {
         assertEquals(0x4D, cube.fill() >>> 24);
         assertEquals(0xE6, cube.outline() >>> 24);
         assertEquals(cube.fill() & 0xFFFFFF, cube.outline() & 0xFFFFFF);
-        // The frame and the post are the only boxes besides the models.
-        assertEquals(2, layout.shapes().size());
     }
 
     @Test
@@ -445,8 +437,6 @@ public final class GreenhouseHologramTest {
         assertEquals(0.16, slab.maxY(), EPSILON);
         assertEquals(0xFFFFD700, slab.outline());
         assertEquals(0x2E, slab.fill() >>> 24);
-        // Only the origin frame and post are always drawn; the slab belongs to the mutation spot.
-        assertEquals(2, layout.shapes().size());
     }
 
     @Test
@@ -468,34 +458,11 @@ public final class GreenhouseHologramTest {
     }
 
     @Test
-    public void cellZeroZeroIsAlwaysMarkedWithAFrameAndAPost() {
-        List<Shape> shapes = shapesOf(new GreenhouseGrid(), GreenhouseOrientation.IDENTITY);
-
-        assertEquals(2, shapes.size());
-        Shape frame = shapes.get(0);
-        Shape post = shapes.get(1);
-        // Default: cell (0, 0) is dx 0, dz 0, the north-west corner of the plot.
-        assertEquals(0.02, frame.minX(), EPSILON);
-        assertEquals(0.98, frame.maxX(), EPSILON);
-        assertEquals(0.02, frame.minZ(), EPSILON);
-        assertEquals(4.0F, frame.width(), 0);
-        assertEquals(0xFFFFFFFF, frame.outline());
-        assertTrue(post.maxY() > 1.5);
-        // Hugging the grid's outer corner (x 0, z 0) inside the cell.
-        assertEquals(0.04, post.minX(), EPSILON);
-        assertEquals(0.24, post.maxX(), EPSILON);
-        assertEquals(0.04, post.minZ(), EPSILON);
-        assertEquals(0.24, post.maxZ(), EPSILON);
-    }
-
-    @Test
-    public void theMarkerFollowsTheOrientation() {
-        List<Shape> mirrored = shapesOf(new GreenhouseGrid(), GreenhouseOrientation.IDENTITY.mirrored());
-
-        // Mirrored: cell (0, 0) is dx 9, dz 0 and the outer corner is (10, 0).
-        assertEquals(9.02, mirrored.get(0).minX(), EPSILON);
-        assertEquals(0.02, mirrored.get(0).minZ(), EPSILON);
-        assertEquals(9.76, mirrored.get(1).minX(), EPSILON);
-        assertEquals(0.04, mirrored.get(1).minZ(), EPSILON);
+    public void anEmptyGridDrawsNothingNotEvenAMarkerOnCellZeroZero() {
+        for (boolean mirror : new boolean[] {false, true}) {
+            var layout = GreenhouseHologramShapes.build(new GreenhouseGrid(), new GreenhouseOrientation(0, mirror));
+            assertTrue(layout.placements().isEmpty());
+            assertTrue(layout.cells().isEmpty());
+        }
     }
 }

@@ -110,12 +110,23 @@ public final class GreenhouseSoilCheckTest {
     @Test
     public void onlyTrustedSoilsAreChecked() {
         for (String crop : List.of("Nether Wart", "Wheat Seeds", "Carrot", "Potato", "Melon Seeds", "Pumpkin Seeds",
-            "Cindershade", "Lonelily", "Godseed")) {
+            "Cocoa Beans", "Cindershade", "Lonelily", "Godseed")) {
             assertTrue(crop, GreenhouseSoilCheck.trusted(crop));
         }
-        for (String crop : List.of("Cactus", "Sunflower", "Fire", "Sugar Cane", "Cocoa Beans", "Brown Mushroom")) {
+        for (String crop : List.of("Cactus", "Sunflower", "Fire", "Sugar Cane", "Brown Mushroom")) {
             assertFalse(crop, GreenhouseSoilCheck.trusted(crop));
         }
+    }
+
+    @Test
+    public void soulSandUnderCocoaBeansIsTheWrongBlock() {
+        // The player's greenhouse, 2026-11-07: cell (0, 0) held soul sand under Cocoa Beans and nothing was flagged.
+        String[] blocks = floor("minecraft:farmland");
+        blocks[0] = "minecraft:soul_sand";
+
+        List<Ghost> ghosts = GreenhouseSoilCheck.ghosts(List.of(new Footprint("Cocoa Beans", false, 0, 0, 1, 1)), blocks);
+
+        assertEquals(List.of(new Ghost(0, 0, Soil.FARMLAND, GhostKind.WRONG_BLOCK)), ghosts);
     }
 
     @Test
