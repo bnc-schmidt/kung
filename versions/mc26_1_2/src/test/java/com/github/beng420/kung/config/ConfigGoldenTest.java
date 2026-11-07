@@ -221,7 +221,10 @@ public final class ConfigGoldenTest {
     }
 
     private void assertGolden(String name, String actual) throws IOException {
-        String text = actual.endsWith("\n") ? actual : actual + "\n";
+        // Folder tooltips name the test working directory: a release worktree sits elsewhere than the main checkout.
+        String work = Path.of("").toAbsolutePath().toString();
+        String text = actual.replace(work, "<test-run>");
+        if (!text.endsWith("\n")) text += "\n";
         String expected = null;
         try {
             expected = resource(name).replace("\r\n", "\n");

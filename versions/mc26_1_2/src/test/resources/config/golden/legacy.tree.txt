@@ -294,10 +294,10 @@
       BUTTON Remove visible=true dev=false value=- tip=[] resettable=false
   * Custom Sounds enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Plays your own sound files on an arrow hit and when the Wither shield ends.]
     BUTTON Sound Settings visible=true dev=false value=Open tip=[Pick a sound for each event from the folder's files, and set its volume and pitch.] resettable=false
-    BUTTON Sound Folder visible=true dev=false value=Open tip=[Drop .wav, .mp3 or .aiff files in here:, D:\Downloads\macros\kung\versions\mc26_1_2\build\test-run\config\kung\custom-sounds] resettable=false
+    BUTTON Sound Folder visible=true dev=false value=Open tip=[Drop .wav, .mp3 or .aiff files in here:, <test-run>\config\kung\custom-sounds] resettable=false
   * Menu Font enabled=false clickable=false actionOnly=false pinned=false dev=false tip=[The font Kung's own menus draw with; the game's own text stays untouched.]
     CHOICE Font visible=true dev=false value=Inter of [Inter, Minecraft] tip=[Inter is Kung's bundled font, Minecraft is the game's own., Every .ttf in the font folder shows up here as well.] resettable=false
-    BUTTON Font Folder visible=true dev=false value=Open tip=[Drop .ttf files in here:, D:\Downloads\macros\kung\versions\mc26_1_2\build\test-run\config\kung\fonts] resettable=false
+    BUTTON Font Folder visible=true dev=false value=Open tip=[Drop .ttf files in here:, <test-run>\config\kung\fonts] resettable=false
     CHOICE Google Font visible=true dev=false value=Roboto of [Roboto, Open Sans, Lato, Montserrat, Poppins, Source Sans 3, Noto Sans, Nunito, Work Sans, Rubik, Karla, Manrope, IBM Plex Sans, Fira Sans, Oswald, Bebas Neue, JetBrains Mono, Fira Code, IBM Plex Mono, Roboto Mono, Space Mono, Press Start 2P, VT323, Silkscreen] tip=[] resettable=false
     BUTTON Download visible=true dev=false value=Get tip=[Downloads the family above into the font folder and switches to it.] resettable=false
     LABEL Drop .ttf files in the folder, or download one visible=true dev=false value= tip=[] resettable=false
