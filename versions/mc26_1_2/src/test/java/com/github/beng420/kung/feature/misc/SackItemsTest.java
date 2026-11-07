@@ -122,14 +122,40 @@ public class SackItemsTest {
     @Test
     public void anApiAnswerAddsTheLostPickUpsToTheCurrentCount() {
         // The chat held 3,690 at the warp and 3,700 now; the API holds 3,704: 14 were lost, so 3,714.
-        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, 3_690, false));
-        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, 3_690, true));
-        // The same count settles a row only on the last ask: an earlier one may be an older snapshot.
-        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_690, 3_690, false));
-        assertEquals(3_700, SackTrackerFeature.resolvedAmount(3_700, 3_690, 3_690, true));
-        // Less than the count at the warp is an older snapshot, even on the last ask: the count is never lowered.
-        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, 3_690, false));
-        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, 3_690, true));
+        var counted = List.of(3_690L, 3_700L);
+        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, counted, null, false));
+        assertEquals(3_714, SackTrackerFeature.resolvedAmount(3_700, 3_704, counted, null, true));
+        // The same count settles a row only once the API surely refreshed: an earlier one may be an older snapshot.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_690, counted, null, false));
+        assertEquals(3_700, SackTrackerFeature.resolvedAmount(3_700, 3_690, counted, null, true));
+        // Less than the count at the warp is an older snapshot, even when fresh: the count is never lowered.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, counted, null, false));
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(3_700, 3_000, counted, null, true));
+    }
+
+    @Test
+    public void aLaterApiSaveDoesNotCountTheGrindedPickUpsTwice() {
+        // 1,000 at the warp, then the chat counted +300 and +250. The API said 1,000 at the warp: no loss yet.
+        var counted = List.of(1_000L, 1_300L, 1_550L);
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(1_550, 1_000, counted, 1_000L, false));
+        // A later save holds the first message's count exactly: nothing was lost, the row settles unchanged.
+        assertEquals(1_550, SackTrackerFeature.resolvedAmount(1_550, 1_300, counted, 1_000L, false));
+        // A later save 14 above that count: 14 were lost, the grinded part is already in the current count.
+        assertEquals(1_564, SackTrackerFeature.resolvedAmount(1_550, 1_314, counted, 1_000L, false));
+        // An answer that never changed from the warp save is still no news before the API surely refreshed.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(1_550, 1_000, counted, 1_000L, false));
+        assertEquals(1_550, SackTrackerFeature.resolvedAmount(1_550, 1_000, counted, 1_000L, true));
+        // Below every count is a snapshot older than the change.
+        assertEquals(-1, SackTrackerFeature.resolvedAmount(1_550, 900, counted, 1_000L, true));
+    }
+
+    @Test
+    public void aRowWithoutAnIdTakesItFromItsNameWhenThatIsASackItem() {
+        assertEquals("ENCHANTED_COAL", SackTrackerFeature.guessedId("Enchanted Coal"));
+        assertEquals("ENCHANTED_PACKED_ICE", SackTrackerFeature.guessedId(" Enchanted Packed Ice "));
+        // Names that differ from their id, and gem rows, stay empty until their sack is opened once.
+        assertEquals("", SackTrackerFeature.guessedId("Lily Pad"));
+        assertEquals("", SackTrackerFeature.guessedId("Onyx Gemstones"));
     }
 
     @Test

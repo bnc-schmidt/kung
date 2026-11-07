@@ -79,9 +79,15 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     private static final long ACTIVE_MILLIS = 5 * 60_000L;
     /**
      * After a world change marked rows "~" the API is asked after 4, 12, 30, 90 and 220 s (the ticks between): Hypixel
-     * saves a profile at a world change, and about every 3 minutes besides. The 220 s ask is the last one.
+     * saves a profile at a world change, and about every 3 minutes besides. By the 220 s ask it surely saved again.
      */
     private static final int[] RESYNC_DELAYS = {80, 160, 360, 1200, 2600};
+    /** From this ask on, the API surely refreshed since the world change. */
+    private static final int FRESH_ASK = RESYNC_DELAYS.length - 1;
+    /** A row still marked after the scheduled asks is asked about once a minute. */
+    private static final int REPEAT_TICKS = 1200;
+    /** The asks in all (about 25 minutes), after which the marked rows keep their "~" until a sack is read. */
+    private static final int MAX_ASKS = 30;
     /** The first ask also checks the rows without a "~"; only marked rows are asked again. */
     private static final int QUIET_ASKS = 1;
     /** The Hypixel key is shared by every Kung player: one player may ask this often per 5 minutes. */
@@ -114,10 +120,12 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
     /** The rows grinded when the connection dropped: Hypixel loses their unreported pick-ups too, so they get the "~" once the profile is back. */
     private List<String> activeBeforeLeaving = List.of();
     private int ticksUntilSync;
-    /** Each marked row's count at the world change: the API holds what the chat lost on top of it. */
-    private final Map<SackItem, Long> amountAtChange = new java.util.IdentityHashMap<>();
+    /** Each row's count at the world change, then after every [Sacks] message since: the API holds what the chat lost on top of them. */
+    private final Map<SackItem, List<Long>> trail = new java.util.IdentityHashMap<>();
+    /** What the API said the first time it was asked for a row after the change: the profile as saved at the change. */
+    private final Map<SackItem, Long> firstApi = new java.util.IdentityHashMap<>();
     private final java.util.ArrayDeque<Long> resyncRequests = new java.util.ArrayDeque<>();
-    /** The next API ask (an index into RESYNC_DELAYS), -1 when none is due. */
+    /** The next API ask (an index into the schedule, see {@link #delayTicks}), -1 when none is due. */
     private int resyncStep = -1;
     private int ticksToResync;
     private boolean resyncInFlight;
@@ -182,7 +190,7 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         syncedAt.clear();
         changedAt.clear();
         approximate.clear();
-        amountAtChange.clear();
+        trail.clear();
         resyncStep = -1;
         // ponytail: matched by name, not profile - after a reconnect into another profile a same-named row gets a needless "~".
         if (config().sackTrackerProfileKnown()) {
@@ -363,22 +371,39 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
      */
     private void startResync() {
         resyncGeneration++;
-        amountAtChange.clear();
+        trail.clear();
+        firstApi.clear();
         for (SackItem item : config().sackTrackerAllItems()) {
-            if (!item.id().isEmpty() && item.amount() >= 0) amountAtChange.put(item, item.amount());
+            // A row whose sack was never opened with an id-reading jar has none: most names are their id in capitals.
+            if (item.id().isEmpty()) config().setSackTrackerId(item, guessedId(item.name()));
+            if (!item.id().isEmpty() && item.amount() >= 0) trail.put(item, new ArrayList<>(List.of(item.amount())));
         }
-        resyncStep = !amountAtChange.isEmpty() && config().sackTrackerApiResync() ? 0 : -1;
-        ticksToResync = RESYNC_DELAYS[0];
+        resyncStep = !trail.isEmpty() && config().sackTrackerApiResync() ? 0 : -1;
+        ticksToResync = delayTicks(0);
+    }
+
+    /** "Enchanted Coal" is ENCHANTED_COAL; empty when that is no sack item (a name that differs from its id). */
+    static String guessedId(String name) {
+        String id = name.strip().toUpperCase(Locale.ROOT).replace(' ', '_');
+        return SackItems.contains(id) ? id : "";
+    }
+
+    /** The scheduled asks first, then one a minute while a row stays marked. */
+    private static int delayTicks(int step) {
+        return step < RESYNC_DELAYS.length ? RESYNC_DELAYS[step] : REPEAT_TICKS;
     }
 
     private void tickResync(Minecraft client) {
         if (resyncStep < 0 || resyncInFlight || client.player == null || --ticksToResync > 0) return;
         long now = System.currentTimeMillis();
         while (!resyncRequests.isEmpty() && now - resyncRequests.peekFirst() > 300_000L) resyncRequests.removeFirst();
-        if (!tracking() || amountAtChange.isEmpty() || approximate.isEmpty() && resyncStep >= QUIET_ASKS
-            || HypixelSkyBlockProfileClient.sackSource().isEmpty()
-            || resyncRequests.size() >= RESYNC_MAX_PER_5_MIN) {
+        if (!tracking() || trail.isEmpty() || approximate.isEmpty() && resyncStep >= QUIET_ASKS
+            || HypixelSkyBlockProfileClient.sackSource().isEmpty()) {
             resyncStep = -1; // the sack was read or the API cannot be asked: the rows keep their "~"
+            return;
+        }
+        if (resyncRequests.size() >= RESYNC_MAX_PER_5_MIN) {
+            ticksToResync = 200; // the shared key is spared: this ask waits for room in the window
             return;
         }
         resyncRequests.addLast(now);
@@ -394,9 +419,9 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             }));
     }
 
-    /** Rows the API settles lose their "~"; the others stay marked and are asked again until the last ask. */
+    /** Rows the API settles lose their "~"; the others stay marked and are asked again, for as long as {@link #MAX_ASKS} allows. */
     private void applyApi(SackCounts counts, int step) {
-        boolean last = step == RESYNC_DELAYS.length - 1;
+        boolean fresh = step >= FRESH_ASK;
         String profile = config().sackTrackerProfileName();
         if (!tracking() || !profile.isBlank() && !counts.profile().isBlank() && !profile.equalsIgnoreCase(counts.profile())) {
             KungDebugRecorder.event("sack-tracker", "api resync dropped: the API's profile " + counts.profile() + " is not " + profile);
@@ -404,57 +429,71 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
             return;
         }
         boolean pending = false;
-        for (SackItem item : List.copyOf(amountAtChange.keySet())) {
+        for (SackItem item : List.copyOf(trail.keySet())) {
             boolean marked = approximate.contains(item);
             Long api = counts.counts().get(item.id());
-            long before = amountAtChange.get(item);
+            List<Long> counted = trail.get(item);
             if (api == null) {
                 if (marked) KungDebugRecorder.event("sack-tracker", "api resync " + item.name() + " id=" + item.id() + " is not in the answer");
                 continue;
             }
+            Long first = firstApi.putIfAbsent(item, api);
             // A row without "~" has nothing to wait for: only found pick-ups change it, the same count is no news.
-            long resolved = resolvedAmount(item.amount(), api, before, last && marked);
+            long resolved = resolvedAmount(item.amount(), api, counted, first, fresh && marked);
             if (marked || resolved >= 0 && resolved != item.amount()) {
                 KungDebugRecorder.event("sack-tracker", "api resync ask " + (step + 1) + " " + item.name() + " " + item.id()
-                    + " api=" + api + " atChange=" + before + " tracked=" + item.amount()
-                    + (resolved < 0 ? " not yet" : " -> " + resolved));
+                    + " api=" + api + " first=" + first + " counts=" + counted.size() + " atChange=" + counted.getFirst()
+                    + " tracked=" + item.amount() + (resolved < 0 ? " not yet" : " -> " + resolved));
             }
             if (resolved < 0) {
-                pending |= marked;
+                if (marked) pending = true;
+                else trail.remove(item);
                 continue;
             }
             setAmount(item, resolved);
             approximate.remove(item);
-            amountAtChange.remove(item);
+            trail.remove(item);
         }
-        resyncStep = (pending || step + 1 < QUIET_ASKS) && !last ? step + 1 : -1;
-        if (resyncStep >= 0) ticksToResync = RESYNC_DELAYS[resyncStep];
+        resyncStep = (pending || step + 1 < QUIET_ASKS) && step + 1 < MAX_ASKS ? step + 1 : -1;
+        if (resyncStep >= 0) ticksToResync = delayTicks(resyncStep);
     }
 
     private void apiFailed(Throwable error, int step) {
         Throwable cause = error instanceof CompletionException && error.getCause() != null ? error.getCause() : error;
         String reason = String.valueOf(cause.getMessage());
         KungDebugRecorder.event("sack-tracker", "api resync ask " + (step + 1) + " failed: " + reason);
-        // A limit (429) will not pass in seconds: stop, the rows keep their "~" until the sack is read.
-        int next = reason.contains("429") ? -1 : step + 1;
-        resyncStep = next < RESYNC_DELAYS.length ? next : -1;
-        if (resyncStep >= 0) ticksToResync = RESYNC_DELAYS[resyncStep];
+        resyncStep = step + 1 < MAX_ASKS ? step + 1 : -1;
+        // A limit (429) will not pass in seconds: the next ask waits two minutes.
+        if (resyncStep >= 0) ticksToResync = reason.contains("429") ? Math.max(delayTicks(resyncStep), 2400) : delayTicks(resyncStep);
     }
 
     /**
-     * What an API answer makes of a row marked "~", given the row's count when the world changed. More than that
-     * count means the chat lost pick-ups, and the difference is added to the current count. The same count is exact
-     * only on the last ask, once the API surely refreshed since the change; less is an older snapshot. -1: not yet.
+     * What an API answer makes of a row's count, -1 for not yet. {@code counted} holds the row's count at the world
+     * change and after each message since. The first answer, and the same one again, is the profile as saved at the
+     * change: more than the count then is what the chat lost, added to the current count. An answer that changed
+     * since is a later save and holds pick-ups the chat counted too, so it is matched with the highest count not above
+     * it, and only the rest was lost; a count it equals settles the row. The same count as at the change settles a row
+     * only once the API surely refreshed since; less than every count is an older snapshot.
      */
-    static long resolvedAmount(long current, long api, long amountAtChange, boolean last) {
-        long lost = api - amountAtChange;
+    static long resolvedAmount(long current, long api, List<Long> counted, Long firstApi, boolean fresh) {
+        boolean atChange = firstApi == null || api == firstApi;
+        long base = counted.getFirst();
+        if (!atChange) {
+            base = Long.MIN_VALUE;
+            for (long count : counted) {
+                if (count <= api) base = Math.max(base, count);
+            }
+            if (base == Long.MIN_VALUE) return -1;
+        }
+        long lost = api - base;
         if (lost > 0) return current + lost;
-        return lost == 0 && last ? current : -1;
+        return lost == 0 && (!atChange || fresh) ? current : -1;
     }
 
     private void markSynced(SackItem item) {
         syncedAt.put(item, System.currentTimeMillis());
         approximate.remove(item);
+        trail.remove(item); // the sack showed the true count: nothing left for the API to add
     }
 
     private void syncOpenSack(Minecraft client) {
@@ -554,6 +593,8 @@ public final class SackTrackerFeature extends ConfigurableFeature<MiscConfig> {
         KungDebugRecorder.event("sack-tracker", "message " + name + " " + (delta > 0 ? "+" : "") + delta
             + (counted != delta ? " counted " + counted : "") + " -> " + (item.amount() + counted));
         setAmount(item, item.amount() + counted);
+        List<Long> counts = trail.get(item);
+        if (counts != null) counts.add(item.amount());
     }
 
     /** "(Last 26s.)" or "(Last 1m 5s.)" of a [Sacks] message: how long the pick-ups it sums took; 0 when it says nothing. */
