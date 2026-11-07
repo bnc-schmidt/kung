@@ -1,5 +1,6 @@
 package com.github.beng420.kung.command;
 
+import static com.github.beng420.kung.command.CommandTestSupport.kung;
 import static com.github.beng420.kung.command.CommandTestSupport.parse;
 import static com.github.beng420.kung.command.CommandTestSupport.userDispatcher;
 import static org.junit.Assert.*;
@@ -32,5 +33,29 @@ public class CommandAliasesTest {
         assertFalse(executable(dispatcher, "kung personalbest"));
         assertTrue(executable(dispatcher, "kung jerry"));
         assertTrue(executable(dispatcher, "kung greenhouse dump"));
+    }
+
+    @Test
+    public void wpAndWpsAreWaypointsWithAllItsSubcommands() {
+        var dispatcher = kung(WaypointCommandGroup::register);
+        for (String name : new String[] {"waypoints", "wp", "wps"}) {
+            for (String rest : new String[] {"", " list", " group new Mines", " move 1 2 up", " import here"}) {
+                var parsed = parse(dispatcher, "kung " + name + rest);
+                // An alias is a redirect, so the command to run sits in the last child context.
+                assertTrue(name + rest, parsed.getExceptions().isEmpty() && !parsed.getReader().canRead()
+                    && parsed.getContext().getLastChild().getCommand() != null);
+            }
+        }
+        var unknown = parse(dispatcher, "kung wpx");
+        assertFalse(unknown.getExceptions().isEmpty() && !unknown.getReader().canRead());
+    }
+
+    @Test
+    public void guiAndEditOpenTheHudEditorLikeHud() {
+        var dispatcher = userDispatcher();
+        for (String name : new String[] {"hud", "gui", "edit"}) {
+            assertTrue(name, executable(dispatcher, "kung " + name));
+        }
+        assertFalse(executable(dispatcher, "kung gui extra"));
     }
 }

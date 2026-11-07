@@ -34,6 +34,10 @@ final class UserCommandGroup {
             .then(literal("preview")
                 .then(literal("updates").executes(KungCommandActions::previewUpdateNotification)))
             .then(literal("hud").executes(context -> KungCommandActions.openHudEditor(context, tracker)));
+        // /kung gui and /kung edit are more names for /kung hud.
+        for (String name : new String[] {"gui", "edit"}) {
+            root.then(literal(name).executes(context -> KungCommandActions.openHudEditor(context, tracker)));
+        }
         // /kung pbs and /kung personalbests are more names for /kung splits.
         Command<FabricClientCommandSource> openSplits = context -> KungCommandActions.openSplitPersonalBests(context, tracker);
         for (String name : new String[] {"splits", "pbs", "personalbests"}) {
