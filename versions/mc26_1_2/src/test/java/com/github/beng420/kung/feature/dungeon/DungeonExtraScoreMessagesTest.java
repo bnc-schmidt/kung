@@ -72,7 +72,7 @@ public final class DungeonExtraScoreMessagesTest {
     }
 
     @Test
-    public void skyblockerBonusesAreIdempotentSilentAndResetWithTheRun() throws Exception {
+    public void skyblockerBonusesAreIdempotentAndResetWithTheRun() throws Exception {
         var previous = KungConfig.get().dungeon;
         KungConfig.get().dungeon = new DungeonConfig();
         KungConfig.get().dungeon.setExtraScoreMessagesEnabled(true);
@@ -92,7 +92,7 @@ public final class DungeonExtraScoreMessagesTest {
             assertTrue(stats.princeKilled());
             assertTrue(stats.batScoreKilled());
             assertFalse(requested(stats, "mimicMessageSent"));
-            assertFalse(requested(stats, "princeMessageSent"));
+            assertTrue("Hypixel's own line is yours, whatever was reported before", requested(stats, "princeMessageSent"));
             assertFalse(requested(stats, "batMessageSent"));
             assertEquals("", stats.playerStats(new java.util.UUID(0, 1)).bonusMarkers());
             stats.resetForCountdown();
@@ -200,7 +200,7 @@ public final class DungeonExtraScoreMessagesTest {
     }
 
     @Test
-    public void mimicTraceSeparatesDisabledOwnDetectionFromPartyEvidenceWithoutEchoes() throws Exception {
+    public void aTeammatesReportNeverStopsYourOwnMimicOrPrinceMessage() throws Exception {
         var previous = KungConfig.get().dungeon;
         var config = new DungeonConfig();
         KungConfig.get().dungeon = config;
@@ -216,14 +216,24 @@ public final class DungeonExtraScoreMessagesTest {
             config.setExtraScoreMessagesEnabled(true);
             var reportedKill = new DungeonRunStats();
             reportedKill.observeMessage(null, "Party > [MVP+] starziiiii: Mimic Killed!", 100L);
+            assertFalse(requested(reportedKill, "mimicMessageSent"));
             reportedKill.observeMimicEspKill(null, "entity-death");
             assertTrue(reportedKill.mimicKilled());
-            assertFalse(requested(reportedKill, "mimicMessageSent"));
+            assertTrue("the report came first, and Kung still says it", requested(reportedKill, "mimicMessageSent"));
             String trace = KungDebugRecorder.dump();
             assertTrue(trace.contains("source=chat first=true"));
             assertTrue(trace.contains("suppressed=reported-kill"));
             assertTrue(trace.contains("source=entity-death first=false"));
-            assertTrue(trace.contains("suppressed=already-killed"));
+            reportedKill.observeMimicEspKill(null, "mimic-death-at-chest");
+            assertTrue(KungDebugRecorder.dump().contains("suppressed=already-announced"));
+
+            config.setPrinceMessageEnabled(true);
+            var reportedPrince = new DungeonRunStats();
+            reportedPrince.observeMessage(null, "Party > [VIP] gemothic: Prince Killed!", 200L);
+            assertFalse(requested(reportedPrince, "princeMessageSent"));
+            reportedPrince.observeMessage(null, "A Prince falls. +1 Bonus Score", 201L);
+            assertTrue(reportedPrince.princeKilled());
+            assertTrue(requested(reportedPrince, "princeMessageSent"));
         } finally {
             KungConfig.get().dungeon = previous;
             KungDebugRecorder.clear();

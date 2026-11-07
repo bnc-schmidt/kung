@@ -88,6 +88,29 @@ public final class DungeonMimicPersistenceTest {
         assertNull(DungeonMimicEspFeature.mimicDeathAtChest(stats, List.of(chest), List.of(atChest), 1010L, opened));
     }
 
+    @Test public void aFinishedRoomWithoutItsChestCountsAsYourMimicKillButNotWhileAnyChestCouldStillBeThere() {
+        // Trace 15:44: a teammate opened the chest out of sight; Kung only remembered it, the room turned green.
+        var chest = new BlockPos(-185, 69, -188);
+        var other = new BlockPos(-122, 78, -22);
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(7, true);
+        Predicate<BlockPos> done = pos -> true;
+        Predicate<BlockPos> gone = pos -> true;
+        assertTrue(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(chest), done, gone));
+
+        // Secrets missing, the chest still trapped or in an unloaded chunk: the team may have skipped the Mimic.
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(chest), pos -> false, gone));
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(chest), done, pos -> false));
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(chest, other), done, chest::equals));
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(), done, gone));
+
+        var noMimicFloor = new DungeonRunStats();
+        noMimicFloor.configureForFloor(5, false);
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(noMimicFloor, List.of(chest), done, gone));
+        stats.observeMimicEspKill(null, "room-done-no-chest");
+        assertFalse(DungeonMimicEspFeature.mimicRoomDoneWithoutChest(stats, List.of(chest), done, gone));
+    }
+
     @Test public void combatXpActionbarWithThousandsSeparatorsStillCountsAsKillXp() {
         var pattern = DungeonMimicEspFeature.COMBAT_XP_PATTERN;
         assertTrue(pattern.matcher("+1,251.9 Combat (722,792,684/0) 0/3 Secrets").matches());

@@ -145,6 +145,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         observeMimicRooms();
         logCandidateState(renderPlan);
         observeMimicEntityState(client);
+        observeFinishedMimicRoom(client);
         logState();
     }
 
@@ -336,10 +337,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
                 || !isAllowedMimicPosition(client, renderPlan, previous)) {
                 continue;
             }
-            if (!client.level.hasChunk(previous.getX() >> 4, previous.getZ() >> 4)
-                || client.level.getBlockState(previous).is(Blocks.TRAPPED_CHEST)) {
-                continue;
-            }
+            if (!chestOpened(client, previous)) continue;
             mimicEncounterActive = true;
             mimicChestOpenedTick = nowTick;
             KungDebugRecorder.event("mimic-esp", "mimic chest opened pos="
@@ -363,10 +361,8 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         }
 
         long nowTick = tracker.dungeonTick();
-        // Same test as observeOpenedMimicChest: a loaded chunk whose chest block is no longer trapped.
         var death = mimicDeathAtChest(tracker.runStats(), lastKnownMimicChestPositions, tracker.babyZombieDeaths(), nowTick,
-            chest -> client.level.hasChunk(chest.getX() >> 4, chest.getZ() >> 4)
-                && !client.level.getBlockState(chest).is(Blocks.TRAPPED_CHEST));
+            chest -> chestOpened(client, chest));
         if (death != null) {
             KungDebugRecorder.event("mimic-esp", "mimic death at chest pos=" + xyz(death.pos())
                 + " age=" + (nowTick - death.tick()) + " opened=true");
@@ -384,6 +380,50 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
         // Entities also disappear when leaving their tracking range. That is not a kill.
         if (!currentIds.isEmpty()) mimicEncounterActive = true;
         observedMimicEntityIds = currentIds;
+    }
+
+    /** A loaded chunk whose chest block is no longer a trapped chest: the chest was opened. */
+    private static boolean chestOpened(Minecraft client, BlockPos chest) {
+        return client.level.hasChunk(chest.getX() >> 4, chest.getZ() >> 4)
+            && !client.level.getBlockState(chest).is(Blocks.TRAPPED_CHEST);
+    }
+
+    /** The Mimic's room shows the green check (every secret found), on whichever of its cells carries it. */
+    private static boolean allSecretsFound(DungeonLiveMapWriter.MatchRenderPlan plan, BlockPos chest) {
+        DungeonLiveMapWriter.CellKey cell = cellOf(chest);
+        if (cell == null) return false;
+        String owner = plan.roomOwners().get(cell);
+        return plan.completedRooms().stream()
+            .anyMatch(done -> done.equals(cell) || owner != null && owner.equals(plan.roomOwners().get(done)));
+    }
+
+    /**
+     * Nobody saw the Mimic die (a teammate opened its chest out of sight), but its room has every secret found and the
+     * chest we knew is gone: count it as your own kill, with map, score, message and room marker.
+     */
+    private void observeFinishedMimicRoom(Minecraft client) {
+        if (client.level == null) return;
+        var plan = tracker.renderPlan();
+        if (!mimicRoomDoneWithoutChest(tracker.runStats(), lastKnownMimicChestPositions,
+            chest -> allSecretsFound(plan, chest), chest -> chestOpened(client, chest))) {
+            return;
+        }
+        KungDebugRecorder.event("mimic-esp", "mimic room done, chest gone pos=" + xyz(lastKnownMimicChestPositions.getFirst()));
+        completeMimic(client, "room-done-no-chest");
+    }
+
+    /**
+     * Every remembered Mimic chest sits in a room with all secrets found and is gone from a loaded chunk. A chest in an
+     * unloaded chunk, or one still trapped, may be a Mimic the team skipped, so one such chest stops the rule.
+     */
+    static boolean mimicRoomDoneWithoutChest(
+        DungeonRunStats stats,
+        List<BlockPos> chests,
+        Predicate<BlockPos> allSecretsFound,
+        Predicate<BlockPos> opened
+    ) {
+        return stats.hasMimic() && !stats.mimicKilled() && !chests.isEmpty()
+            && chests.stream().allMatch(chest -> allSecretsFound.test(chest) && opened.test(chest));
     }
 
     /**
