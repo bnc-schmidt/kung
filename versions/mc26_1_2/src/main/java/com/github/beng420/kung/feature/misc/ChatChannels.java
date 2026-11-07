@@ -16,7 +16,9 @@ public final class ChatChannels {
     private static final Pattern CLOCK_STAMP =
         Pattern.compile("\\[(?:[0-9./-]+ )?\\d{1,2}:\\d{2}(?::\\d{2})?(?: ?[AaPp][Mm])?]\\s*");
     private static final Pattern SWITCH_NOTICE = Pattern.compile("You are now in the (.+) channel");
-    private static final Pattern MOVED_NOTICE = Pattern.compile("You are not in a party and were moved to the ALL channel\\.?");
+    /** Hypixel moves you to ALL on its own: when the party is gone, and when a chat conversation lapsed. */
+    private static final Pattern MOVED_NOTICE = Pattern.compile("(?:You are not in a party and were moved to"
+        + "|The conversation you were in expired and you have been moved back to) the ALL channel\\.?");
     private static final Pattern CHAT_COMMAND = Pattern.compile("/?chat\\s+(\\S+)\\s*", Pattern.CASE_INSENSITIVE);
     private static final String ALREADY_NOTICE = "You're already in this channel!";
     /** Every line of a kind starts with one of these; most lines do not, and skip the patterns. */
@@ -83,6 +85,41 @@ public final class ChatChannels {
                 case GUILD, OFFICER -> Channel.GUILD;
                 case COOP -> Channel.COOP;
             };
+        }
+    }
+
+    /**
+     * The chat conversation Hypixel opens with one player (a /msg without text): your messages go to them until it
+     * lapses, {@code window} after the last message you sent. Hypixel then moves you to ALL with a notice; until that
+     * arrives, the session counts as ended.
+     */
+    public record Conversation(String name, long window, long endsAt) {
+        private static final Pattern OPENED = Pattern.compile(
+            "Opened a chat conversation with (?:\\[[^\\]]+] )*(\\w{1,16}) for the next (\\d{1,3}) minutes?\\..*");
+        private static final Pattern SENT = Pattern.compile("To (?:\\[[^\\]]+] )*(\\w{1,16}): .*");
+
+        /** The conversation a notice opens, or null for any other line. */
+        public static Conversation opened(String text, long now) {
+            if (text == null) return null;
+            Matcher notice = OPENED.matcher(HypixelLocation.clean(text));
+            if (!notice.matches()) return null;
+            long window = Long.parseLong(notice.group(2)) * 60_000L;
+            return new Conversation(notice.group(1), window, now + window);
+        }
+
+        public boolean ended(long now) { return now >= endsAt; }
+
+        /** This conversation after a line: your own message to its player, in time, starts the window again. */
+        public Conversation after(String text, long now) {
+            if (ended(now)) return this;
+            Matcher sent = SENT.matcher(HypixelLocation.clean(text));
+            return sent.matches() && sent.group(1).equalsIgnoreCase(name) ? new Conversation(name, window, now + window) : this;
+        }
+
+        /** The time left as "4:32", rounded up. */
+        public String left(long now) {
+            long seconds = (Math.max(0, endsAt - now) + 999) / 1000;
+            return seconds / 60 + ":" + (seconds % 60 < 10 ? "0" : "") + seconds % 60;
         }
     }
 

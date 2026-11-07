@@ -17,12 +17,16 @@ import net.minecraft.resources.Identifier;
 
 /**
  * "Chat: Party": the channel Hypixel sends your next message to. {@link ChatChannelsFeature} reads it from the
- * "You are now in the PARTY channel" notices, from /chat sent by you and from the tabs. It shows only while the chat
- * is open, and the channel is saved, so it is still there after a restart.
+ * "You are now in the PARTY channel" notices, from /chat sent by you and from the tabs. In a chat conversation it
+ * shows the player and the time left instead. It shows only while the chat is open, and the channel is saved, so it
+ * is still there after a restart.
  */
 public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscConfig> {
     public static final CurrentChatDisplayFeature INSTANCE = new CurrentChatDisplayFeature();
     private static final int LABEL_COLOR = 0x55FF55;
+    private static final int DM_COLOR = 0xFF55FF;
+    private static final int TIMER_COLOR = 0xAAAAAA;
+    private static final int ENDED_COLOR = 0xFF5555;
     private static final int PAD = 4;
     private static final int HEIGHT = 16;
     /** "Chat: Officer" in the default font, with the padding. */
@@ -43,13 +47,22 @@ public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscCon
         var client = Minecraft.getInstance();
         if (!isEnabled() || client.level == null || !(McCompat.screen(client) instanceof ChatScreen) || McCompat.hudHidden(client)
             || KungHudEditorState.externalEditing()) return;
-        draw(graphics, config(), ChatChannelsFeature.send());
+        draw(graphics, config(), ChatChannelsFeature.send(), ChatChannelsFeature.conversation());
     }
 
-    private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, ChatChannels.Send send) {
+    /** A chat conversation shows the player and the time left, or "session ended"; else the channel. */
+    private static void draw(GuiGraphicsExtractor graphics, MiscConfig config, ChatChannels.Send send,
+        ChatChannels.Conversation conversation) {
         var font = Minecraft.getInstance().font;
-        var line = Component.literal("Chat: ").withColor(LABEL_COLOR)
-            .append(Component.literal(send.label()).withColor(send.color()));
+        var line = Component.literal("Chat: ").withColor(LABEL_COLOR);
+        if (conversation == null) {
+            line.append(Component.literal(send.label()).withColor(send.color()));
+        } else {
+            long now = System.currentTimeMillis();
+            line.append(Component.literal(conversation.name()).withColor(DM_COLOR));
+            line.append(conversation.ended(now) ? Component.literal(" - session ended").withColor(ENDED_COLOR)
+                : Component.literal(" " + conversation.left(now)).withColor(TIMER_COLOR));
+        }
         HudPose.begin(graphics, config.currentChatDisplayX(), config.currentChatDisplayY(),
             config.currentChatDisplayScale() / 100F);
         try {
@@ -60,7 +73,7 @@ public final class CurrentChatDisplayFeature extends ConfigurableFeature<MiscCon
     }
 
     public static void drawPreview(GuiGraphicsExtractor graphics, MiscConfig config) {
-        draw(graphics, config, ChatChannels.Send.PARTY);
+        draw(graphics, config, ChatChannels.Send.PARTY, null);
     }
 
     public static KungHudLayout.Bounds overlayBounds(MiscConfig config) {

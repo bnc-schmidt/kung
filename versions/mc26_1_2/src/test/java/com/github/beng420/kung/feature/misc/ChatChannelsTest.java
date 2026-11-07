@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.misc;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
+import static org.junit.Assert.assertSame;
 import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.feature.misc.ChatChannels.Channel;
@@ -110,6 +111,9 @@ public final class ChatChannelsTest {
         assertEquals(ChatChannels.Send.COOP, ChatChannels.switchNotice("You are now in the SKYBLOCK CO-OP channel"));
         assertEquals(ChatChannels.Send.ALL,
             ChatChannels.switchNotice("You are not in a party and were moved to the ALL channel."));
+        // Trace 2026-11-06: a lapsed chat conversation ends in the ALL channel.
+        assertEquals(ChatChannels.Send.ALL, ChatChannels.switchNotice(
+            "The conversation you were in expired and you have been moved back to the ALL channel."));
         assertNull(ChatChannels.switchNotice("You are now in the MYSTERY channel"));
         assertNull(ChatChannels.switchNotice("[MVP+] Araqz: You are now in the PARTY channel"));
         assertNull(ChatChannels.switchNotice("Party > [MVP+] Araqz: You are now in the PARTY channel"));
@@ -144,6 +148,35 @@ public final class ChatChannelsTest {
         assertNull(ChatChannels.chatCommand("chat party hello"));
         assertNull(ChatChannels.chatCommand("chat nonsense"));
         assertNull(ChatChannels.chatCommand(null));
+    }
+
+    @Test
+    public void aConversationLastsFiveMinutesFromYourLastMessageToItsPlayer() {
+        long start = 1_000_000L;
+        // The notice and the "To" lines are from the trace of 2026-11-04.
+        var open = ChatChannels.Conversation.opened(
+            "Opened a chat conversation with [MVP++] gardenman for the next 5 minutes. Use /chat a to leave", start);
+        assertEquals("gardenman", open.name());
+        assertEquals("5:00", open.left(start));
+        assertEquals("4:30", open.left(start + 30_000));
+        assertEquals("rounded up", "0:01", open.left(start + 299_500));
+        assertFalse(open.ended(start + 299_999));
+        assertTrue(open.ended(start + 300_000));
+
+        var renewed = open.after("To [MVP++] gardenman: lol", start + 100_000);
+        assertEquals("5:00", renewed.left(start + 100_000));
+        assertEquals("a rankless player is the same", "5:00",
+            open.after("To gardenman: lol", start + 100_000).left(start + 100_000));
+        assertSame("a message from them does not", open, open.after("From [MVP++] gardenman: hi", start + 100_000));
+        assertSame("a message to someone else does not", open, open.after("To [MVP+] Beng114: yo", start + 100_000));
+        assertSame("a lapsed session is not revived", open, open.after("To [MVP++] gardenman: lol", start + 400_000));
+    }
+
+    @Test
+    public void otherLinesOpenNoConversation() {
+        assertNull(ChatChannels.Conversation.opened("From [MVP++] gardenman: u have m7 party?", 0L));
+        assertNull(ChatChannels.Conversation.opened("You are now in the PARTY channel", 0L));
+        assertNull(ChatChannels.Conversation.opened(null, 0L));
     }
 
     private static void assertKind(Channel expected, String line) {

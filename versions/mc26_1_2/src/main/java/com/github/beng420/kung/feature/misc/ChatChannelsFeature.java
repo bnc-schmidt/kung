@@ -61,6 +61,8 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     private static ChatChannels.Channel view;
     private static ChatChannels.Send pending;
     private static long pendingAtMillis;
+    /** The chat conversation Hypixel has open with one player, null for none; Hypixel's move-to-ALL notice clears it. */
+    private static ChatChannels.Conversation conversation;
     /** Channel of each message by content identity, so a rebuild of thousands of lines classifies each only once. */
     private static final Map<Component, Optional<ChatChannels.Channel>> CLASSIFIED = new IdentityHashMap<>();
 
@@ -100,9 +102,13 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     /** Where your next message goes. */
     public static ChatChannels.Send send() { return send; }
 
+    /** The open chat conversation, which Current Chat Display shows in place of the channel; null for none. */
+    public static ChatChannels.Conversation conversation() { return conversation; }
+
     /** The sent-to channel is kept and saved, so a reconnect or restart still shows it; only the pending switch goes. */
     private static void forgetChannel() {
         pending = null;
+        conversation = null;
         if (view != null) {
             view = null;
             refresh();
@@ -112,6 +118,13 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     // ---- Hypixel's channel -------------------------------------------------------------------------------------
 
     private static void onLine(String text) {
+        long now = System.currentTimeMillis();
+        ChatChannels.Conversation opened = ChatChannels.Conversation.opened(text, now);
+        if (opened != null) {
+            conversation = opened;
+        } else if (conversation != null) {
+            conversation = conversation.after(text, now);
+        }
         ChatChannels.Send notice = ChatChannels.switchNotice(text);
         if (notice != null) {
             switched(notice);
@@ -131,6 +144,7 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     private static void switched(ChatChannels.Send channel) {
         send = channel;
         pending = null;
+        conversation = null;
         if (!INSTANCE.initialized()) return;
         INSTANCE.config().setChatSend(channel.name());
         if (INSTANCE.config().chatChannelsFollowChat()) setView(channel.channel());
