@@ -2,6 +2,7 @@ package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.feature.dungeon.DungeonMapFeature;
 import com.github.beng420.kung.feature.dungeon.DragonDebuffHud;
+import com.github.beng420.kung.feature.dungeon.DungeonSecretsOverlayFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonSplitsOverlayFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.feature.dungeon.M7DragonFeature;
@@ -39,6 +40,12 @@ public final class KungHudLayout {
                 config.splits::x, config.splits::y, config.splits::setX, config.splits::setY,
                 config.splits::scale, config.splits::setScale, config.splits::enabled, config.splits::setEnabled,
                 graphics -> DungeonSplitsOverlayFeature.drawPreview(graphics, config.splits, tracker.splitTracker())),
+            new Entry("dungeon_secrets", "Secrets Overlay", () -> DungeonSecretsOverlayFeature.overlayBounds(config.dungeon),
+                config.dungeon::secretsOverlayX, config.dungeon::secretsOverlayY,
+                config.dungeon::setSecretsOverlayX, config.dungeon::setSecretsOverlayY,
+                config.dungeon::secretsOverlayScale, config.dungeon::setSecretsOverlayScale,
+                config.dungeon::secretsOverlayEnabled, config.dungeon::setSecretsOverlayEnabled,
+                graphics -> DungeonSecretsOverlayFeature.drawPreview(graphics, config.dungeon)),
             new Entry("superpairs", "Superpairs Helper", () -> SuperpairsHelperFeature.overlayBounds(config.misc),
                 config.misc::superpairsHelperX, config.misc::superpairsHelperY,
                 config.misc::setSuperpairsHelperX, config.misc::setSuperpairsHelperY,

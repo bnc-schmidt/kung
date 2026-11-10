@@ -48,6 +48,8 @@ public final class KungConfigScreen extends Screen {
     private static final int LEFT = 8;
     private static final int COLUMN_WIDTH = 171;
     private static final int ROW_HEIGHT = 18;
+    /** The left strip of a feature row with settings: its arrow, and the part a left click opens the settings with. */
+    private static final int FEATURE_ARROW_WIDTH = 14;
     private static final int SETTING_HEIGHT = 16;
     /** Two lines: label (and a slider's value), then the full-width track or text box. */
     private static final int TWO_LINE_HEIGHT = 26;
@@ -55,6 +57,8 @@ public final class KungConfigScreen extends Screen {
     private static final int TOP = 22;
     private static final int HEADER_HEIGHT = 18;
     private static final int PANEL_RADIUS = 4;
+    private static final int SCROLLBAR_TRACK = 0x66000000;
+    private static final int SCROLLBAR_THUMB = 0xDDFFFFFF;
     private static final int CHOICE_LIST_MINIMUM = 2;
     private static final int CHOICE_LIST_ROWS = 8;
     private static final int SEARCH_BOTTOM = 80;
@@ -446,6 +450,25 @@ public final class KungConfigScreen extends Screen {
                 }
             }
         }
+        drawScrollbar(graphics, category, x, viewportTop, panelBottom);
+    }
+
+    /** A thin bar at the column's right edge while the column scrolls: it shows that more rows lie above or below. */
+    private void drawScrollbar(GuiGraphicsExtractor graphics, CategoryEntry category, int x, int viewportTop, int panelBottom) {
+        int maxScroll = maxCategoryScroll(category, panelBottom - TOP);
+        // Inset from the rounded panel corners.
+        int top = viewportTop + 2;
+        int bottom = panelBottom - 3;
+        int track = bottom - top;
+        if (maxScroll <= 0 || track <= 0) {
+            return;
+        }
+        int thumb = Math.max(12, track * track / (track + maxScroll));
+        int thumbY = top + (track - thumb) * categoryScroll(category) / maxScroll;
+        int right = x + COLUMN_WIDTH - 1;
+        graphics.fill(right - 2, top, right, bottom, SCROLLBAR_TRACK);
+        // White, not the accent: an enabled feature row behind it is accent-colored too.
+        graphics.fill(right - 2, thumbY, right, thumbY + thumb, SCROLLBAR_THUMB);
     }
 
     private void drawFeatureRow(
@@ -469,15 +492,28 @@ public final class KungConfigScreen extends Screen {
             : settingsOnly ? THEME.control() : THEME.panelDark();
         UiShapes.rounded(graphics, x, rowY, COLUMN_WIDTH, ROW_HEIGHT, 0,
             rowY + ROW_HEIGHT == viewportBottom ? PANEL_RADIUS : 0, color);
-        if (hovered && menuFont.width(feature.name()) > COLUMN_WIDTH - 8) {
-            slidingText(graphics, feature.name(), x + 4, rowY + 5, COLUMN_WIDTH - 8, x, THEME.text(), true);
+        // A feature with settings shows an arrow at its left edge: a left click on it opens the settings, for a
+        // player whose right click does not reach the menu (the right click on the row still does the same).
+        boolean opens = !feature.settings().isEmpty() && !feature.alwaysExpanded();
+        int margin = opens ? FEATURE_ARROW_WIDTH : 4;
+        int room = COLUMN_WIDTH - 2 * margin;
+        if (hovered && menuFont.width(feature.name()) > room) {
+            slidingText(graphics, feature.name(), x + margin, rowY + 5, room, x, THEME.text(), true);
         } else {
-            drawCentered(graphics, trimToWidth(feature.name(), COLUMN_WIDTH - 8), x + COLUMN_WIDTH / 2, rowY + 5, THEME.text(), true);
+            drawCentered(graphics, trimToWidth(feature.name(), room), x + COLUMN_WIDTH / 2, rowY + 5, THEME.text(), true);
+        }
+        if (opens) {
+            graphics.text(menuFont, isFeatureExpanded(feature) ? "v" : ">", x + 5, rowY + 5, THEME.text(), true);
         }
         if (hovered && !feature.tooltip().isEmpty()) {
             requestTooltip(feature, feature.name(), feature.tooltip(), x, rowY);
         }
         addClickRegion(x, rowY, COLUMN_WIDTH, ROW_HEIGHT, (clickX, clickY, button) -> clickFeature(feature, button));
+        if (opens) {
+            // Added after the row, so it wins where they overlap (the regions are searched last to first).
+            addClickRegion(x, rowY, FEATURE_ARROW_WIDTH, ROW_HEIGHT,
+                (clickX, clickY, button) -> button > 1 || clickFeature(feature, 1));
+        }
         if (feature.developerOnly()) drawDeveloperStar(graphics, x + COLUMN_WIDTH, rowY);
     }
 

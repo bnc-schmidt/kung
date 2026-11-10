@@ -98,7 +98,8 @@ public final class KungSettings {
                     config.dungeon::setWishAlertEnabled,
                     wishAlertSettings(config, developer))
                     .withTooltip("Healer only: alerts when your ultimate is ready and a boss enrages",
-                        "or a teammate drops below the Low HP threshold.",
+                        "or a teammate is below the Low HP threshold, or about to be:",
+                        "a drop as big as their last one would take them under it.",
                         "Teammate HP comes from the sidebar; 100% is the most HP seen this run.",
                         "Stays silent while Wish is on cooldown."),
                 new FeatureEntry("Colored F7/M7 Pillars", config.dungeon::coloredPillarsEnabled,
@@ -226,6 +227,12 @@ public final class KungSettings {
                         ))
                     )
                 ),
+                new FeatureEntry("Secrets Overlay", config.dungeon::secretsOverlayEnabled,
+                    config.dungeon::setSecretsOverlayEnabled, List.of())
+                    .withTooltip("Lists every player's secrets of this run, live, with the party total.",
+                        "Your own count grows when you find a secret and the party total rises with it.",
+                        "A teammate's count comes from their own Kung (Room Sync on), else it shows \"?\".",
+                        "The API count replaces your own count at the end of the run."),
                 new FeatureEntry("Splits Overlay", config.splits::enabled,
                     config.splits::setEnabled,
                     List.of(
@@ -241,6 +248,11 @@ public final class KungSettings {
                             )),
                         SettingEntry.toggle("Time Lost", config.splits::timeLost,
                             config.splits::setTimeLost),
+                        SettingEntry.toggle("Include PB Run", config.splits::includePbRun,
+                            config.splits::setIncludePbRun)
+                            .withTooltip("Shows the splits of your fastest recorded run behind a thin line,",
+                                "and after \" | \" on every line of the chat paste.",
+                                "The run is kept per floor, whether or not this is on. See /kung pbs."),
                         SettingEntry.toggle("Paste In Chat", config.splits::runEndChat,
                             config.splits::setRunEndChat)
                             .withTooltip("Print all splits in your local chat when the run ends."),
@@ -339,7 +351,26 @@ public final class KungSettings {
                 ).withTooltip("Draws a line from your crosshair to the nearest Invisibug on Moonglade Marsh.",
                     "An Invisibug is found by its crit particles and stays found 5 seconds after the last one.",
                     "Only crits right above a stand count: a tree you chop or an NPC stays unmarked.",
-                    "A bug behind you or off screen keeps its direction: the line ends on the screen edge.")
+                    "A bug behind you or off screen keeps its direction: the line ends on the screen edge."),
+                new FeatureEntry("Attribute Menu", config.attributeMenu::enabled,
+                    config.attributeMenu::setEnabled,
+                    List.of(
+                        SettingEntry.toggle("Show Level", config.attributeMenu::showLevel,
+                            config.attributeMenu::setShowLevel)
+                            .withTooltip("Shows each attribute's level as the number on its item.",
+                                "The level is read from the item's name: a Roman numeral, none for level 0.")
+                            .withChildren(List.of(
+                                SettingEntry.toggle("Only Below Level 10", config.attributeMenu::levelOnlyBelowMax,
+                                    config.attributeMenu::setLevelOnlyBelowMax)
+                                    .withTooltip("Hides the number once an attribute is level 10.")
+                            )),
+                        SettingEntry.toggle("Red Background", config.attributeMenu::redBackground,
+                            config.attributeMenu::setRedBackground)
+                            .withTooltip("Fills the slot of every attribute below level 10 red.",
+                                "It covers the rarity backgrounds of other mods.")
+                    )
+                ).withTooltip("Shows each attribute's level as a number in the Attribute Menu",
+                    "and marks every attribute you can still raise with a red slot.")
             )),
             new CategoryEntry("Mining", List.of(
                 new FeatureEntry("Gourmand Alert", config.mining::gourmandAlertEnabled,
@@ -486,6 +517,11 @@ public final class KungSettings {
                 new FeatureEntry("Peek Chat", config.misc::peekChatEnabled, config.misc::setPeekChatEnabled, List.of(
                     SettingEntry.keybind("Peek Key", () -> LoadoutsAutoCloseFeature.keybindDisplay(config.misc.peekChatKeybind()),
                         config.misc::peekChatKeybind, config.misc::setPeekChatKeybind),
+                    SettingEntry.toggle("Peek In Menus", config.misc::peekChatInMenus,
+                        config.misc::setPeekChatInMenus)
+                        .withTooltip("The key also shows the chat while an inventory or other menu is open.",
+                            "Drawn above the menu, so it stays sharp. The wheel scrolls it there too.",
+                            "Not in the chat screen, and not while a text box has focus."),
                     SettingEntry.toggle("Scroll Chat", config.misc::peekChatScrollEnabled,
                         config.misc::setPeekChatScrollEnabled)
                         .withTooltip("Scroll the wheel while holding the key to scroll the chat, not the hotbar.")
@@ -583,7 +619,8 @@ public final class KungSettings {
                         SettingEntry.toggle("Keep Cards Visible", config.misc::superpairsKeepCardsVisible,
                             config.misc::setSuperpairsKeepCardsVisible)
                             .withTooltip("Superpairs: a card you saw stays on its slot after the game turns it around.",
-                                "It is drawn from what you saw, so the game cannot hide it again."),
+                                "It is drawn from what you saw, so the game cannot hide it again.",
+                                "Hover the slot to read the card's name instead of the button's \"click\" text."),
                         SettingEntry.toggle("Pair Colors", config.misc::superpairsPairColors,
                             config.misc::setSuperpairsPairColors)
                             .withTooltip("Superpairs: every kind of card gets its own background color, so equal cards",
@@ -601,6 +638,11 @@ public final class KungSettings {
                             .withTooltip("Superpairs: a green frame shows the next click worth making once nothing unseen",
                                 "is left: the best known pair, its twin, or after an Instant Find a known Titanic or T7.",
                                 "Titanic bottles and T7 enchantments always get a gold frame."),
+                        SettingEntry.toggle("Add-on Solvers", config.misc::experimentSolversEnabled,
+                            config.misc::setExperimentSolversEnabled)
+                            .withTooltip("Chronomatron and Ultrasequencer: marks the next click in the add-ons.",
+                                "Turn it off to keep only the Superpairs help.",
+                                "Also stops Auto Click Add-ons, which needs the solver."),
                         SettingEntry.slider("Max Buffs Round", config.misc::experimentMaxBuffsRound,
                             config.misc::setExperimentMaxBuffsRound, 0, 30, 1)
                             .withTooltip(KungBuild.MODRINTH
@@ -937,6 +979,10 @@ public final class KungSettings {
                 .withTooltip("How dark rooms you have not opened yet are drawn."),
             SettingEntry.toggle("Boss Map", config.dungeon::showInBoss,
                 config.dungeon::setShowInBoss),
+            SettingEntry.toggle("Rotate Map", config.dungeon::rotateMap, config.dungeon::setRotateMap)
+                .withTooltip("Rooms and doors turn with your view: ahead is always up, your head stays in the middle.",
+                    "The frame and the footer stay put, room names stay upright.",
+                    "What turns out of the frame is cut off. Not on the boss map."),
             SettingEntry.toggle("Prince Icons", config.dungeon::princeIconsEnabled,
                 config.dungeon::setPrinceIconsEnabled),
             KungBuild.MODRINTH ? null : SettingEntry.toggle("Mimic ESP", config.dungeon::mimicEspEnabled,
@@ -1060,8 +1106,8 @@ public final class KungSettings {
             SettingEntry.toggle("Statue Boxes", config.dungeon::dragonStatueBoxesEnabled,
                 config.dungeon::setDragonStatueBoxesEnabled)
                 .withTooltip("Shows estimated dragon counting areas at the statues, edged in the statue's colour.",
-                    "While its dragon is up the box is lightly filled: green if a kill right now",
-                    "would count (origin inside the estimate), red if not."),
+                    "While its dragon is up the box walls are lightly filled: green if a kill right now",
+                    "would count (origin inside the estimate), red if not. Bottom and top stay clear."),
             SettingEntry.toggle("Count Notifications", config.dungeon::dragonCountNotificationsEnabled,
                 config.dungeon::setDragonCountNotificationsEnabled)
                 .withTooltip("Local notifications for server-confirmed dragon counts."),

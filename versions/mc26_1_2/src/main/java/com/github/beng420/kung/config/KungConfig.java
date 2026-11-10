@@ -1,6 +1,7 @@
 package com.github.beng420.kung.config;
 
 import com.github.beng420.kung.KungMod;
+import com.github.beng420.kung.config.category.AttributeMenuConfig;
 import com.github.beng420.kung.config.category.BRHelperConfig;
 import com.github.beng420.kung.config.category.ConfigCategory;
 import com.github.beng420.kung.config.category.DebugConfig;
@@ -54,6 +55,7 @@ public final class KungConfig {
     public HitboxesConfig hitboxes = new HitboxesConfig();
     public GreenhouseConfig greenhouse = new GreenhouseConfig();
     public InvisibugConfig invisibug = new InvisibugConfig();
+    public AttributeMenuConfig attributeMenu = new AttributeMenuConfig();
     public PlotCleaningConfig plotCleaning = new PlotCleaningConfig();
     public MiningConfig mining = new MiningConfig();
     public ForagingConfig foraging = new ForagingConfig();
@@ -107,6 +109,7 @@ public final class KungConfig {
                     hitboxes = loaded.hitboxes;
                     greenhouse = loaded.greenhouse;
                     invisibug = loaded.invisibug;
+                    attributeMenu = loaded.attributeMenu;
                     plotCleaning = loaded.plotCleaning;
                     mining = loaded.mining;
                     foraging = loaded.foraging;
@@ -172,7 +175,7 @@ public final class KungConfig {
 
     private List<ConfigCategory> categories() {
         return List.of(dungeon, bloodRush, chatFilter, splits, debug, misc, slayer, safari, feast, gardenAlarms,
-            hitboxes, greenhouse, invisibug, plotCleaning, mining, foraging, waypoints);
+            hitboxes, greenhouse, invisibug, attributeMenu, plotCleaning, mining, foraging, waypoints);
     }
 
     private void bindCategories() {

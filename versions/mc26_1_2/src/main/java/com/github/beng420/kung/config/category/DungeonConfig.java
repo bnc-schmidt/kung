@@ -18,6 +18,8 @@ public final class DungeonConfig extends ConfigCategory {
     private int textScale = 100;
     private int unopenedRoomAlpha = 12;
     private boolean showInBoss = true;
+    /** The clear map turns with the view, ahead up and the head in the middle; frame and footer stay put. */
+    private boolean rotateMap = false;
     private boolean princeIconsEnabled = true;
     private Map<String, Boolean> princeRoomOverrides = new HashMap<>();
     private boolean mimicEspEnabled = false;
@@ -32,6 +34,11 @@ public final class DungeonConfig extends ConfigCategory {
     private int dragonDebuffX = 8;
     private int dragonDebuffY = 230;
     private int dragonDebuffScale = 85;
+    /** The live per-player secrets list; its numbers come from each player's own Kung, never from a guess. */
+    private boolean secretsOverlayEnabled = false;
+    private int secretsOverlayX = 8;
+    private int secretsOverlayY = 120;
+    private int secretsOverlayScale = 100;
     private boolean dragonPrioEnabled = false;
     // Archer is always Arch and Berserker always Bers; the other three classes pick a split.
     private DragonPrioSplit dragonPrioMage = DragonPrioSplit.BERS;
@@ -125,6 +132,8 @@ public final class DungeonConfig extends ConfigCategory {
     public int unopenedRoomAlpha() { return unopenedRoomAlpha; }
     public boolean showInBoss() { return showInBoss; }
     public void setShowInBoss(boolean value) { showInBoss = value; save(); }
+    public boolean rotateMap() { return rotateMap; }
+    public void setRotateMap(boolean value) { rotateMap = value; save(); }
     public boolean princeIconsEnabled() { return princeIconsEnabled; }
     public void setPrinceIconsEnabled(boolean value) { princeIconsEnabled = value; save(); }
     public Boolean roomPrinceOverride(String roomKey) {
@@ -171,6 +180,14 @@ public final class DungeonConfig extends ConfigCategory {
     public void setDragonDebuffX(int value) { dragonDebuffX = value; save(); }
     public void setDragonDebuffY(int value) { dragonDebuffY = value; save(); }
     public void setDragonDebuffScale(int value) { dragonDebuffScale = Math.clamp(value, 25, 300); save(); }
+    public boolean secretsOverlayEnabled() { return secretsOverlayEnabled; }
+    public void setSecretsOverlayEnabled(boolean value) { secretsOverlayEnabled = value; save(); }
+    public int secretsOverlayX() { return secretsOverlayX; }
+    public int secretsOverlayY() { return secretsOverlayY; }
+    public int secretsOverlayScale() { return Math.clamp(secretsOverlayScale, 25, 300); }
+    public void setSecretsOverlayX(int value) { secretsOverlayX = value; save(); }
+    public void setSecretsOverlayY(int value) { secretsOverlayY = value; save(); }
+    public void setSecretsOverlayScale(int value) { secretsOverlayScale = Math.clamp(value, 25, 300); save(); }
     public boolean dragonPrioEnabled() { return dragonPrioEnabled; }
     public void setDragonPrioEnabled(boolean value) { dragonPrioEnabled = value; save(); }
     public DragonPrioSplit dragonPrioMage() { return dragonPrioMage == null ? DragonPrioSplit.BERS : dragonPrioMage; }

@@ -19,6 +19,8 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.Supplier;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.junit.After;
 import org.junit.Assume;
 import org.junit.Rule;
@@ -221,9 +223,11 @@ public final class ConfigGoldenTest {
     }
 
     private void assertGolden(String name, String actual) throws IOException {
-        // Folder tooltips name the test working directory: a release worktree sits elsewhere than the main checkout.
+        // Folder tooltips name the test working directory: a release worktree sits elsewhere than the main checkout,
+        // and Windows writes the rest of the path with backslashes where Linux uses slashes.
         String work = Path.of("").toAbsolutePath().toString();
-        String text = actual.replace(work, "<test-run>");
+        String text = Pattern.compile("<test-run>[^\\s,\\]]*").matcher(actual.replace(work, "<test-run>"))
+            .replaceAll(found -> Matcher.quoteReplacement(found.group().replace('\\', '/')));
         if (!text.endsWith("\n")) text += "\n";
         String expected = null;
         try {
@@ -233,6 +237,19 @@ public final class ConfigGoldenTest {
         Path out = Path.of("golden-actual", name);
         Files.createDirectories(out.getParent());
         Files.writeString(out, text, StandardCharsets.UTF_8);
-        mismatches.add(name);
+        mismatches.add(name + ": " + firstDifference(expected, text));
+    }
+
+    /** The first line that differs, so a failure on another machine shows what changed without the written file. */
+    private static String firstDifference(String expected, String actual) {
+        if (expected == null) return "no snapshot file";
+        String[] wanted = expected.split("\n", -1);
+        String[] got = actual.split("\n", -1);
+        for (int line = 0; line < Math.max(wanted.length, got.length); line++) {
+            String left = line < wanted.length ? wanted[line] : "<missing>";
+            String right = line < got.length ? got[line] : "<missing>";
+            if (!left.equals(right)) return "line " + (line + 1) + "\n  expected: " + left + "\n  actual:   " + right;
+        }
+        return "no line differs";
     }
 }

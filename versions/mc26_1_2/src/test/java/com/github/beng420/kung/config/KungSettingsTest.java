@@ -32,7 +32,7 @@ public final class KungSettingsTest {
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 12 : 13, 1, 4, 2, 1, 2, modrinth ? 19 : 21, 4),
+        assertEquals(List.of(modrinth ? 13 : 14, 1, 4, 3, 1, 2, modrinth ? 19 : 21, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -63,6 +63,30 @@ public final class KungSettingsTest {
         assertEquals(6, config.invisibug.thickness());
         config.invisibug.setColor(0x12FF8040);
         assertEquals(0xFFFF8040, config.invisibug.color());
+    }
+
+    @Test
+    public void attributeMenuIsOffByDefaultAndItsSettingsWriteThroughToTheConfig() {
+        KungConfig config = new KungConfig(temporary.getRoot().toPath().resolve("attribute-menu.json"));
+        FeatureEntry menu = feature(KungSettings.categories(config, () -> { }), "Attribute Menu");
+        assertFalse(menu.enabled());
+        assertEquals(List.of("Show Level", "Red Background"), menu.settings().stream().map(SettingEntry::label).toList());
+
+        SettingEntry level = setting(menu, "Show Level");
+        assertEquals(List.of("Only Below Level 10"), level.children().stream().map(SettingEntry::label).toList());
+        SettingEntry onlyBelow = level.children().getFirst();
+        assertTrue("the number is on by default", level.booleanSupplier().getAsBoolean());
+        assertTrue("a level 10 attribute shows no number by default", onlyBelow.booleanSupplier().getAsBoolean());
+        assertTrue("the red background is on by default", setting(menu, "Red Background").booleanSupplier().getAsBoolean());
+
+        menu.toggle().run();
+        assertTrue(config.attributeMenu.enabled());
+        onlyBelow.toggle().run();
+        assertFalse(config.attributeMenu.levelOnlyBelowMax());
+        level.toggle().run();
+        assertFalse(config.attributeMenu.showLevel());
+        setting(menu, "Red Background").toggle().run();
+        assertFalse(config.attributeMenu.redBackground());
     }
 
     @Test

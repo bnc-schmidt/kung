@@ -81,6 +81,8 @@ public final class MiscConfig extends ConfigCategory {
     private String peekChatKeybind;
     private boolean peekChatScrollEnabled = true;
     private int peekChatScrollLines = 7;
+    /** Whether the peek key also shows the chat while an inventory or other menu is open. */
+    private boolean peekChatInMenus = false;
     private boolean chatChannelsEnabled = false;
     /** Names of the {@code ChatChannels.Channel} kinds the player hid; a kind added later starts shown. */
     private Set<String> chatChannelsHidden = new LinkedHashSet<>();
@@ -115,6 +117,8 @@ public final class MiscConfig extends ConfigCategory {
     private boolean superpairsPairLetters = true;
     private boolean superpairsMarkBestClick = true;
     private boolean superpairsMarkPairs = true;
+    /** The Chronomatron and Ultrasequencer add-on solvers, which the Superpairs Helper switch also turns on. */
+    private boolean experimentSolversEnabled = true;
     /** Full flavor only, like the other automation: claims the known pairs after Auto Click Main Game is done. */
     private boolean superpairsAutoClaimEnabled = false;
     /** Full flavor only: the Modrinth jar has no row and no feature reading it. */
@@ -256,6 +260,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setPeekChatScrollEnabled(boolean value) { peekChatScrollEnabled = value; save(); }
     public int peekChatScrollLines() { return Math.clamp(peekChatScrollLines, 1, 30); }
     public void setPeekChatScrollLines(int value) { peekChatScrollLines = Math.clamp(value, 1, 30); save(); }
+    public boolean peekChatInMenus() { return peekChatInMenus; }
+    public void setPeekChatInMenus(boolean value) { peekChatInMenus = value; save(); }
     public boolean chatChannelsEnabled() { return chatChannelsEnabled; }
     public void setChatChannelsEnabled(boolean value) { chatChannelsEnabled = value; save(); }
     public boolean chatChannelsFollowChat() { return chatChannelsFollowChat; }
@@ -641,6 +647,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setSuperpairsPairLetters(boolean value) { superpairsPairLetters = value; save(); }
     public boolean superpairsMarkPairs() { return superpairsMarkPairs; }
     public void setSuperpairsMarkPairs(boolean value) { superpairsMarkPairs = value; save(); }
+    public boolean experimentSolversEnabled() { return experimentSolversEnabled; }
+    public void setExperimentSolversEnabled(boolean value) { experimentSolversEnabled = value; save(); }
     public boolean superpairsAutoClaimEnabled() { return superpairsAutoClaimEnabled; }
     public void setSuperpairsAutoClaimEnabled(boolean value) { superpairsAutoClaimEnabled = value; save(); }
     public boolean superpairsMarkBestClick() { return superpairsMarkBestClick; }

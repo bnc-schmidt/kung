@@ -161,6 +161,14 @@ _Avoid_: widget, overlay
 **HUD editor**:
 The screen where the player moves and scales HUD elements.
 
+**Secrets overlay**:
+The HUD element that lists every dungeon player's secrets of the current run. The own number is the secret tally: a rise of the party total in the tab that follows an own chest click, skull click, item pickup or bat kill. A teammate's number is what that teammate's own Kung reported. Nobody's number is guessed: the overlay shows "?" instead.
+_Avoid_: secret counter
+
+**Best run**:
+The fastest finished run Kung recorded on a floor: every split, Boss Entry and Total, saved apart from the personal best of each split. Splits Overlay shows it behind a thin line and the chat paste after " | " when Include PB Run is on. Each row also shows the **delta**: this run's time minus the best run's, colored on a gradient from green (much faster) through yellow to red (much slower), where "much" is a tenth of the best run's time for that row (a running phase shows only once it is slower). A faster finished run replaces the best run and prints "new PB run recorded".
+_Avoid_: PB run (the setting's name only)
+
 **Planner**:
 A feature with a screen of its own for planning, such as the Greenhouse planner.
 
@@ -172,6 +180,12 @@ A command typed as `/kung ...`.
 
 **Join shortcut**:
 A top-level slash command such as `/f7` or `/m1` that starts a Catacombs floor. It has no setting and is not a feature.
+
+**Channel shortcut**:
+A top-level slash command such as `/cp` or `/cg` that sends the `/chat` command of one send channel: Party, All, Guild or Co-op. It has no setting and is not a feature.
+
+**Friend suggestions**:
+The player's Hypixel friends, added to the tab suggestions wherever a slash command takes a player name: the commands Kung lists, such as `/p`, `/msg` and `/pv`, and any text argument the command tree calls a player. Kung only listens: it learns friends from "Friend >" join and leave lines and from the pages of `/friend list` the player opens, and keeps them per account. They have no setting and are not a feature.
 
 **Chat command**:
 A message such as `!c50` that other players type in party chat and Kung answers.
