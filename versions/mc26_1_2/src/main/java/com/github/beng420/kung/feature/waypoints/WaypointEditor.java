@@ -110,8 +110,8 @@ public final class WaypointEditor {
      * The Add Waypoint Key: a waypoint at {@code pos} in every marked group that shows on the island, named as the
      * editor names a new one. Throws when no group is marked there.
      */
-    public String addToMarked(BlockPos pos, WaypointIsland current, boolean inSkyBlock) {
-        List<WaypointGroup> marked = store.visibleOn(current.id(), inSkyBlock).stream().filter(WaypointGroup::marked).toList();
+    public String addToMarked(BlockPos pos, WaypointIsland current, boolean active) {
+        List<WaypointGroup> marked = store.visibleOn(current.id(), active).stream().filter(WaypointGroup::marked).toList();
         if (marked.isEmpty()) {
             throw new IllegalArgumentException("No marked group on " + current.name() + ". Mark one with the * in the waypoint editor.");
         }

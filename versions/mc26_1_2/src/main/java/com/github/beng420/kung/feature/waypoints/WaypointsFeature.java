@@ -32,7 +32,8 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
     private final WaypointStore store = WaypointStore.INSTANCE;
     private final WaypointEditor editor = new WaypointEditor(store);
     private WaypointIsland island = WaypointIsland.UNKNOWN;
-    private boolean inSkyBlock;
+    /** Waypoints draw and the Add Waypoint Key works: in SkyBlock, or in a singleplayer world. */
+    private boolean active;
     private long epoch = -1;
     private int ticks;
     private boolean addKeyDown;
@@ -62,7 +63,7 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
     public List<Shown> shown() {
         List<Shown> shown = new ArrayList<>();
         if (!isEnabled()) return shown;
-        for (WaypointGroup group : store.visibleOn(island.id(), inSkyBlock)) {
+        for (WaypointGroup group : store.visibleOn(island.id(), active)) {
             List<Waypoint> waypoints = group.waypoints();
             for (int index = 0; index < waypoints.size(); index++) {
                 Waypoint waypoint = waypoints.get(index);
@@ -93,7 +94,9 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
             ticks = 0;
         }
         if (ticks++ % ISLAND_CHECK_TICKS == 0) {
-            inSkyBlock = instance.tracking() && instance.location().kind() != HypixelLocation.Kind.UNKNOWN;
+            // A singleplayer world is a place to try waypoints; it has no island, so only "Everywhere" groups show.
+            active = client.hasSingleplayerServer()
+                || instance.tracking() && instance.location().kind() != HypixelLocation.Kind.UNKNOWN;
             island = instance.tracking() ? WaypointIsland.current(instance.visibleLines()) : WaypointIsland.UNKNOWN;
         }
         if (pendingNotice != null) {
@@ -104,10 +107,10 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
         WaypointsConfig config = config();
         // One press per push, in the world with no screen open, so typing never adds a waypoint.
         boolean held = McCompat.screen(client) == null && LoadoutsAutoCloseFeature.keybindHeld(config.addKeybind());
-        if (held && !addKeyDown && inSkyBlock) addAtCrosshair(client);
+        if (held && !addKeyDown && active) addAtCrosshair(client);
         addKeyDown = held;
         Vec3 at = client.player.position();
-        for (WaypointGroup group : store.visibleOn(island.id(), inSkyBlock)) {
+        for (WaypointGroup group : store.visibleOn(island.id(), active)) {
             if (!group.ordered() || group.waypoints().isEmpty()) continue;
             group.setCurrentIndex(WaypointRoute.advance(group.waypoints(), group.currentIndex(), at.x, at.y, at.z,
                 config.activationRadius(), config.allowGoingBackwards(), config.allowSkipping()));
@@ -119,7 +122,7 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
         BlockPos pos = client.hitResult instanceof BlockHitResult hit && hit.getType() == HitResult.Type.BLOCK
             ? hit.getBlockPos() : client.player.blockPosition();
         try {
-            client.player.sendSystemMessage(KungMessages.info("Waypoints", editor.addToMarked(pos, island, inSkyBlock)));
+            client.player.sendSystemMessage(KungMessages.info("Waypoints", editor.addToMarked(pos, island, active)));
         } catch (IllegalArgumentException refused) {
             client.player.sendSystemMessage(KungMessages.warning("Waypoints", refused.getMessage()));
         }

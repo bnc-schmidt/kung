@@ -130,10 +130,11 @@ public final class WaypointStore {
 
     /**
      * What shows on an island: the groups ticked for it, then the groups ticked nowhere. Those show on every island,
-     * but only once the player is in SkyBlock, so they are left out when {@code inSkyBlock} is false.
+     * but only where waypoints are active (SkyBlock, or a singleplayer world), so they are left out when
+     * {@code active} is false.
      */
-    public synchronized List<WaypointGroup> visibleOn(String islandId, boolean inSkyBlock) {
-        if (!inSkyBlock) return List.of();
+    public synchronized List<WaypointGroup> visibleOn(String islandId, boolean active) {
+        if (!active) return List.of();
         List<WaypointGroup> visible = new ArrayList<>(groupsOn(islandId));
         if (!WaypointIsland.fromId(islandId).isUnknown()) visible.addAll(groupsOn(WaypointIsland.UNKNOWN.id()));
         return visible;
