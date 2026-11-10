@@ -73,8 +73,8 @@ public final class ExperimentSolverFeature extends ConfigurableFeature<MiscConfi
 
     @Override
     public boolean isEnabled() {
-        // Part of the Superpairs Helper: its switch turns on the add-on solvers too.
-        return initialized() && config().superpairsHelperEnabled();
+        // Part of the Superpairs Helper: its switch turns on the add-on solvers too, and "Add-on Solvers" turns them off alone.
+        return initialized() && config().superpairsHelperEnabled() && config().experimentSolversEnabled();
     }
 
     private static void tick(Minecraft client) {

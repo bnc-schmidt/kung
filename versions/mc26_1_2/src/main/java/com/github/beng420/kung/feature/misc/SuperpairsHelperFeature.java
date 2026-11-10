@@ -32,6 +32,7 @@ import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
@@ -114,6 +115,9 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         if (KungHudEditorState.externalEditing() || !INSTANCE.isEnabled() || screen != McCompat.screen(client) || !ensureSession(client)) {
             return;
         }
+        // A friend's screenshot shows the panel exactly as dark as the menu's background gradient, as if drawn under
+        // it. A stratum of its own puts it above everything the screen and other mods drew.
+        graphics.nextStratum();
         drawPanel(graphics, client, INSTANCE.config());
     }
 
@@ -162,8 +166,14 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
             resetState("new-menu");
             activeMenu = menu;
             topSlotCount = MenuItems.topSlots(menu);
+            MiscConfig config = INSTANCE.config();
             KungDebugRecorder.event("superpairs", "start container=" + menu.containerId
-                + " title=\"" + McCompat.screen(client).getTitle().getString() + "\" top=" + topSlotCount);
+                + " title=\"" + McCompat.screen(client).getTitle().getString() + "\" top=" + topSlotCount
+                + " keep=" + config.superpairsKeepCardsVisible() + " colors=" + config.superpairsPairColors()
+                + " letters=" + config.superpairsPairLetters() + " pairs=" + config.superpairsMarkPairs()
+                + " best=" + config.superpairsMarkBestClick() + " solvers=" + config.experimentSolversEnabled()
+                + " panel=" + config.superpairsHelperX() + "," + config.superpairsHelperY() + "@" + config.superpairsHelperScale()
+                + " guiScale=" + client.getWindow().getGuiScale() + " blur=" + client.options.getMenuBackgroundBlurriness());
             // One seed covers enabling during an open game. All subsequent reveals
             // come from packets, including brief flips and automatically revealed partners.
             for (int slot = 0; slot < topSlotCount; slot++) {
@@ -314,6 +324,19 @@ public final class SuperpairsHelperFeature extends ConfigurableFeature<MiscConfi
         if (config.superpairsMarkBestClick() && pick.slots().contains(slot.index)) {
             UiShapes.slotFrame(graphics, x, y, BEST_FRAME);
         }
+    }
+
+    /**
+     * The tooltip for a slot whose card Keep Cards Visible draws over a turned-around button: the card's own, from
+     * what was seen at the reveal, instead of the button's "click to reveal". Null leaves the game's tooltip alone.
+     */
+    public static List<Component> keptCardTooltip(AbstractContainerScreen<?> screen, Slot hovered, ItemStack shown) {
+        if (activeMenu == null || screen.getMenu() != activeMenu || !INSTANCE.initialized()
+            || !INSTANCE.config().superpairsKeepCardsVisible() || hovered == null || hovered.getItem() != shown) {
+            return null;
+        }
+        ItemStack face = faces.get(hovered.index);
+        return face == null || faceUp(shown) ? null : Screen.getTooltipFromItem(Minecraft.getInstance(), face);
     }
 
     /** True when the slot shows a card (reward or bonus) rather than a button, a pane or nothing. */

@@ -2,15 +2,19 @@ package com.github.beng420.kung.mixin;
 
 import com.github.beng420.kung.feature.experiment.ExperimentSolverFeature;
 import com.github.beng420.kung.feature.foraging.BeaconSolverFeature;
+import com.github.beng420.kung.feature.hunting.AttributeMenuFeature;
 import com.github.beng420.kung.feature.misc.LoadoutsAutoCloseFeature;
 import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.misc.SackTrackerFeature;
+import java.util.List;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.ContainerInput;
 import net.minecraft.world.inventory.Slot;
+import net.minecraft.world.item.ItemStack;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
@@ -89,6 +93,15 @@ public abstract class AbstractContainerScreenMixin {
         BeaconSolverFeature.drawSlot((AbstractContainerScreen<?>) (Object) this, graphics, slot);
     }
 
+    // Hovering a card that Superpairs' Keep Cards Visible draws over a button shows the card's tooltip, not the button's.
+    @Inject(method = "getTooltipFromContainerItem", at = @At("HEAD"), cancellable = true)
+    private void kung$keptCardTooltip(ItemStack stack, CallbackInfoReturnable<List<Component>> callbackInfo) {
+        List<Component> kept = SuperpairsHelperFeature.keptCardTooltip((AbstractContainerScreen<?>) (Object) this, hoveredSlot, stack);
+        if (kept != null) {
+            callbackInfo.setReturnValue(kept);
+        }
+    }
+
     @ModifyArg(
         method = "extractSlot",
         at = @At(
@@ -98,10 +111,15 @@ public abstract class AbstractContainerScreenMixin {
         index = 4
     )
     private String kung$loadoutStackSizeLabel(String original) {
+        var screen = (AbstractContainerScreen<?>) (Object) this;
+        // The Attribute Menu's level replaces any count another mod set; the other labels only fill an empty one.
+        String attributeLevel = AttributeMenuFeature.slotLabel(screen, kung$extractingSlot);
+        if (attributeLevel != null) {
+            return attributeLevel;
+        }
         if (original != null) {
             return original;
         }
-        var screen = (AbstractContainerScreen<?>) (Object) this;
         String loadout = LoadoutsAutoCloseFeature.loadoutStackSizeLabel(screen, kung$extractingSlot);
         return loadout != null ? loadout : BeaconSolverFeature.slotLabel(screen, kung$extractingSlot);
     }

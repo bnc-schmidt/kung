@@ -33,10 +33,12 @@ enum ChatCommand {
     CA_ARCHER(Goal.CLASS_AVERAGE, DungeonClass.ARCHER, "ca"), CA_BERSERK(Goal.CLASS_AVERAGE, DungeonClass.BERSERK, "ca"),
     CA_HEALER(Goal.CLASS_AVERAGE, DungeonClass.HEALER, "ca"), CA_MAGE(Goal.CLASS_AVERAGE, DungeonClass.MAGE, "ca"),
     CA_TANK(Goal.CLASS_AVERAGE, DungeonClass.TANK, "ca"),
-    // "!a50 [name]": runs that class still needs for that level (!b !h !m !t for the others). Other mods and Hypixel
-    // use !m1-!m7 and !t1-!t5 themselves, so the mage and tank commands also answer to the long names !mage and !tank.
-    A(Goal.CLASS_LEVEL, DungeonClass.ARCHER), B(Goal.CLASS_LEVEL, DungeonClass.BERSERK),
-    H(Goal.CLASS_LEVEL, DungeonClass.HEALER), M(Goal.CLASS_LEVEL, DungeonClass.MAGE, "m", "mage"),
+    // "!a50 [name]": runs that class still needs for that level (!b !h !m !t for the others). Every class also answers
+    // to its long names (!arch50, !archer50, ...), the same forms the !ca "-class" flags take. Other mods and Hypixel
+    // use !m1-!m7 and !t1-!t5 themselves, so the one-letter mage and tank commands leave those to them.
+    A(Goal.CLASS_LEVEL, DungeonClass.ARCHER, "a", "arch", "archer"),
+    B(Goal.CLASS_LEVEL, DungeonClass.BERSERK, "b", "bers", "berserk", "berserker"),
+    H(Goal.CLASS_LEVEL, DungeonClass.HEALER, "h", "heal", "healer"), M(Goal.CLASS_LEVEL, DungeonClass.MAGE, "m", "mage"),
     T(Goal.CLASS_LEVEL, DungeonClass.TANK, "t", "tank");
 
     /** Levels 1 to 200 without leading zeros; a longer number is no command. */

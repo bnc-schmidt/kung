@@ -15,23 +15,39 @@ public final class LineBoxes {
     private static final Vector3fc Y = new Vector3f(0, 1, 0);
     private static final Vector3fc Z = new Vector3f(0, 0, 1);
 
-    /** Corner indices per face; bit 0 picks x, bit 1 picks y, bit 2 picks z. */
-    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {0, 1, 5, 4},
-        {6, 7, 3, 2}, {1, 0, 2, 3}, {4, 5, 7, 6}};
+    /**
+     * Corner indices per face; bit 0 picks x, bit 1 picks y, bit 2 picks z. The four side walls come first,
+     * then the bottom and the top.
+     */
+    private static final int[][] FACES = {{0, 4, 6, 2}, {5, 1, 3, 7}, {1, 0, 2, 3},
+        {4, 5, 7, 6}, {0, 1, 5, 4}, {6, 7, 3, 2}};
+    private static final int WALLS = 4;
 
     private LineBoxes() { }
 
     /** The 6 faces of a world-space box as quads, drawn relative to the camera; for the POSITION_COLOR quads type. */
     public static void fill(VertexConsumer quads, PoseStack.Pose pose, AABB box, double cameraX, double cameraY,
                             double cameraZ, int color) {
+        fill(quads, pose, box, cameraX, cameraY, cameraZ, color, false);
+    }
+
+    /** As {@link #fill}, but with {@code wallsOnly} the bottom and the top stay open: only the four side walls are drawn. */
+    public static void fill(VertexConsumer quads, PoseStack.Pose pose, AABB box, double cameraX, double cameraY,
+                            double cameraZ, int color, boolean wallsOnly) {
         fill(quads, pose, box.minX - cameraX, box.minY - cameraY, box.minZ - cameraZ,
-            box.maxX - cameraX, box.maxY - cameraY, box.maxZ - cameraZ, color);
+            box.maxX - cameraX, box.maxY - cameraY, box.maxZ - cameraZ, color, wallsOnly);
     }
 
     /** The 6 faces of a box as quads, the corners as the pose expects them. */
     public static void fill(VertexConsumer quads, PoseStack.Pose pose, double minX, double minY, double minZ,
                             double maxX, double maxY, double maxZ, int color) {
-        for (int[] face : FACES) {
+        fill(quads, pose, minX, minY, minZ, maxX, maxY, maxZ, color, false);
+    }
+
+    private static void fill(VertexConsumer quads, PoseStack.Pose pose, double minX, double minY, double minZ,
+                             double maxX, double maxY, double maxZ, int color, boolean wallsOnly) {
+        for (int i = 0; i < (wallsOnly ? WALLS : FACES.length); i++) {
+            int[] face = FACES[i];
             for (int corner : face) {
                 quads.addVertex(pose,
                     (float) ((corner & 1) == 0 ? minX : maxX),

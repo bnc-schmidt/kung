@@ -16,6 +16,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
+import net.fabricmc.loader.api.FabricLoader;
 
 public final class KungDebugRecorder {
     /** General ring: once full, each new line evicts the oldest. */
@@ -149,6 +150,7 @@ public final class KungDebugRecorder {
         StringBuilder builder = new StringBuilder(snapshot.size() * 96);
         builder.append("Kung Trace\n");
         builder.append("created=").append(Instant.now()).append('\n');
+        builder.append("mods=").append(loadedMods()).append('\n');
         builder.append("entries=").append(snapshot.size()).append('/').append(storedCount).append('\n');
         builder.append("storedLimit=").append(MAX_EVENTS).append('\n');
         builder.append("reservedSplitLimit=").append(MAX_SPLIT_EVENTS).append('\n');
@@ -161,6 +163,23 @@ public final class KungDebugRecorder {
         builder.append('\n');
         for (String line : snapshot) builder.append(line).append('\n');
         return builder.toString();
+    }
+
+    /**
+     * Every loaded mod as id=version except Fabric API's many parts, so a report from a friend shows which other
+     * mods draw or click beside Kung. Pure model tests run without a loader.
+     */
+    private static String loadedMods() {
+        try {
+            return FabricLoader.getInstance().getAllMods().stream()
+                .map(mod -> mod.getMetadata())
+                .filter(meta -> !meta.getId().startsWith("fabric-") && !meta.getId().contains("mixinextras"))
+                .map(meta -> meta.getId() + "=" + meta.getVersion().getFriendlyString())
+                .sorted()
+                .collect(java.util.stream.Collectors.joining(", "));
+        } catch (RuntimeException | LinkageError exception) {
+            return "unknown";
+        }
     }
 
     private static long eventSequence(String line) {

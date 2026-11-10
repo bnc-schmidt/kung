@@ -81,7 +81,7 @@ final class M7DragonRenderer {
             try {
                 for (Marker marker : markers) {
                     if (!marker.filled()) continue;
-                    LineBoxes.fill(quads, pose, marker.bounds(), camera.x, camera.y, camera.z, marker.color());
+                    LineBoxes.fill(quads, pose, marker.bounds(), camera.x, camera.y, camera.z, marker.color(), marker.wallsOnly());
                 }
             } catch (RuntimeException exception) {
                 fillBroken = true;
@@ -90,7 +90,9 @@ final class M7DragonRenderer {
         });
     }
 
-    record Marker(AABB bounds, int color, float width, boolean filled) {
+    /** {@code wallsOnly}: a filled box keeps its bottom and top open, so only the side walls are tinted. */
+    record Marker(AABB bounds, int color, float width, boolean filled, boolean wallsOnly) {
+        Marker(AABB bounds, int color, float width, boolean filled) { this(bounds, color, width, filled, false); }
         Marker(AABB bounds, int color, float width) { this(bounds, color, width, false); }
     }
 

@@ -43,6 +43,7 @@ import net.fabricmc.fabric.api.client.message.v1.ClientReceiveMessageEvents;
 import net.fabricmc.fabric.api.client.networking.v1.ClientPlayConnectionEvents;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.HudElementRegistry;
 import net.fabricmc.fabric.api.client.rendering.v1.hud.VanillaHudElements;
+import net.minecraft.client.Camera;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.core.BlockPos;
@@ -58,6 +59,7 @@ import net.minecraft.world.entity.projectile.arrow.AbstractArrow;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.Vec3;
+import org.joml.Vector3fc;
 
 /** Local arena guidance; only server evidence can confirm a statue result. */
 public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
@@ -379,9 +381,11 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
                 boolean live = attempt != null && !attempt.dead() && attempt.loaded();
                 // Edges name the statue; the fill, only while its dragon is up, says whether a kill right
                 // now would count. 12% per face, since you often look through two faces of a box this big.
+                // Only the side walls are tinted: the bottom and the top stay clear, so the arena floor and
+                // the sky show through.
                 markers.add(new M7DragonRenderer.Marker(statue.range(), statue.color() | 0xFF000000, 2.0F));
                 if (live) markers.add(new M7DragonRenderer.Marker(statue.range(),
-                    statue.contains(attempt.position()) ? 0x2055FF55 : 0x20FF5555, 0, true));
+                    statue.contains(attempt.position()) ? 0x2055FF55 : 0x20FF5555, 0, true, true));
             }
         }
         if (config().m7DragonHelperEnabled()) addAimMarkers(markers, client, partialTick);
@@ -1053,13 +1057,17 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
         Minecraft client = Minecraft.getInstance();
         if (!config().dragonHpEnabled() || hpSeen.isEmpty() || !ready() || client.player == null
             || McCompat.hudHidden(client)) return;
-        Vec3 eye = McCompat.camera(client).position();
+        Camera camera = McCompat.camera(client);
+        Vec3 eye = camera.position();
+        Vector3fc forward = camera.forwardVector();
         for (HpSeen seen : hpSeen.values()) {
             EnderDragon dragon = seen.dragon();
             if (dragon.isRemoved() || !M7DragonHp.visible(seen.last(), dragon.getHealth())) continue;
             // Same interpolation carry-over as the core markers, or the text steps at 20 Hz.
             Vec3 core = trailPoint(dragon, DungeonConfig.DragonPart.BODY)
                 .add(dragon.getPosition(partialTick).subtract(dragon.position()));
+            // Behind the camera the projection mirrors the point onto the screen, as with the Mimic ESP: never drawn.
+            if (DungeonMimicEspFeature.depthInFront(core.subtract(eye), forward.x(), forward.y(), forward.z()) <= 0.05) continue;
             Vec3 screen = client.gameRenderer.projectPointToScreen(core);
             if (!Double.isFinite(screen.x) || !Double.isFinite(screen.y) || screen.z < -1.0 || screen.z > 1.0) continue;
             String text = M7DragonHp.format(seen.last());

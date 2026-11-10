@@ -99,7 +99,7 @@ public final class ChatCommandTest {
         assertEquals(DungeonClass.TANK, ChatCommand.T.dungeonClass());
         assertEquals(DungeonClass.BERSERK, ChatCommand.CA_BERSERK.dungeonClass());
         assertNull(ChatCommand.CA.dungeonClass());
-        for (String body : new String[] {"!a50 -arch", "!a50 Beng114 Second", "!a50x", "!arch50", "a50", "!a", "!b50 invalid-name"}) {
+        for (String body : new String[] {"!a50 -arch", "!a50 Beng114 Second", "!a50x", "!arch", "!archer0", "a50", "!a", "!b50 invalid-name"}) {
             assertEquals(body, List.of(), matching(body));
         }
     }
@@ -117,6 +117,12 @@ public final class ChatCommandTest {
             if (level > 5) assertLevel("!t" + level + "\t", ChatCommand.T, level); // !t1 to !t5 start Kuudra tiers
             // The long names take every level, the floors and tiers included.
             assertLevel("!mage" + level, ChatCommand.M, level);
+            assertLevel("!arch" + level, ChatCommand.A, level);
+            assertLevel("!ARCHER" + level + " Beng114", ChatCommand.A, level);
+            assertLevel("!bers" + level, ChatCommand.B, level);
+            assertLevel("!berserker" + level, ChatCommand.B, level);
+            assertLevel("!heal" + level, ChatCommand.H, level);
+            assertLevel("!healer" + level + " Beng114", ChatCommand.H, level);
             assertLevel("!TANK" + level + " Beng114", ChatCommand.T, level);
         }
         for (int floor = 1; floor <= 7; floor++) {
