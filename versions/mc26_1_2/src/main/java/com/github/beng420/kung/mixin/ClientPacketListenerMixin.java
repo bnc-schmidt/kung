@@ -21,6 +21,7 @@ import com.llamalad7.mixinextras.injector.wrapoperation.Operation;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.network.protocol.game.ClientboundEntityEventPacket;
+import net.minecraft.network.protocol.game.ClientboundTakeItemEntityPacket;
 import net.minecraft.network.protocol.game.ClientboundBundlePacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetContentPacket;
 import net.minecraft.network.protocol.game.ClientboundContainerSetSlotPacket;
@@ -68,6 +69,11 @@ public abstract class ClientPacketListenerMixin {
         Entity entity = kung$entity(packet.getId());
         DungeonDebuffFeature.INSTANCE.observeSpawn(entity);
         M7DragonFeature.INSTANCE.observeSpawn(entity);
+    }
+
+    @Inject(method = "handleTakeItemEntity", at = @At("TAIL"))
+    private void kung$onItemPickup(ClientboundTakeItemEntityPacket packet, CallbackInfo callbackInfo) {
+        DungeonEventRouter.observeItemPickup(packet.getPlayerId());
     }
 
     @Inject(method = "handleSetEquipment", at = @At("TAIL"))

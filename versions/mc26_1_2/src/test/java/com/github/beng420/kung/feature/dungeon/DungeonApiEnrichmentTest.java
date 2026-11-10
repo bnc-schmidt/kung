@@ -2,6 +2,7 @@ package com.github.beng420.kung.feature.dungeon;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import java.util.Set;
@@ -22,6 +23,23 @@ public final class DungeonApiEnrichmentTest {
         // A second lookup would reach the null client and throw: the skip must come first.
         api.requestTotal(null, "Alice", result -> { });
         assertTrue(set(api, "requestedTotals").isEmpty());
+    }
+
+    @Test
+    public void theLastEndValueStandsInForAStartValueOnlyWhileItIsYoung() {
+        var api = new DungeonApiEnrichment();
+        long[] now = {1_000_000L};
+        api.clock = () -> now[0];
+        assertNull(api.endValueOf("alice"));
+        api.rememberEndValue("alice", 480);
+        api.rememberEndValue("bob", -1);
+        now[0] += 9 * 60_000L;
+        assertEquals(Integer.valueOf(480), api.endValueOf("alice"));
+        assertNull("a hidden counter is no value", api.endValueOf("bob"));
+        api.reset();
+        assertEquals("a new run keeps it", Integer.valueOf(480), api.endValueOf("alice"));
+        now[0] += 2 * 60_000L;
+        assertNull(api.endValueOf("alice"));
     }
 
     @Test

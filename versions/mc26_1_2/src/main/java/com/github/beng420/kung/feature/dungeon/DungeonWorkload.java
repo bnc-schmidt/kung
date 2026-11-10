@@ -12,7 +12,7 @@ record DungeonWorkload(boolean rooms, boolean players, boolean roomSync) {
         boolean sync = dungeon.roomSyncEnabled();
         boolean rooms = dungeon.enabled() || !KungBuild.MODRINTH && config.bloodRush.enabled()
             || dungeon.playerTrackingEnabled() || sync;
-        boolean players = rooms || config.splits.enabled()
+        boolean players = rooms || config.splits.enabled() || dungeon.secretsOverlayEnabled() || dungeon.wishAlertEnabled()
             || dungeon.deathMessagesEnabled() || dungeon.fiveCryptPartyMessageEnabled()
             || dungeon.extraScoreMessagesEnabled()
             || dungeon.cryptProgressPartyMessageEnabled() || dungeon.fiveCryptTitleEnabled()

@@ -100,6 +100,25 @@ public final class DungeonScoreReadinessTest {
         assertEquals(300, stats.score(plan(RoomType.TRAP, true, false), 40));
     }
 
+    /** 2026-11-08 M7: the estimate fell 5 to 6 when the Watcher spoke, until the map checked Blood's room. */
+    @Test public void theScoreDoesNotFallWhenTheWatcherFinishesBloodBeforeTheMapChecksItsRoom() {
+        var stats = new DungeonRunStats();
+        stats.configureForFloor(7, true);
+        stats.observeTabLine(null, "Secrets Found: 87.5%", null);
+        stats.observeTabLine(null, "Crypts: 5", null);
+        var base = plan(RoomType.NORMAL, true, false);
+        var cleared = new HashSet<>(base.clearedRooms());
+        cleared.remove(new CellKey(2, 0)); // Blood's cell, still unchecked on the map
+        var open = new MatchRenderPlan(base.matches(), base.predictedRooms(), base.matchedRoomCells(), base.internalDoors(),
+            base.externalDoors(), base.roomTypes(), base.roomOwners(), base.hints(), base.remoteRoomCells(),
+            base.remoteRoomProgress(), base.visitedRooms(), Set.copyOf(cleared), base.completedRooms(),
+            base.openedSpecialDoorCells(), base.fairyEntranceDoor(), base.bloodRushPath(), base.mapPuzzleNames());
+        int before = stats.score(open, 40);
+        stats.observeMessage(null, "[BOSS] The Watcher: You have proven yourself. You may pass.", 100L);
+        assertEquals(before, stats.score(open, 40));
+        assertEquals(before, stats.score(base, 40)); // and the check arriving changes nothing either
+    }
+
     @Test public void aHighServerClearPercentageCannotBypassAnOpenPuzzle() {
         var stats = readySecrets();
         stats.observeScoreboardLine(null, "§aCleared: §f100% §7(300)");

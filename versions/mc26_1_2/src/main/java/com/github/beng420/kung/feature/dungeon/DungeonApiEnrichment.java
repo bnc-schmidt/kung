@@ -13,6 +13,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
+import java.util.function.LongSupplier;
+import java.util.function.Predicate;
 import net.minecraft.client.Minecraft;
 
 public final class DungeonApiEnrichment {
@@ -23,9 +25,20 @@ public final class DungeonApiEnrichment {
     private static final long[] BASELINE_RETRY_MS = {3_000L, 10_000L, 30_000L};
     private static final long[] FINAL_RETRY_MS = {1_500L, 4_000L};
     private static final long[] NO_RETRY = {};
-    private static final int MAX_PROBLEM_LENGTH = 80;
+    private static final int MAX_PROBLEM_LENGTH = 140;
+    /**
+     * A lookup of the same player that Hypixel refuses (429: "already looked up") leaves the last run's end value as
+     * the next start value. Secrets only grow inside a run, so it still holds after a few minutes in the lobby.
+     */
+    private static final long END_VALUE_MAX_AGE_MS = 10 * 60_000L;
+
+    private record EndValue(int total, long atMs) {
+    }
 
     private final Set<String> requestedTotals = new HashSet<>();
+    /** Kept across runs (reset() leaves it alone): the last end value of each player of this game session. */
+    private final Map<String, EndValue> endValues = new HashMap<>();
+    LongSupplier clock = System::currentTimeMillis;
     private final Set<String> requestedBaselines = new HashSet<>();
     private final Set<String> requestedFinals = new HashSet<>();
     private final Map<String, Integer> baselines = new HashMap<>();
@@ -82,7 +95,7 @@ public final class DungeonApiEnrichment {
         if (requestedFinals.contains(requestedName) || !requestedTotals.add(requestedName)) {
             return;
         }
-        request(client, name, "total-secrets", NO_RETRY, 0, () -> false, onSuccess, () -> { });
+        request(client, name, "total-secrets", NO_RETRY, 0, () -> false, onSuccess, error -> false, () -> { });
     }
 
     public void requestBaseline(
@@ -94,7 +107,7 @@ public final class DungeonApiEnrichment {
         if (finalFetchStarted || !requestedBaselines.add(requestedName)) {
             return;
         }
-        request(client, name, "run-secret baseline", BASELINE_RETRY_MS, 0, () -> !finalFetchStarted, result -> {
+        Consumer<HypixelSkyBlockProfileClient.SecretResult> accept = result -> {
             if (finalFetchStarted) {
                 KungDebugRecorder.event("player-stats", "run-secret baseline ignored after finish player=" + name);
                 return;
@@ -102,7 +115,25 @@ public final class DungeonApiEnrichment {
             baselines.put(resultKey(result, name), result.secretsFound());
             baselines.put(requestedName, result.secretsFound());
             onSuccess.accept(result);
+        };
+        request(client, name, "run-secret baseline", BASELINE_RETRY_MS, 0, () -> !finalFetchStarted, accept, error -> {
+            Integer carried = endValueOf(requestedName);
+            if (carried == null || finalFetchStarted) return false;
+            KungDebugRecorder.event("player-stats", "run-secret baseline from the last run's end value player=" + name
+                + " total=" + carried + " after " + error);
+            accept.accept(new HypixelSkyBlockProfileClient.SecretResult(true, name, carried, ""));
+            return true;
         }, () -> { });
+    }
+
+    /** The player's end value from an earlier run of this game session, while it is young enough; else null. */
+    Integer endValueOf(String requestedName) {
+        EndValue value = endValues.get(requestedName);
+        return value != null && clock.getAsLong() - value.atMs() <= END_VALUE_MAX_AGE_MS ? value.total() : null;
+    }
+
+    void rememberEndValue(String requestedName, int total) {
+        if (total >= 0) endValues.put(requestedName, new EndValue(total, clock.getAsLong()));
     }
 
     public void requestFinal(
@@ -121,14 +152,16 @@ public final class DungeonApiEnrichment {
             note("no start value for " + name);
         }
         pendingFinalFetches++;
-        request(client, name, "run-secret final", FINAL_RETRY_MS, 0, () -> true,
-            result -> onSuccess.accept(result, runSecretDelta(baseline, result.secretsFound())),
-            () -> pendingFinalFetches = Math.max(0, pendingFinalFetches - 1));
+        request(client, name, "run-secret final", FINAL_RETRY_MS, 0, () -> true, result -> {
+            rememberEndValue(requestedName, result.secretsFound());
+            onSuccess.accept(result, runSecretDelta(baseline, result.secretsFound()));
+        }, error -> false, () -> pendingFinalFetches = Math.max(0, pendingFinalFetches - 1));
     }
 
     /**
      * One lookup. A transport or HTTP failure (not a 429: that window lasts minutes) is asked again after the next
      * pause while {@code wanted} holds; {@code onDone} runs once, after the answer or the last failure.
+     * {@code rescue} gets the last failure's text and returns true when it made up for the answer (no problem noted).
      */
     private void request(
         Minecraft client,
@@ -138,6 +171,7 @@ public final class DungeonApiEnrichment {
         int attempt,
         BooleanSupplier wanted,
         Consumer<HypixelSkyBlockProfileClient.SecretResult> onSuccess,
+        Predicate<String> rescue,
         Runnable onDone
     ) {
         long requestedGeneration = generation;
@@ -157,7 +191,7 @@ public final class DungeonApiEnrichment {
                 KungDebugRecorder.event("player-stats", operation + " failed player=" + name + " error=" + error
                     + (retry ? " retry in " + retryPausesMs[attempt] + " ms" : ""));
                 if (!retry) {
-                    note(operation + " " + error);
+                    if (!rescue.test(error)) note(operation + " " + error);
                     onDone.run();
                     return;
                 }
@@ -165,7 +199,7 @@ public final class DungeonApiEnrichment {
                     client.execute(() -> {
                         if (requestedGeneration != generation) return;
                         if (wanted.getAsBoolean()) {
-                            request(client, name, operation, retryPausesMs, attempt + 1, wanted, onSuccess, onDone);
+                            request(client, name, operation, retryPausesMs, attempt + 1, wanted, onSuccess, rescue, onDone);
                         } else {
                             onDone.run();
                         }

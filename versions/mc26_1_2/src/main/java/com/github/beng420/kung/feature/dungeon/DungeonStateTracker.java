@@ -29,6 +29,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.monster.zombie.Zombie;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.saveddata.maps.MapDecoration;
 import net.minecraft.world.level.saveddata.maps.MapItemSavedData;
 
@@ -498,6 +499,18 @@ public final class DungeonStateTracker {
             babyZombieDeaths.add(new BabyZombieDeath(entity.blockPosition(), dungeonTick));
         }
         runStats.observeEntityDeath(Minecraft.getInstance(), entity);
+    }
+
+    void observeOwnBlockClick(BlockPos pos, BlockState state) {
+        if (isInDungeonArea()) runStats.observeOwnBlockClick(pos, state, System.currentTimeMillis());
+    }
+
+    void observeOwnPickup() {
+        if (isInDungeonArea()) runStats.observeOwnPickup(System.currentTimeMillis());
+    }
+
+    void observeOwnUse() {
+        if (isInDungeonArea()) runStats.observeOwnUse(System.currentTimeMillis());
     }
 
     List<BabyZombieDeath> babyZombieDeaths() {
@@ -1360,6 +1373,7 @@ public final class DungeonStateTracker {
             instanceEntrance = DungeonScanUtils.getRoomGridPosition(client.player.blockPosition());
         }
 
+        if (dungeonInstanceActive) runStats.observeWishHealth(client);
         DungeonWorkload workload = DungeonWorkload.current();
         if (dungeonInstanceActive && workload.players()) {
             if (shouldObserve(lastStatsObserveTick, STATS_OBSERVE_INTERVAL_TICKS)) {

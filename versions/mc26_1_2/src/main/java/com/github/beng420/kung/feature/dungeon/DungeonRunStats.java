@@ -42,12 +42,17 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.EquipmentSlot;
 import net.minecraft.world.entity.EquipmentSlotGroup;
+import net.minecraft.world.entity.ambient.Bat;
 import net.minecraft.world.entity.monster.zombie.Zombie;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 
 public final class DungeonRunStats {
     private static final int MAX_DUNGEON_PLAYERS = 5;
+    /** A bat shot with a bow dies far away; a hit one dies at arm's length. */
+    private static final double OWN_BAT_RANGE = 30.0;
     private static final int TARGET_CRYPTS = 5;
     private static final long ROOM_CLEAR_PLAYER_STALE_TICKS = 40;
     /** The summary waits this long for the end values (a slow answer printed "?" at 3 s), then shows what it has. */
@@ -107,6 +112,11 @@ public final class DungeonRunStats {
     private final Map<RoomKey, Integer> roomSecretsFound = new HashMap<>();
     private final Map<RoomKey, Long> lastRoomPresenceTick = new HashMap<>();
     private final Set<String> batKillers = new HashSet<>();
+    private final DungeonSecretTally secretTally = new DungeonSecretTally();
+    /** Blocks this player already clicked this run: a looted chest or a taken skull gives no second secret. */
+    private final Set<BlockPos> clickedSecretBlocks = new HashSet<>();
+    /** The last own swing or item use; a bat that dies without one was not shot or hit by this player. */
+    private long lastOwnUseMillis = -1L;
     private final Set<String> debugClearedRooms = new HashSet<>();
     private final Set<String> debugCompletedRooms = new HashSet<>();
     private final DungeonApiEnrichment apiEnrichment = new DungeonApiEnrichment();
@@ -197,6 +207,9 @@ public final class DungeonRunStats {
         roomSecretsFound.clear();
         lastRoomPresenceTick.clear();
         batKillers.clear();
+        secretTally.reset();
+        clickedSecretBlocks.clear();
+        lastOwnUseMillis = -1L;
         derivedTotalRange = DungeonSecretCounts.TotalRange.ANY;
         derivedTotalConflictTick = -1L;
         debugClearedRooms.clear();
@@ -840,20 +853,25 @@ public final class DungeonRunStats {
     }
 
     public List<DungeonRoomDataSyncClient.LivePlayerReport> livePlayerReports(Minecraft client) {
-        UUID selfUuid = client != null && client.player != null ? client.player.getUUID() : null;
+        UUID selfUuid = client != null && client.player != null ? client.player.getUUID() : this.selfUuid;
         List<DungeonRoomDataSyncClient.LivePlayerReport> reports = new ArrayList<>();
         for (DungeonPlayerStats stats : summaryPlayers(client, selfUuid)) {
-            if (!stats.uuid().equals(selfUuid) || !stats.hasSecretsFound()
-                || !stats.hasOwnRunSecrets()) {
+            if (!stats.uuid().equals(selfUuid)) {
+                continue;
+            }
+            // The server only passes API_DELTA and PERSONAL on, so the live tally travels as PERSONAL. The exact
+            // API delta replaces it at the end of the run.
+            boolean exact = stats.hasSecretsFound() && stats.hasOwnRunSecrets();
+            if (!exact && !secretTally.known()) {
                 continue;
             }
             reports.add(new DungeonRoomDataSyncClient.LivePlayerReport(
                 stats.name(),
-                Math.max(0, stats.secretsFound()),
+                exact ? Math.max(0, stats.secretsFound()) : secretTally.own(),
                 Math.max(0, stats.deaths()),
                 "",
                 System.currentTimeMillis(),
-                stats.secretsSource()
+                exact ? stats.secretsSource() : DungeonSecretCounter.Source.PERSONAL.name()
             ));
         }
         return List.copyOf(reports);
@@ -1026,6 +1044,7 @@ public final class DungeonRunStats {
         if (entity == null) {
             return;
         }
+        if (entity instanceof Bat) observeBatDeath(client, entity, System.currentTimeMillis());
         boolean mimic = isMimicEntity(entity);
         if (entity instanceof Zombie zombie && zombie.isBaby()) {
             KungDebugRecorder.event("mimic-kill", "death-packet id=" + entity.getId()
@@ -1071,7 +1090,17 @@ public final class DungeonRunStats {
         for (String line : lines) {
             observeScoreboardLine(client, line);
         }
-        WishAlert.observeSidebar(client, lines, KungConfig.get().dungeon, selfDungeonClass(), wishLowHealth);
+    }
+
+    /**
+     * Every client tick, not with the 5-tick stats pass: the alert must not wait for the next pass once Hypixel has
+     * sent a teammate's new health. Two sources: the sidebar, and the health score under each nametag.
+     */
+    void observeWishHealth(Minecraft client) {
+        var config = KungConfig.get().dungeon;
+        if (client == null || client.level == null || !config.wishAlertEnabled()) return;
+        WishAlert.observeSidebar(client, HypixelInstanceTracker.INSTANCE.sidebarLines(), config, selfDungeonClass(), wishLowHealth);
+        WishAlert.observeBelowName(client, this::isKnownDungeonPlayer, config, selfDungeonClass(), wishLowHealth);
     }
 
     void observeScoreboardLine(Minecraft client, String raw) {
@@ -1323,7 +1352,68 @@ public final class DungeonRunStats {
         // A server snapshot replaces a previous observation; it never credits the current room/player.
         serverSecretsFoundObserved = true;
         secretsFound = observedTotal;
+        int claimed = secretTally.total(observedTotal, System.currentTimeMillis());
+        if (claimed > 0) {
+            KungDebugRecorder.event("secret-tally", "party total=" + observedTotal + " claimed=" + claimed
+                + " own=" + secretTally.own());
+        }
         updateDerivedSecretsTotalFromPercent();
+    }
+
+    /** A right click on a block that can hold a secret: a chest or a skull. Each block counts once per run. */
+    void observeOwnBlockClick(BlockPos pos, BlockState state, long nowMillis) {
+        if (!(state.is(Blocks.CHEST) || state.is(Blocks.TRAPPED_CHEST)
+            || state.is(Blocks.PLAYER_HEAD) || state.is(Blocks.PLAYER_WALL_HEAD))) {
+            return;
+        }
+        if (clickedSecretBlocks.add(pos.immutable())) observeOwnSecretAction("click " + pos.toShortString(), nowMillis);
+    }
+
+    /** The server said this player picked an item up. Whether it was a secret shows when the party total rises. */
+    void observeOwnPickup(long nowMillis) {
+        observeOwnSecretAction("pickup", nowMillis);
+    }
+
+    /** Any own swing, hit or item use, so that a nearby bat death can be this player's. */
+    void observeOwnUse(long nowMillis) {
+        lastOwnUseMillis = nowMillis;
+    }
+
+    private void observeBatDeath(Minecraft client, Entity bat, long nowMillis) {
+        boolean recentUse = lastOwnUseMillis >= 0L && nowMillis - lastOwnUseMillis <= DungeonSecretTally.WINDOW_MILLIS;
+        if (client.player != null && recentUse && bat.distanceToSqr(client.player) <= OWN_BAT_RANGE * OWN_BAT_RANGE) {
+            observeOwnSecretAction("bat", nowMillis);
+        }
+    }
+
+    private void observeOwnSecretAction(String what, long nowMillis) {
+        boolean matched = secretTally.action(nowMillis);
+        KungDebugRecorder.event("secret-tally", "own action=" + what + " matched=" + matched
+            + " own=" + secretTally.own());
+    }
+
+    /** One line of the secrets overlay: the name, and the count text, "?" while no source knows it. */
+    record SecretRow(String name, String count, boolean self) { }
+
+    /**
+     * The own count is the live tally until the API delta replaces it at the end of the run. A teammate's count is
+     * what that teammate's own Kung reported; nothing is ever guessed for a player without one.
+     */
+    List<SecretRow> secretRows() {
+        List<SecretRow> rows = new ArrayList<>();
+        for (DungeonPlayerStats stats : summaryPlayers()) {
+            boolean self = stats.uuid().equals(selfUuid);
+            String count = self && !stats.hasOwnRunSecrets() && secretTally.known()
+                ? Integer.toString(secretTally.own())
+                : stats.hasSecretsFound() ? Integer.toString(stats.secretsFound()) : "?";
+            rows.add(new SecretRow(stats.name(), count, self));
+        }
+        return List.copyOf(rows);
+    }
+
+    /** The party total from the tab, or -1 before the tab showed one. */
+    int partySecretTotal() {
+        return serverSecretsFoundObserved ? secretsFound : -1;
     }
 
     private void recordMatchedRoomSecretCount(
@@ -1949,18 +2039,37 @@ public final class DungeonRunStats {
             return 0;
         }
 
-        int completedCells = Math.max(completedRooms, scoreMapProgress(renderPlan).clearedCells());
+        int mapCleared = scoreMapProgress(renderPlan).clearedCells();
+        int completedCells = Math.max(completedRooms, mapCleared);
         if (completedCells <= 0) {
             return 0;
         }
 
         int projected = completedCells + (floor > 0 ? 1 : 0);
-        if (!bloodRoomCompleted) {
+        // Blood's credit is counted ahead of the Watcher's word. After it, the map's check on Blood's room carries
+        // it, but that check comes seconds late (2026-11-08 M7: the estimate fell by 5 to 6 at the Watcher's word and
+        // stayed down until the check, or until the boss entry), and a score never falls when Blood completes. So the
+        // credit stays while the map counts the clear rooms (the tab's count holds Blood already) and Blood is unchecked.
+        if (!bloodRoomCompleted || (mapCleared >= completedRooms && bloodDoneButNotChecked(renderPlan))) {
             projected++;
         }
         // Hypixel counts Blood and boss as rooms of their own, so their credit also covers up to two clear rooms
         // still open on the map (2026-11-02 floor 1: 18/20 + Blood + boss, open map cells, final Team Score 270).
         return Math.clamp(projected, 0, totalCells);
+    }
+
+    /** True while the Watcher has finished Blood but the map still shows its room unchecked. */
+    private boolean bloodDoneButNotChecked(DungeonLiveMapWriter.MatchRenderPlan plan) {
+        if (!bloodRoomCompleted || plan == null) {
+            return false;
+        }
+        for (var entry : plan.roomTypes().entrySet()) {
+            if (entry.getValue() == RoomType.BLOOD && plan.roomOwners().containsKey(entry.getKey())
+                && !scoreCellCleared(plan, entry.getKey())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static boolean scoreCellCleared(DungeonLiveMapWriter.MatchRenderPlan plan, DungeonLiveMapWriter.CellKey cell) {
