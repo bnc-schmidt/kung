@@ -813,6 +813,17 @@ public final class DungeonLiveMapWriter {
             return false;
         }
 
+        /**
+         * For a room no catalog entry names, its core and stable hash as the scan saw them: what a catalog entry needs,
+         * and what a report of a room that stays "?" must show. Empty for a room that has a name.
+         */
+        private String unmatchedHashText(DungeonMapSnapshot snapshot, CellKey cell,
+                                         DungeonKnownRoomCatalog.KnownCoreHint hint) {
+            if (cell == null || hint != null || matchContaining(cell.x(), cell.z()) != null) return "";
+            DungeonScanPoint point = snapshot.pointAt(cell.x() * 2, cell.z() * 2);
+            return point == null ? "" : " unmatched core=" + point.coreHash() + " stable=" + point.stableCoreHash();
+        }
+
         List<String> topologyDebugLines(DungeonMapSnapshot snapshot) {
             List<String> lines = new ArrayList<>();
             lines.add("summary revision="
@@ -890,6 +901,7 @@ public final class DungeonLiveMapWriter {
                     + type
                     + " hint="
                     + (hint == null ? "none" : compactName(hint.name()) + "/" + hint.secrets())
+                    + unmatchedHashText(snapshot, firstCell, hint)
                     + " cells="
                     + cellsText(cells)
                     + " visited="

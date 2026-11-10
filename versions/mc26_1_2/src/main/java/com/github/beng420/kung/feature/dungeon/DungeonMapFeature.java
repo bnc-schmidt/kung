@@ -81,6 +81,10 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
     private static DungeonLiveMapWriter.MatchRenderPlan roomLayoutPlan;
     private static DungeonRoomRenderLayout roomLayout;
     private static long playerMarkerFrame;
+    /** Radians the clear map is turned by while Rotate Map draws it; labels turn back by this much. */
+    private static float mapTurn;
+    /** My own head's pose while the map is turned: exact, not smoothed, so it stays in the middle and points up. */
+    private static MarkerPose rotatedSelf;
     private static long lastPlayerMarkerLogMillis;
     private static String lastPlayerMarkerLogState = "";
     private final DungeonStateTracker dungeonStateTracker;
@@ -249,19 +253,79 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         graphics.outline(-3, -3, GRID_PIXEL_SIZE + 6, GRID_PIXEL_SIZE + 6, MAP_BORDER);
 
         GridViewport viewport = GridViewport.from(snapshot, renderPlan, stats);
-        HudPose.begin(graphics, viewport.offsetX(), viewport.offsetY(), viewport.scale());
+        Minecraft client = Minecraft.getInstance();
+        boolean rotate = client.player != null && KungConfig.get().dungeon.rotateMap();
+        if (rotate) startRotation(graphics, client.player, viewport, partialTick);
         try {
-            graphics.pose().translate(-viewport.minPixelX(), -viewport.minPixelY());
-            drawGridContent(graphics, snapshot, renderPlan, stats, viewport);
-            if (!KungBuild.MODRINTH) drawMimicRoomHighlights(graphics, snapshot, renderPlan, stats, viewport);
-            if (!recording) {
-                drawPreRunStartRoom(graphics);
+            HudPose.begin(graphics, viewport.offsetX(), viewport.offsetY(), viewport.scale());
+            try {
+                graphics.pose().translate(-viewport.minPixelX(), -viewport.minPixelY());
+                drawGridContent(graphics, snapshot, renderPlan, stats, viewport);
+                if (!KungBuild.MODRINTH) drawMimicRoomHighlights(graphics, snapshot, renderPlan, stats, viewport);
+                if (!recording) {
+                    drawPreRunStartRoom(graphics);
+                }
+                drawRoomLabels(graphics, snapshot, renderPlan, stats, viewport);
+                drawPlayerMarkers(graphics, snapshot, stats, partialTick);
+            } finally {
+                HudPose.end(graphics);
             }
-            drawRoomLabels(graphics, snapshot, renderPlan, stats, viewport);
-            drawPlayerMarkers(graphics, snapshot, stats, partialTick);
         } finally {
-            HudPose.end(graphics);
+            if (rotate) endRotation(graphics);
         }
+    }
+
+    /**
+     * Rotate Map: everything inside the frame turns, the frame and the footer do not. The scissor cuts off what
+     * turns out of the frame. The pivot is my own head, which lands in the frame's middle.
+     */
+    private static void startRotation(GuiGraphicsExtractor graphics, AbstractClientPlayer player,
+                                      GridViewport viewport, float partialTick) {
+        SmoothPlayerTarget self = smoothTargetFromEntity(player, partialTick);
+        float middle = GRID_PIXEL_SIZE / 2.0F;
+        float headX = viewport.offsetX() + (self.x() - viewport.minPixelX()) * viewport.scale();
+        float headY = viewport.offsetY() + (self.y() - viewport.minPixelY()) * viewport.scale();
+        mapTurn = mapTurn(self.rotation());
+        rotatedSelf = new MarkerPose(self.x(), self.y(), self.rotation());
+        graphics.enableScissor(0, 0, GRID_PIXEL_SIZE, GRID_PIXEL_SIZE);
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(middle, middle);
+        graphics.pose().rotate(-mapTurn);
+        graphics.pose().translate(-headX, -headY);
+    }
+
+    private static void endRotation(GuiGraphicsExtractor graphics) {
+        graphics.pose().popMatrix();
+        graphics.disableScissor();
+        mapTurn = 0;
+        rotatedSelf = null;
+    }
+
+    /**
+     * A head drawn at {@code yaw + 180} points where its player looks (yaw 0 looks south, down the map); the map
+     * turns by the opposite, so the view direction ends up pointing up.
+     */
+    static float mapTurn(float yawDegrees) {
+        return (float) Math.toRadians(yawDegrees + 180.0F);
+    }
+
+    /** My own marker while the map is turned; everyone else keeps their smoothed pose. */
+    private static MarkerPose ownPose(UUID uuid, MarkerPose smoothed) {
+        Minecraft client = Minecraft.getInstance();
+        return rotatedSelf != null && client.player != null && uuid.equals(client.player.getUUID())
+            ? rotatedSelf : smoothed;
+    }
+
+    /** Cancels the map's turn around the given point, so what is drawn next reads upright. End with endUpright. */
+    private static void beginUpright(GuiGraphicsExtractor graphics, float centerX, float centerY) {
+        graphics.pose().pushMatrix();
+        graphics.pose().translate(centerX, centerY);
+        graphics.pose().rotate(mapTurn);
+        graphics.pose().translate(-centerX, -centerY);
+    }
+
+    private static void endUpright(GuiGraphicsExtractor graphics) {
+        graphics.pose().popMatrix();
     }
 
     static DungeonRoomRenderLayout roomLayoutFor(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
@@ -1005,9 +1069,14 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         int x = Math.max(minPixelX + 1, maxPixelX - width - 2);
         int y = Math.max(minPixelY + 1, maxPixelY - height - 1);
         boolean done = stats.princeKilled();
-        drawScaledText(graphics, icon, x, y, done ? MUTED_TEXT : SECRET_TARGET_TEXT, iconScale, true);
-        if (done) {
-            graphics.fill(x - 1, y + height / 2, x + width + 1, y + height / 2 + 1, BAD_TEXT);
+        beginUpright(graphics, x + width / 2.0F, y + height / 2.0F);
+        try {
+            drawScaledText(graphics, icon, x, y, done ? MUTED_TEXT : SECRET_TARGET_TEXT, iconScale, true);
+            if (done) {
+                graphics.fill(x - 1, y + height / 2, x + width + 1, y + height / 2 + 1, BAD_TEXT);
+            }
+        } finally {
+            endUpright(graphics);
         }
     }
 
@@ -1048,17 +1117,23 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
 
         int lineStep = Math.max(1, Math.round(ROOM_TEXT_LINE_STEP * textScale));
         int y = centerY - ((textLines.size() - 1) * lineStep) / 2 - Math.round(3 * textScale);
-        for (int index = 0; index < textLines.size(); index++) {
-            RoomTextLine line = textLines.get(index);
-            drawScaledCenteredText(
-                graphics,
-                line.text(),
-                centerX,
-                y + index * lineStep,
-                textColor,
-                line.scale() * textScale,
-                true
-            );
+        // The whole block turns back around the room's middle, so the lines keep their order.
+        beginUpright(graphics, centerX, centerY);
+        try {
+            for (int index = 0; index < textLines.size(); index++) {
+                RoomTextLine line = textLines.get(index);
+                drawScaledCenteredText(
+                    graphics,
+                    line.text(),
+                    centerX,
+                    y + index * lineStep,
+                    textColor,
+                    line.scale() * textScale,
+                    true
+                );
+            }
+        } finally {
+            endUpright(graphics);
         }
     }
 
@@ -1171,7 +1246,13 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
         boolean shadow
     ) {
         float textScale = textScale(KungConfig.get().dungeon);
-        drawScaledCenteredText(graphics, text, centerX, y - Math.round(4 * (textScale - 1)), color, textScale, shadow);
+        int top = y - Math.round(4 * (textScale - 1));
+        beginUpright(graphics, centerX, top + Minecraft.getInstance().font.lineHeight * textScale / 2.0F);
+        try {
+            drawScaledCenteredText(graphics, text, centerX, top, color, textScale, shadow);
+        } finally {
+            endUpright(graphics);
+        }
     }
 
     private static void drawScaledCenteredText(
@@ -1277,13 +1358,13 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
             ? PLAYER_HEAD_SIZE
             : TEAMMATE_HEAD_SIZE;
         SmoothPlayerTarget target = smoothTargetFromEntity(player, partialTick);
-        MarkerPose pose = smoothMarker(
+        MarkerPose pose = ownPose(player.getUUID(), smoothMarker(
             "entity:" + player.getUUID(),
             target.x(),
             target.y(),
             target.rotation(),
             frame
-        );
+        ));
 
         drawFallbackPlayerMarker(graphics, pose.x(), pose.y(), player.getSkin(), pose.rotation(), classColor, headSize);
     }
@@ -1386,13 +1467,13 @@ public final class DungeonMapFeature extends ConfigurableFeature<DungeonConfig> 
                 continue;
             }
             SmoothPlayerTarget target = markerTarget(markerPixel, decoration, loadedPlayer, partialTick);
-            MarkerPose pose = smoothMarker(
+            MarkerPose pose = ownPose(playerUuid, smoothMarker(
                 "player:" + playerUuid,
                 target.x(),
                 target.y(),
                 target.rotation(),
                 frame
-            );
+            ));
             String markerName = loadedPlayer == null ? playerSlot.name() : loadedPlayer.getName().getString();
             ClassRenderInfo classInfo = classRenderInfoFor(stats, playerUuid, markerName, playerSlot.dungeonClass());
 
