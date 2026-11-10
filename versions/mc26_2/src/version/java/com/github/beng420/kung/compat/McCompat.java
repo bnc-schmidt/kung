@@ -46,6 +46,9 @@ public final class McCompat {
 
     public static ChatComponent chat(Minecraft client) { return client.gui.hud.getChat(); }
 
+    /** The HUD's tick counter, which the chat uses for its message ages. */
+    public static int guiTicks(Minecraft client) { return client.gui.hud.getGuiTicks(); }
+
     public static PlayerTabOverlay tabList(Minecraft client) { return client.gui.hud.getTabList(); }
 
     public static void setTitleTimes(Minecraft client, int fadeIn, int stay, int fadeOut) {

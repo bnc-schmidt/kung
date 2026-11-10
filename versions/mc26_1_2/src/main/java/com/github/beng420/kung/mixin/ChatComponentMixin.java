@@ -30,6 +30,8 @@ public abstract class ChatComponentMixin {
                            ChatComponent.DisplayMode mode, boolean changeCursor, CallbackInfo callbackInfo) {
         if (mode != ChatComponent.DisplayMode.BACKGROUND || !PeekChatFeature.peeking()) return;
         callbackInfo.cancel();
+        // Behind a menu the HUD's chat would sit under the menu's blur: PeekChatFeature draws it over the menu instead.
+        if (PeekChatFeature.peekingInMenu()) return;
         PeekChatFeature.asFocusedChat(() ->
             extractRenderState(graphics, font, tickCount, -1, -1, ChatComponent.DisplayMode.FOREGROUND, false));
     }
