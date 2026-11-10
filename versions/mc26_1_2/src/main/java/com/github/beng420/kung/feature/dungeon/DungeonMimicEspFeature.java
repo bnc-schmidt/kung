@@ -241,7 +241,7 @@ public final class DungeonMimicEspFeature extends ConfigurableFeature<DungeonCon
 
     /** How far the point lies in front of the camera along its view direction; zero or less means behind it. */
     static double depthInFront(Vec3 fromCamera, float forwardX, float forwardY, float forwardZ) {
-        return fromCamera.x * forwardX + fromCamera.y * forwardY + fromCamera.z * forwardZ;
+        return com.github.beng420.kung.util.ViewDepth.depthInFront(fromCamera, forwardX, forwardY, forwardZ);
     }
 
     private boolean isAllowedMimicPosition(Minecraft client, DungeonLiveMapWriter.MatchRenderPlan renderPlan, BlockPos pos) {

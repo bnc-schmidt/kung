@@ -1067,7 +1067,7 @@ public final class M7DragonFeature extends ConfigurableFeature<DungeonConfig> {
             Vec3 core = trailPoint(dragon, DungeonConfig.DragonPart.BODY)
                 .add(dragon.getPosition(partialTick).subtract(dragon.position()));
             // Behind the camera the projection mirrors the point onto the screen, as with the Mimic ESP: never drawn.
-            if (DungeonMimicEspFeature.depthInFront(core.subtract(eye), forward.x(), forward.y(), forward.z()) <= 0.05) continue;
+            if (com.github.beng420.kung.util.ViewDepth.depthInFront(core.subtract(eye), forward.x(), forward.y(), forward.z()) <= 0.05) continue;
             Vec3 screen = client.gameRenderer.projectPointToScreen(core);
             if (!Double.isFinite(screen.x) || !Double.isFinite(screen.y) || screen.z < -1.0 || screen.z > 1.0) continue;
             String text = M7DragonHp.format(seen.last());
