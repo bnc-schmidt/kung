@@ -9,13 +9,16 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Predicate;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
+import net.minecraft.client.player.AbstractClientPlayer;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.scores.DisplaySlot;
 
 /** Tells a healer to wish, but only when wishing is actually possible. */
 public final class WishAlert {
@@ -24,8 +27,15 @@ public final class WishAlert {
      * NoammAddons was installed here, and NoammAddons only matches on it as well.
      */
     private static final Pattern ENRAGED = Pattern.compile("^⚠ (\\w+) is enraged! ⚠$");
-    /** Sidebar teammate line, e.g. "[H] yrkuna 12,345❤"; a dead teammate shows DEAD and never matches. */
+    /** Sidebar teammate line, e.g. "[H] yrkuna 12,345❤". */
     private static final Pattern TEAMMATE = Pattern.compile("\\[[HMABT]\\] (\\w{1,16}) ([\\d,.]+)(k?) ?❤");
+    /** A dead teammate shows DEAD instead of HP. */
+    private static final Pattern DEAD = Pattern.compile("\\[[HMABT]\\] (\\w{1,16}) DEAD");
+    /**
+     * Hypixel shows every player's health as the "health" score under the nametag too. A trace of a real run
+     * (2026-11-10) showed the same numbers as the sidebar, never later and at most one tick earlier, both once a second.
+     */
+    private static final String BELOW_NAME_HEALTH = "health";
 
     private WishAlert() { }
 
@@ -70,12 +80,40 @@ public final class WishAlert {
     static void observeSidebar(Minecraft client, List<String> lines, DungeonConfig config,
         DungeonRunStats.DungeonClass selfClass, LowHealth lowHealth) {
         if (client == null || client.player == null || client.gui == null || config == null) return;
-        boolean ready = canWish(config, selfClass, client.player.experienceLevel,
-            com.github.beng420.kung.runtime.KungDeveloperAccess.allowed());
+        boolean ready = ready(client, config, selfClass);
         for (String line : lines) {
             String name = lowHealth.observe(HypixelLocation.clean(line), config.wishAlertLowHealthPercent(), ready);
             if (name != null) alert(client, name + " is below " + config.wishAlertLowHealthPercent() + "% HP");
         }
+    }
+
+    /** The "health" score under each teammate's nametag: the sidebar's numbers, sometimes a tick earlier. */
+    static void observeBelowName(Minecraft client, Predicate<String> teammate, DungeonConfig config,
+        DungeonRunStats.DungeonClass selfClass, LowHealth lowHealth) {
+        if (client == null || client.player == null || client.gui == null || client.level == null || config == null) return;
+        var board = client.level.getScoreboard();
+        var objective = board.getDisplayObjective(DisplaySlot.BELOW_NAME);
+        if (objective == null || !BELOW_NAME_HEALTH.equals(objective.getName())) return;
+        boolean ready = ready(client, config, selfClass);
+        for (AbstractClientPlayer player : client.level.players()) {
+            String name = player.getName().getString();
+            if (player == client.player || !teammate.test(name)) continue;
+            var score = board.getPlayerScoreInfo(player, objective);
+            if (score == null) continue;
+            // A score of 0 is a dead teammate: no alert, and the revive's HP is no drop.
+            if (score.value() <= 0) {
+                lowHealth.forget(name);
+                continue;
+            }
+            String low = lowHealth.observeHp(name, score.value(), config.wishAlertLowHealthPercent(), ready,
+                System.currentTimeMillis());
+            if (low != null) alert(client, low + " is below " + config.wishAlertLowHealthPercent() + "% HP");
+        }
+    }
+
+    private static boolean ready(Minecraft client, DungeonConfig config, DungeonRunStats.DungeonClass selfClass) {
+        return canWish(config, selfClass, client.player.experienceLevel,
+            com.github.beng420.kung.runtime.KungDeveloperAccess.allowed());
     }
 
     private static void alert(Minecraft client, String reason) {
@@ -87,24 +125,52 @@ public final class WishAlert {
     }
 
     /**
-     * Teammate HP from the dungeon sidebar, which shows current HP only.
+     * Teammate HP from the dungeon sidebar and the below-name score; both show current HP only, once a second.
+     * Waiting for the threshold is too slow: a teammate can go from healthy to dead inside one update. So an alert
+     * also fires when a drop as big as the last one, seen within the last two updates, would take them under it.
      * ponytail: max HP is the highest value seen this run (everyone starts full). A shield that
      * the sidebar counts as HP would raise that max and make later alerts early; read real max HP
      * from somewhere else if a trace shows that happening.
      */
     static final class LowHealth {
+        /** A drop stays "recent" for two server updates; after that the teammate has held steady. */
+        static final long RECENT_DROP_MILLIS = 2_000L;
+
         private final Map<String, Double> maxSeen = new HashMap<>();
         private final Set<String> alerted = new HashSet<>();
+        private final Map<String, Double> lastHp = new HashMap<>();
+        private final Map<String, Double> lastDrop = new HashMap<>();
+        private final Map<String, Long> lastDropAt = new HashMap<>();
         private boolean loggedUnparsed;
 
         void reset() {
             maxSeen.clear();
             alerted.clear();
+            lastHp.clear();
+            lastDrop.clear();
+            lastDropAt.clear();
             loggedUnparsed = false;
         }
 
-        /** Returns a teammate to alert for: below the threshold, Wish ready, not alerted since they last recovered. */
+        /** A dead teammate comes back with whatever HP the revive gives: that is no drop. */
+        void forget(String name) {
+            lastHp.remove(name);
+            lastDrop.remove(name);
+            lastDropAt.remove(name);
+            alerted.remove(name);
+        }
+
+        /** Returns a teammate to alert for: low or about to be, Wish ready, not alerted since they last recovered. */
         String observe(String line, int thresholdPercent, boolean ready) {
+            return observe(line, thresholdPercent, ready, System.currentTimeMillis());
+        }
+
+        String observe(String line, int thresholdPercent, boolean ready, long nowMillis) {
+            Matcher dead = DEAD.matcher(line);
+            if (dead.find()) {
+                forget(dead.group(1));
+                return null;
+            }
             Matcher matcher = TEAMMATE.matcher(line);
             if (!matcher.find()) {
                 // The format is not confirmed by a real run yet; one sample shows what to match instead.
@@ -117,14 +183,28 @@ public final class WishAlert {
             String name = matcher.group(1);
             double hp = Double.parseDouble(matcher.group(2).replace(",", "")) * (matcher.group(3).isEmpty() ? 1 : 1000);
             if (!maxSeen.containsKey(name)) KungDebugRecorder.event("wish-alert", "teammate " + name + " hp=" + hp + " line=" + line);
+            return observeHp(name, hp, thresholdPercent, ready, nowMillis);
+        }
+
+        String observeHp(String name, double hp, int thresholdPercent, boolean ready, long nowMillis) {
+            Double previous = lastHp.put(name, hp);
+            // The same value from the other source is no change, so it is no drop either.
+            if (previous != null && hp < previous) {
+                lastDrop.put(name, previous - hp);
+                lastDropAt.put(name, nowMillis);
+            }
             double max = maxSeen.merge(name, hp, Math::max);
-            if (hp >= max * thresholdPercent / 100.0) {
+            double limit = max * thresholdPercent / 100.0;
+            Long dropAt = lastDropAt.get(name);
+            double recentDrop = dropAt != null && nowMillis - dropAt <= RECENT_DROP_MILLIS ? lastDrop.get(name) : 0.0;
+            if (hp >= limit && hp - recentDrop >= limit) {
                 alerted.remove(name);
                 return null;
             }
             // Held back while Wish charges, so it still fires once Wish is ready and they are still low.
             if (!ready || !alerted.add(name)) return null;
-            KungDebugRecorder.event("wish-alert", "low " + name + " hp=" + hp + " max=" + max + " threshold=" + thresholdPercent);
+            KungDebugRecorder.event("wish-alert", "low " + name + " hp=" + hp + " max=" + max
+                + " threshold=" + thresholdPercent + " recentDrop=" + recentDrop);
             return name;
         }
     }
