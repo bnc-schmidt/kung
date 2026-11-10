@@ -27,6 +27,7 @@ public final class KungCommands {
             DeveloperCommandGroup.register(root);
             dispatcher.register(root);
             DungeonJoinCommands.register(dispatcher);
+            ChatShortcuts.register(dispatcher);
         });
     }
 }

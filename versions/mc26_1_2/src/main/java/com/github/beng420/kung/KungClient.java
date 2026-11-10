@@ -9,6 +9,7 @@ import com.github.beng420.kung.feature.dungeon.DungeonStateTracker;
 import com.github.beng420.kung.feature.screen.ScreenTracker;
 import com.github.beng420.kung.runtime.AppServices;
 import com.github.beng420.kung.runtime.KungPaths;
+import com.github.beng420.kung.skyblock.HypixelFriendTracker;
 import com.github.beng420.kung.skyblock.HypixelGuildTracker;
 import com.github.beng420.kung.skyblock.HypixelInstanceTracker;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
@@ -32,6 +33,7 @@ public final class KungClient implements ClientModInitializer {
         HypixelInstanceTracker.initializeClient();
         HypixelPartyTracker.initializeClient();
         HypixelGuildTracker.initializeClient();
+        HypixelFriendTracker.initializeClient();
         SkyBlockMayorTracker.initializeClient();
         JerryPerkpocalypse.initializeClient();
         CatacombsRecentXpTracker.initializeClient();
