@@ -27,6 +27,7 @@ public final class SplitPersonalBestsScreen extends Screen {
     private static final UiTheme THEME = UiTheme.menu();
     private static final int PANEL_WIDTH = 500;
     private static final int PANEL_HEIGHT = 408;
+    private static final int BEST_RUN_ROW_HEIGHT = 20;
     private static final Pattern TIME_INPUT = Pattern.compile("[0-9]{0,15}(:[0-9]{0,2}(\\.[0-9]{0,3})?)?");
     private static final Pattern COMPLETE_TIME = Pattern.compile("[0-9]{1,15}:[0-5][0-9]\\.[0-9]{3}");
     private final SplitsConfig config = KungConfig.get().splits;
@@ -34,6 +35,8 @@ public final class SplitPersonalBestsScreen extends Screen {
     private final List<Row> rows = new ArrayList<>();
     private Font menuFont;
     private int selectedFloor;
+    /** The second tab: the floor's fastest recorded run, read-only, with a button to clear it. */
+    private boolean bestRunTab;
     private int x;
     private int y;
     private String status = "Save and Clear apply immediately. Esc closes this page.";
@@ -85,6 +88,8 @@ public final class SplitPersonalBestsScreen extends Screen {
     private UiBounds saveBounds(int index) { return new UiBounds(x + 383, rowY(index), 46, 20); }
     private UiBounds clearBounds(int index) { return new UiBounds(x + 436, rowY(index), 50, 20); }
     private UiBounds resetAverageBounds() { return new UiBounds(x + 394, y + 6, 92, 20); }
+    private UiBounds splitsTabBounds() { return new UiBounds(x + 114, y + 6, 52, 20); }
+    private UiBounds bestRunTabBounds() { return new UiBounds(x + 172, y + 6, 70, 20); }
     private UiBounds floorBounds(int index) {
         if (index == 0) return new UiBounds(x + 14, y + 32, 65, 20);
         int number = index > 7 ? index - 7 : index;
@@ -103,15 +108,23 @@ public final class SplitPersonalBestsScreen extends Screen {
             UiShapes.shadow(graphics, x, y, PANEL_WIDTH, PANEL_HEIGHT, 5);
             UiShapes.rounded(graphics, x - 1, y - 1, PANEL_WIDTH + 2, PANEL_HEIGHT + 2, 6, THEME.accent());
             UiShapes.rounded(graphics, x, y, PANEL_WIDTH, PANEL_HEIGHT, 5, THEME.panel());
-            graphics.text(menuFont, getTitle(), x + 14, y + 12, THEME.accent(), false);
-            int runs = config.recentRunCount(floor(), masterMode());
-            graphics.text(menuFont, "AVG: " + runs + "/" + SplitsConfig.RECENT_RUN_LIMIT + " runs",
-                x + 270, y + 12, THEME.muted(), false);
-            UiButton.draw(graphics, menuFont, THEME, resetAverageBounds(), "Reset AVG", mouseX, mouseY, runs > 0, THEME.error());
+            graphics.text(menuFont, "Personal Bests", x + 14, y + 12, THEME.accent(), false);
+            UiButton.draw(graphics, menuFont, THEME, splitsTabBounds(), "Splits", mouseX, mouseY, true,
+                bestRunTab ? THEME.text() : THEME.accent());
+            UiButton.draw(graphics, menuFont, THEME, bestRunTabBounds(), "Best Run", mouseX, mouseY, true,
+                bestRunTab ? THEME.accent() : THEME.text());
             for (int i = 0; i < 15; i++) {
                 UiButton.draw(graphics, menuFont, THEME, floorBounds(i), floorLabel(i), mouseX, mouseY, true,
                     i == selectedFloor ? THEME.accent() : THEME.text());
             }
+            if (bestRunTab) {
+                drawBestRun(graphics, mouseX, mouseY);
+                return;
+            }
+            int runs = config.recentRunCount(floor(), masterMode());
+            graphics.text(menuFont, "AVG: " + runs + "/" + SplitsConfig.RECENT_RUN_LIMIT + " runs",
+                x + 270, y + 12, THEME.muted(), false);
+            UiButton.draw(graphics, menuFont, THEME, resetAverageBounds(), "Reset AVG", mouseX, mouseY, runs > 0, THEME.error());
             graphics.text(menuFont, "Split", x + 14, y + 88, THEME.muted(), false);
             graphics.text(menuFont, "Saved PB", x + 174, y + 88, THEME.muted(), false);
             graphics.text(menuFont, "New time", x + 265, y + 88, THEME.muted(), false);
@@ -134,13 +147,54 @@ public final class SplitPersonalBestsScreen extends Screen {
         }
     }
 
+    /** The floor's fastest recorded run: every split and the whole time, next to the saved best of that split. */
+    private void drawBestRun(GuiGraphicsExtractor graphics, int mouseX, int mouseY) {
+        var run = config.bestRun(floor(), masterMode());
+        long total = config.bestRunMillis(floor(), masterMode());
+        graphics.text(menuFont, total > 0L ? "Best run: " + formatTime(total) : "No best run recorded",
+            x + 270, y + 12, THEME.muted(), false);
+        UiButton.draw(graphics, menuFont, THEME, resetAverageBounds(), "Clear Run", mouseX, mouseY, total > 0L, THEME.error());
+        graphics.text(menuFont, "Split", x + 14, y + 88, THEME.muted(), false);
+        graphics.text(menuFont, "Best run", x + 174, y + 88, THEME.muted(), false);
+        graphics.text(menuFont, "Saved PB", x + 265, y + 88, THEME.muted(), false);
+        List<String> names = new ArrayList<>(List.of(DungeonSplitTracker.namesFor(floor(), masterMode())));
+        int phases = names.size();
+        names.add(SplitsConfig.BEST_RUN_BOSS_ENTRY);
+        names.add(SplitsConfig.BEST_RUN_TOTAL);
+        for (int i = 0; i < names.size(); i++) {
+            int top = y + 104 + i * BEST_RUN_ROW_HEIGHT;
+            String name = names.get(i);
+            graphics.text(menuFont, name, x + 14, top + 4, THEME.text(), false);
+            graphics.text(menuFont, formatTime(run.getOrDefault(name, -1L)), x + 174, top + 4, THEME.warning(), false);
+            // Boss Entry and Total are no splits, so no personal best exists for them.
+            long best = i < phases ? config.personalBestMillis(floor(), masterMode(), name) : -1L;
+            graphics.text(menuFont, formatTime(best), x + 265, top + 4, THEME.muted(), false);
+        }
+        graphics.text(menuFont, "Recorded when a finished run beats this time. Needs the Splits Overlay on.",
+            x + 14, y + 378, THEME.muted(), false);
+        graphics.text(menuFont, status, x + 14, y + 392, THEME.muted(), false);
+    }
+
     @Override
     public boolean mouseClicked(MouseButtonEvent event, boolean doubleClick) {
         if (McInput.button(event) != 0) return false;
         layout();
         int mx = coordinate(event.x());
         int my = coordinate(event.y());
-        if (resetAverageBounds().contains(mx, my)) {
+        if (splitsTabBounds().contains(mx, my) || bestRunTabBounds().contains(mx, my)) {
+            boolean best = bestRunTabBounds().contains(mx, my);
+            if (best != bestRunTab) focus(-1);
+            bestRunTab = best;
+            return true;
+        }
+        if (bestRunTab && resetAverageBounds().contains(mx, my)) {
+            if (config.bestRunMillis(floor(), masterMode()) > 0L) {
+                config.clearBestRun(floor(), masterMode());
+                status = floorLabel(selectedFloor) + " best run cleared. The next finished run becomes the best.";
+            }
+            return true;
+        }
+        if (resetAverageBounds().contains(mx, my) && !bestRunTab) {
             if (config.recentRunCount(floor(), masterMode()) > 0) {
                 config.clearRecentRuns(floor(), masterMode());
                 status = floorLabel(selectedFloor) + " AVG history reset. Personal bests kept.";
@@ -153,6 +207,7 @@ public final class SplitPersonalBestsScreen extends Screen {
                 return true;
             }
         }
+        if (bestRunTab) return true;
         for (int i = 0; i < rows.size(); i++) {
             if (saveBounds(i).contains(mx, my)) { save(rows.get(i)); return true; }
             if (clearBounds(i).contains(mx, my)) { clear(rows.get(i)); return true; }
@@ -187,6 +242,7 @@ public final class SplitPersonalBestsScreen extends Screen {
     @Override
     public boolean keyPressed(KeyEvent event) {
         if (McInput.key(event) == KeyCodes.ESCAPE) { onClose(); return true; }
+        if (bestRunTab) return super.keyPressed(event);
         if (McInput.key(event) == KeyCodes.TAB) {
             int focused = -1;
             for (int i = 0; i < rows.size(); i++) if (rows.get(i).input().isFocused()) focused = i;
@@ -204,6 +260,7 @@ public final class SplitPersonalBestsScreen extends Screen {
 
     @Override
     public boolean charTyped(CharacterEvent event) {
+        if (bestRunTab) return false;
         for (Row row : rows) if (row.input().isFocused()) return row.input().charTyped(event);
         return false;
     }

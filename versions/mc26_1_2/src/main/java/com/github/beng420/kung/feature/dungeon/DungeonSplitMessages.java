@@ -4,6 +4,7 @@ import com.github.beng420.kung.config.category.SplitsConfig;
 import com.github.beng420.kung.message.KungMessages;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.network.chat.Component;
@@ -26,17 +27,27 @@ final class DungeonSplitMessages {
 
     static List<Notice> summary(DungeonSplitTracker tracker, int floor, boolean masterMode, SplitsConfig config) {
         List<Notice> result = new ArrayList<>();
-        result.add(new Notice(KungMessages.Type.INFO, floorPrefix(floor, masterMode) + "Run Splits (server time in parentheses)"));
+        // " | <pb>" after every line: the same row of the best recorded run, "--" where that run has none.
+        Map<String, Long> pbRun = config.includePbRun() ? tracker.pbRun() : null;
+        result.add(new Notice(KungMessages.Type.INFO, floorPrefix(floor, masterMode) + "Run Splits (server time in parentheses"
+            + (pbRun == null ? ")" : ", best run after |)")));
         for (String name : tracker.splitNames()) {
             var split = DungeonSplitsOverlayFeature.phaseSnapshot(tracker, name);
-            result.add(summaryTime(name, split == null ? -1L : split.splitDurationMillis(),
-                split == null ? -1L : split.serverSplitDurationMillis(), config,
-                split != null && split == tracker.stoppedCurrentSplit()));
+            long wall = split == null ? -1L : split.splitDurationMillis();
+            boolean unfinished = split != null && split == tracker.stoppedCurrentSplit();
+            result.add(summaryTime(name, wall, split == null ? -1L : split.serverSplitDurationMillis(), config,
+                unfinished, pbText(pbRun, name, config), delta(pbRun, name, wall, !unfinished), pbMillis(pbRun, name)));
         }
         var portal = DungeonSplitsOverlayFeature.completedSplit("Portal Entry", tracker.completedSplits());
-        result.add(summaryTime("Boss Entry", portal == null ? -1L : portal.totalDurationMillis(),
-            portal == null ? -1L : portal.serverTotalDurationMillis(), config, false));
-        result.add(summaryTime("Total", tracker.currentTotalDurationMillis(), tracker.currentTotalServerDurationMillis(), config, false));
+        long bossWall = portal == null ? -1L : portal.totalDurationMillis();
+        result.add(summaryTime("Boss Entry", bossWall, portal == null ? -1L : portal.serverTotalDurationMillis(), config, false,
+            pbText(pbRun, SplitsConfig.BEST_RUN_BOSS_ENTRY, config),
+            delta(pbRun, SplitsConfig.BEST_RUN_BOSS_ENTRY, bossWall, true), pbMillis(pbRun, SplitsConfig.BEST_RUN_BOSS_ENTRY)));
+        long totalWall = tracker.currentTotalDurationMillis();
+        result.add(summaryTime("Total", totalWall, tracker.currentTotalServerDurationMillis(), config, false,
+            pbText(pbRun, SplitsConfig.BEST_RUN_TOTAL, config),
+            delta(pbRun, SplitsConfig.BEST_RUN_TOTAL, totalWall, DungeonSplitsOverlayFeature.finishedAllPhases(tracker)),
+            pbMillis(pbRun, SplitsConfig.BEST_RUN_TOTAL)));
         if (config.timeLost()) {
             long loss = DungeonSplitsOverlayFeature.settledTotalLostTimeMillis(tracker);
             result.add(new Notice(colored("Time Lost: ", DungeonSplitsOverlayFeature.LOST_TIME)
@@ -46,7 +57,34 @@ final class DungeonSplitMessages {
         return List.copyOf(result);
     }
 
-    private static Notice summaryTime(String name, long wallMillis, long serverMillis, SplitsConfig config, boolean unfinished) {
+    /** " | 1m 2.34s" for a row of the best run, or nothing while the best run is not included. */
+    private static String pbText(Map<String, Long> pbRun, String row, SplitsConfig config) {
+        if (pbRun == null) return "";
+        return " | " + DungeonSplitsOverlayFeature.formatDurationMillis(pbRun.getOrDefault(row, -1L), config.format());
+    }
+
+    private static long pbMillis(Map<String, Long> pbRun, String row) {
+        return pbRun == null ? -1L : pbRun.getOrDefault(row, -1L);
+    }
+
+    /** This run's time minus the best run's for a row, or NO_DELTA while the best run is not included or has none. */
+    private static long delta(Map<String, Long> pbRun, String row, long wallMillis, boolean settled) {
+        return pbRun == null ? DungeonSplitsOverlayFeature.NO_DELTA
+            : DungeonSplitsOverlayFeature.deltaMillis(wallMillis, pbRun.getOrDefault(row, -1L), settled);
+    }
+
+    /** The chat line for a run that beat the floor's best: the new time and the one it replaced. */
+    static Notice bestRunNotice(int floor, boolean masterMode, long totalMillis, long previousMillis,
+                                SplitsConfig.TimeFormat format) {
+        String previous = previousMillis > 0L
+            ? " (Previous: " + DungeonSplitsOverlayFeature.formatDurationMillis(previousMillis, format) + ")"
+            : " (first recorded run)";
+        return new Notice(KungMessages.Type.SUCCESS, floorPrefix(floor, masterMode) + "new PB run recorded: "
+            + DungeonSplitsOverlayFeature.formatDurationMillis(totalMillis, format) + previous);
+    }
+
+    private static Notice summaryTime(String name, long wallMillis, long serverMillis, SplitsConfig config,
+                                      boolean unfinished, String pb, long delta, long pbMillis) {
         int labelColor = wallMillis >= 0L || name.equals("Boss Entry") || name.equals("Total")
             ? DungeonSplitsOverlayFeature.phaseColor(name) : DungeonSplitsOverlayFeature.MUTED;
         var body = colored(name + (unfinished ? " (unfinished)" : "") + ": ", labelColor)
@@ -56,6 +94,11 @@ final class DungeonSplitMessages {
                 DungeonSplitsOverlayFeature.MUTED));
         String loss = config.timeLost() ? DungeonSplitsOverlayFeature.lostTimeSuffix(wallMillis, serverMillis) : "";
         if (!loss.isEmpty()) body.append(colored(" " + loss, DungeonSplitsOverlayFeature.LOST_TIME));
+        if (!pb.isEmpty()) body.append(colored(pb, DungeonSplitsOverlayFeature.MUTED));
+        if (delta != DungeonSplitsOverlayFeature.NO_DELTA) {
+            body.append(colored(" (" + DungeonSplitsOverlayFeature.formatDeltaMillis(delta) + ")",
+                DungeonSplitsOverlayFeature.deltaColor(delta, pbMillis)));
+        }
         return new Notice(body);
     }
 

@@ -45,6 +45,7 @@ public final class DungeonSplitTracker {
         "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows.", 5,
         "[BOSS] Sadan: So you made it all the way here... Now you wish to defy me? Sadan?!", 6,
         "[BOSS] Maxor: WELL! WELL! WELL! LOOK WHO'S HERE!", 7);
+    private static final String RELICS_LAST_RESORT = "[BOSS] Wither King: You... again?";
     private static final String WITHER_KING_DEATH = "[BOSS] Wither King: Incredible. You did what I couldn't do myself.";
     /** Hypixel dropped most Necron/Wither King dialogue; a relic pickup is the surviving Relics start. */
     private static final Pattern RELIC_PICKUP = Pattern.compile("^(?:\\[[^\\]]+] )?\\w{1,16} picked the Corrupted \\w+ Relic!$");
@@ -90,6 +91,16 @@ public final class DungeonSplitTracker {
     private String awaitingCompletionAfter;
     /** The score freezes clocks before the immediately following victory text can confirm this PB. */
     private PendingVictory pendingVictory;
+    /**
+     * Relics began on the Wither King's "You... again?", the last resort: the pickups and Necron's death line never
+     * arrived (a dead player gets neither), so Relics really began earlier. From that line to the first dragon is
+     * always about 5 seconds, which is no Relics time and must never become a record.
+     */
+    private boolean currentStartInexact;
+    /** The best run this finished run beat, so the run keeps its comparison once the record is its own. Null otherwise. */
+    private Map<String, Long> beatenRun;
+    /** The "new best run" line, held until the splits paste (if any) has gone out before it. */
+    private DungeonSplitMessages.Notice bestRunNotice;
 
     public DungeonSplitTracker() {
         this(() -> System.nanoTime() / 1_000_000L,
@@ -220,6 +231,9 @@ public final class DungeonSplitTracker {
         stoppedCurrentSplit = null;
         awaitingCompletionAfter = null;
         pendingVictory = null;
+        currentStartInexact = false;
+        beatenRun = null;
+        bestRunNotice = null;
     }
 
     /** Manual debug split; automatic progression below only ever moves forward. */
@@ -313,6 +327,8 @@ public final class DungeonSplitTracker {
         // Missing phase messages leave an unknown boundary. Preserve total time,
         // but do not label the entire elapsed span as an accurate single phase.
         advanceTo(next, clean);
+        // Set after the move: starting a split clears it.
+        if (clean.equals(RELICS_LAST_RESORT)) currentStartInexact = true;
         return true;
     }
 
@@ -395,7 +411,7 @@ public final class DungeonSplitTracker {
 
     private void completeCurrentAndStart(String next, boolean timingKnown, String boundary) {
         long elapsed = currentTotalDurationMillis();
-        if (hasCurrentSplit()) completeCurrent(elapsed, timingKnown, boundary, true);
+        if (hasCurrentSplit()) completeCurrent(elapsed, timingKnown && !currentStartInexact, boundary, true);
         awaitingCompletionAfter = null;
         currentSplitName = next;
         startClockSegment(elapsed);
@@ -440,13 +456,52 @@ public final class DungeonSplitTracker {
                 Long sample = runMeasurements.get(name);
                 if (completedRun && sample != null) averagePhases.put(name, sample);
             }
-            config.get().recordRun(floor, masterMode, validPhases, averagePhases);
+            SplitsConfig settings = config.get();
+            Map<String, Long> previousBest = settings.bestRun(floor, masterMode);
+            boolean newBest = settings.recordRun(floor, masterMode, validPhases, averagePhases,
+                completedRun && !averagePhases.isEmpty() ? bestRunOf(averagePhases) : null);
+            if (newBest) {
+                long previousTotal = previousBest.getOrDefault(SplitsConfig.BEST_RUN_TOTAL, -1L);
+                beatenRun = previousBest;
+                bestRunNotice = DungeonSplitMessages.bestRunNotice(floor, masterMode, stoppedElapsedMillis,
+                    previousTotal, settings.format());
+                diagnostics.accept("best-run recorded floor=" + floor + " master=" + masterMode
+                    + " totalMs=" + stoppedElapsedMillis + " previousMs=" + previousTotal);
+            }
         }
         personalBestCandidates.clear();
         if (completedRun) runMeasurements.clear();
     }
 
+    /** A confirmed run as a candidate for the floor's best run: every measured split, Boss Entry and the whole time. */
+    private Map<String, Long> bestRunOf(Map<String, Long> phases) {
+        Map<String, Long> run = new HashMap<>(phases);
+        CompletedSplit portal = DungeonSplitsOverlayFeature.completedSplit("Portal Entry", completed);
+        if (portal != null && portal.totalDurationMillis() > 0L) {
+            run.put(SplitsConfig.BEST_RUN_BOSS_ENTRY, portal.totalDurationMillis());
+        }
+        run.put(SplitsConfig.BEST_RUN_TOTAL, stoppedElapsedMillis);
+        return run;
+    }
+
+    private void sendBestRunNotice() {
+        if (bestRunNotice == null) return;
+        runSummaries.accept(List.of(bestRunNotice));
+        bestRunNotice = null;
+    }
+
+    /**
+     * The splits of the floor's fastest recorded run, to compare this run with: by phase name, plus "Boss Entry" and
+     * "Total". Empty while the floor is unknown or nothing was recorded. A run that just set the record keeps the
+     * run it beat.
+     */
+    public Map<String, Long> pbRun() {
+        if (beatenRun != null) return beatenRun;
+        return hasKnownFloor() ? config.get().bestRun(floor, masterMode) : Map.of();
+    }
+
     private void startClockSegment(long elapsed) {
+        currentStartInexact = false;
         currentSplitStartMillis = elapsed;
         currentSplitStartServerMillis = serverElapsedMillis;
         largestPhaseTickGapMillis = 0L;
@@ -515,6 +570,7 @@ public final class DungeonSplitTracker {
         if (!manualRun && settings.enabled() && settings.runEndChat()) {
             runSummaries.accept(DungeonSplitMessages.summary(this, hasKnownFloor() ? floor : -1, masterMode, settings));
         }
+        sendBestRunNotice();
     }
 
     private boolean confirmPendingVictory(String message) {
@@ -534,6 +590,7 @@ public final class DungeonSplitTracker {
         }
         saveMeasurements(true);
         if (pending.bestEligible()) announce(notice);
+        sendBestRunNotice();
         // Confirm the existing score-boundary sample; never append a split or resume either clock.
         predictedFinishMillis = stoppedElapsedMillis;
         traceStopped("run-victory-confirmed", message);
@@ -635,8 +692,9 @@ public final class DungeonSplitTracker {
             case "[BOSS] Goldor: Who dares trespass into my domain?" -> "Terminals";
             case "The Core entrance is opening!" -> "Goldor";
             case "[BOSS] Necron: You went further than any human before, congratulations." -> "Necron";
-            // "You... again?" is only the last-resort Relics start; it never moves a run that is already in Relics.
-            case "[BOSS] Necron: All this, for nothing...", "[BOSS] Wither King: You... again?" -> "Relics";
+            // "You... again?" is only the last-resort Relics start; it never moves a run that is already in Relics, and
+            // the Relics time measured from it is not kept (currentStartInexact).
+            case "[BOSS] Necron: All this, for nothing...", RELICS_LAST_RESORT -> "Relics";
             case "[BOSS] Wither King: We will decide it all, here, now." -> "Dragons";
             default -> null;
         };

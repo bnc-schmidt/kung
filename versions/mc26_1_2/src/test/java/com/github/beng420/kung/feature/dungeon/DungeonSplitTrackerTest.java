@@ -612,7 +612,7 @@ public final class DungeonSplitTrackerTest {
         return tracker;
     }
 
-    /** The last two completed splits are Necron then Relics, both measured (never -1). */
+    /** The last two completed splits are Necron then Relics; -1 means the phase's timing is unknown. */
     private static void assertNecronAndRelics(DungeonSplitTracker tracker, long necron, long relics) {
         var completed = tracker.completedSplits();
         var necronSplit = completed.get(completed.size() - 2);
@@ -653,7 +653,7 @@ public final class DungeonSplitTrackerTest {
     }
 
     @Test
-    public void everyRelicsStartBoundaryLeavesNecronAndRelicsMeasured() {
+    public void everyRelicsStartBoundaryLeavesNecronMeasuredAndRelicsMeasuredUnlessItStartedOnTheLastResort() {
         for (String start : new String[] {NECRON_DEATH, RELIC_PICKUP, KING_AGAIN}) {
             AtomicLong clock = new AtomicLong();
             DungeonSplitTracker tracker = necronTracker(clock, new SplitsConfig());
@@ -663,13 +663,37 @@ public final class DungeonSplitTrackerTest {
             clock.addAndGet(6_000L);
             assertTrue(start, tracker.observeMessage(KING_DECIDES, 0L));
             assertEquals(start, "Dragons", tracker.currentSplitName());
-            assertNecronAndRelics(tracker, 4_000L, 6_000L);
+            // The last resort comes only after the real start went unseen, so those 6 s are not the Relics phase.
+            assertNecronAndRelics(tracker, 4_000L, start.equals(KING_AGAIN) ? -1L : 6_000L);
             // Later Wither King lines are plain dialogue, never a boundary.
             assertFalse(tracker.observeMessage(KING_AGAIN, 0L));
             assertFalse(tracker.observeMessage(
                 "[BOSS] Wither King: I no longer wish to fight, but I know that will not stop you.", 0L));
             assertEquals("Dragons", tracker.currentSplitName());
         }
+    }
+
+    /**
+     * 2026-11-09 report: the player and the Tank were dead, so no pickup or Necron death line arrived; the Relics
+     * time began at "You... again?", always 5 s before the first dragon, and became a Relics record.
+     */
+    @Test
+    public void relicsStartedOnTheLastResortIsNeverAPersonalBest() {
+        SplitsConfig config = new SplitsConfig();
+        config.setEnabled(true);
+        AtomicLong clock = new AtomicLong();
+        DungeonSplitTracker tracker = necronTracker(clock, config);
+        clock.addAndGet(30_000L);
+        assertTrue(tracker.observeMessage(KING_AGAIN, 0L));
+        clock.addAndGet(5_000L);
+        tracker.dragonSpawned();
+        assertEquals("Dragons", tracker.currentSplitName());
+        assertEquals(-1L, tracker.completedSplits().getLast().splitDurationMillis());
+        clock.addAndGet(20_000L);
+        tracker.observeMessage("[BOSS] Wither King: Incredible. You did what I couldn't do myself.", 0L);
+        clock.addAndGet(2_000L);
+        tracker.observeMessage("Team Score: 300 (S+)", 0L);
+        assertEquals(-1L, config.personalBestMillis(7, true, "Relics"));
     }
 
     @Test

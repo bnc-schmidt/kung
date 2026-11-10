@@ -7,6 +7,9 @@ import java.util.TreeMap;
 
 public final class SplitsConfig extends ConfigCategory {
     public static final int RECENT_RUN_LIMIT = 20;
+    /** The two rows of a best run that are no phase: the time when the boss was entered, and the whole run. */
+    public static final String BEST_RUN_BOSS_ENTRY = "Boss Entry";
+    public static final String BEST_RUN_TOTAL = "Total";
     private boolean enabled = false;
     private int x = 226;
     private int y = 8;
@@ -25,6 +28,13 @@ public final class SplitsConfig extends ConfigCategory {
     /** Whole-run record times in milliseconds by floor key: seeded once from the API, then from Hypixel's NEW RECORD lines. */
     private Map<String, Long> floorRecords = new TreeMap<>();
     private boolean floorRecordsSeeded = false;
+    /** Show the best recorded run beside the splits (overlay) and after each line (chat paste). */
+    private boolean includePbRun = false;
+    /**
+     * The fastest confirmed run Kung recorded per floor key: real milliseconds by phase, plus {@link #BEST_RUN_BOSS_ENTRY}
+     * and {@link #BEST_RUN_TOTAL}. It is always recorded; {@link #includePbRun} only decides whether it is shown.
+     */
+    private Map<String, Map<String, Long>> bestRuns = new TreeMap<>();
     private transient long predictionRevision;
 
     public boolean enabled() { return enabled; }
@@ -48,6 +58,43 @@ public final class SplitsConfig extends ConfigCategory {
     public void setRunEndChat(boolean value) { runEndChat = value; save(); }
     public boolean pbTitle() { return pbTitle; }
     public void setPbTitle(boolean value) { pbTitle = value; save(); }
+    public boolean includePbRun() { return includePbRun; }
+    public void setIncludePbRun(boolean value) { includePbRun = value; save(); }
+
+    /** The splits of the floor's fastest recorded run, by phase name; empty when none was recorded. */
+    public Map<String, Long> bestRun(int floor, boolean masterMode) {
+        String key = floorKey(floor, masterMode);
+        Map<String, Long> run = key == null || bestRuns == null ? null : bestRuns.get(key);
+        return run == null ? Map.of() : Map.copyOf(run);
+    }
+
+    /** The whole-run time of the fastest recorded run in milliseconds, -1 when none. */
+    public long bestRunMillis(int floor, boolean masterMode) {
+        Long total = bestRun(floor, masterMode).get(BEST_RUN_TOTAL);
+        return total != null && total > 0L ? total : -1L;
+    }
+
+    /** Keeps the run when it is faster than the floor's recorded one; the caller saves. True when it became the best. */
+    private boolean keepBestRun(int floor, boolean masterMode, Map<String, Long> run) {
+        String key = floorKey(floor, masterMode);
+        Long total = run == null ? null : run.get(BEST_RUN_TOTAL);
+        if (key == null || total == null || total <= 0L) return false;
+        long known = bestRunMillis(floor, masterMode);
+        if (known > 0L && known <= total) return false;
+        Map<String, Long> kept = new TreeMap<>();
+        run.forEach((phase, duration) -> {
+            if (phase != null && !phase.isBlank() && duration != null && duration > 0L) kept.put(phase, duration);
+        });
+        if (bestRuns == null) bestRuns = new TreeMap<>();
+        bestRuns.put(key, kept);
+        return true;
+    }
+
+    public void clearBestRun(int floor, boolean masterMode) {
+        String key = floorKey(floor, masterMode);
+        if (key == null || bestRuns == null || bestRuns.remove(key) == null) return;
+        save();
+    }
 
     /** The floor's record time in milliseconds, -1 when unknown. */
     public long floorRecordMillis(int floor, boolean masterMode) {
@@ -152,8 +199,18 @@ public final class SplitsConfig extends ConfigCategory {
 
     /** Flush PB candidates and, only for a confirmed finish, the run's AVG samples in one save. */
     public void recordRun(int floor, boolean masterMode, Map<String, Long> measurements, Map<String, Long> completedRun) {
+        recordRun(floor, masterMode, measurements, completedRun, null);
+    }
+
+    /**
+     * The same, and a confirmed run's splits ({@code bestRun}, with {@link #BEST_RUN_BOSS_ENTRY} and
+     * {@link #BEST_RUN_TOTAL}) become the floor's best run when its total beats the recorded one. All in one save.
+     * Returns whether it did.
+     */
+    public boolean recordRun(int floor, boolean masterMode, Map<String, Long> measurements,
+                             Map<String, Long> completedRun, Map<String, Long> bestRun) {
         String key = floorKey(floor, masterMode);
-        if (key == null || measurements == null) return;
+        if (key == null || measurements == null) return false;
         boolean changed = false;
         for (var entry : measurements.entrySet()) {
             String phase = entry.getKey();
@@ -177,10 +234,12 @@ public final class SplitsConfig extends ConfigCategory {
             recentRuns.put(key, runs);
             changed = true;
         }
-        if (changed) {
+        boolean newBest = keepBestRun(floor, masterMode, bestRun);
+        if (changed || newBest) {
             predictionRevision++;
             save();
         }
+        return newBest;
     }
 
     private static String floorKey(int floor, boolean masterMode) {

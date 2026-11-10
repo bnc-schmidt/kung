@@ -20,7 +20,9 @@ public final class DungeonSplitMessagesTest {
     private final SplitsConfig config = new SplitsConfig();
     private final List<DungeonSplitTracker.PhaseMessage> phases = new ArrayList<>();
     private final List<List<DungeonSplitMessages.Notice>> summaries = new ArrayList<>();
-    private final DungeonSplitTracker tracker = new DungeonSplitTracker(clock::get, ignored -> { }, config, phases::add, summaries::add);
+    // The "new PB run recorded" line is a batch of its own; these tests are about the splits paste, so it is left out.
+    private final DungeonSplitTracker tracker = new DungeonSplitTracker(clock::get, ignored -> { }, config, phases::add,
+        batch -> { if (!batch.getFirst().text().contains("new PB run recorded")) summaries.add(batch); });
 
     @Test public void september19RejoinWithoutModeDoesNotClaimNormalSevenRecords() {
         config.setEnabled(true);
