@@ -141,6 +141,10 @@ processResources {
 }
 
 tasks.named("test") {
+  // A failing test prints its whole message, so a CI log names the line that differs (the golden tests say which).
+  testLogging {
+    exceptionFormat = "full"
+  }
   workingDir = layout.buildDirectory.dir("test-run").get().asFile
   doFirst {
     workingDir.mkdirs()
