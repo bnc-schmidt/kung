@@ -145,6 +145,9 @@ tasks.named("test") {
   testLogging {
     exceptionFormat = "full"
   }
+  // The settings snapshot shows "Auto: <this machine's zone>". A fixed zone without daylight saving gives the same
+  // text on every machine and all year; CI runs in UTC, so the snapshot uses it too.
+  systemProperty "user.timezone", "UTC"
   workingDir = layout.buildDirectory.dir("test-run").get().asFile
   doFirst {
     workingDir.mkdirs()
