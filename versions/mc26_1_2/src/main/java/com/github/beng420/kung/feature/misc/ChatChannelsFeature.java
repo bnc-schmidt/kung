@@ -7,7 +7,9 @@ import com.github.beng420.kung.feature.ConfigurableFeature;
 import com.github.beng420.kung.mixin.ChatComponentAccessor;
 import com.github.beng420.kung.ui.UiTheme;
 import com.github.beng420.kung.util.KungDebugRecorder;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -61,6 +63,10 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     private static ChatChannels.Channel view;
     private static ChatChannels.Send pending;
     private static long pendingAtMillis;
+    /** Plain messages you sent (no command) that Hypixel has not echoed yet; the echo shows the channel they landed in. */
+    private record Sent(String text, long atMillis) {}
+    private static final Deque<Sent> SENT = new ArrayDeque<>();
+    private static final int SENT_LIMIT = 8;
     /** The chat conversation Hypixel has open with one player, null for none; Hypixel's move-to-ALL notice clears it. */
     private static ChatChannels.Conversation conversation;
     /** Channel of each message by content identity, so a rebuild of thousands of lines classifies each only once. */
@@ -76,6 +82,11 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
         });
         ClientSendMessageEvents.COMMAND.register(command -> {
             if (tracking()) onCommand(command);
+        });
+        ClientSendMessageEvents.CHAT.register(message -> {
+            if (!tracking()) return;
+            SENT.addLast(new Sent(message, System.currentTimeMillis()));
+            if (SENT.size() > SENT_LIMIT) SENT.removeFirst();
         });
         ClientPlayConnectionEvents.DISCONNECT.register((handler, client) -> forgetChannel());
         ScreenEvents.AFTER_INIT.register((client, screen, width, height) -> {
@@ -109,6 +120,7 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     private static void forgetChannel() {
         pending = null;
         conversation = null;
+        SENT.clear();
         if (view != null) {
             view = null;
             refresh();
@@ -131,6 +143,34 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
         } else if (pending != null && ChatChannels.alreadyNotice(text)) {
             if (System.currentTimeMillis() - pendingAtMillis < PENDING_MILLIS) switched(pending);
             pending = null;
+        } else if (!SENT.isEmpty()) {
+            onEcho(text, now);
+        }
+    }
+
+    /**
+     * A plain message that lands in another channel than the one shown (Hypixel moved you, or another mod switched)
+     * brings its echo from that channel, and the channel the display shows follows it. An echo "To Name: text" means
+     * a chat conversation with that player is open, which the display shows in place of the channel.
+     */
+    private static void onEcho(String text, long now) {
+        SENT.removeIf(sent -> now - sent.atMillis() > PENDING_MILLIS);
+        Minecraft client = Minecraft.getInstance();
+        String name = client == null || client.getUser() == null ? null : client.getUser().getName();
+        for (Sent sent : SENT) {
+            String player = ChatChannels.directEcho(text, sent.text());
+            if (player != null) {
+                SENT.remove(sent);
+                long window = conversation != null && conversation.name().equalsIgnoreCase(player)
+                    ? conversation.window() : ChatChannels.Conversation.DEFAULT_WINDOW;
+                conversation = new ChatChannels.Conversation(player, window, now + window);
+                return;
+            }
+            ChatChannels.Send landed = ChatChannels.landedChannel(text, name, sent.text());
+            if (landed == null) continue;
+            SENT.remove(sent);
+            if (landed != send || conversation != null) switched(landed);
+            return;
         }
     }
 
@@ -184,9 +224,16 @@ public final class ChatChannelsFeature extends ConfigurableFeature<MiscConfig> {
     /** A click on a tab: show it at once, and sends the channel; DMs have none and only change the view. */
     private static void selectTab(Minecraft client, ChatChannels.Channel tab) {
         setView(tab);
-        ChatChannels.Send target = ChatChannels.sendFor(tab);
-        if (target == null || target == send || client.player == null) return;
+        ChatChannels.Send target = tabSendTarget(INSTANCE.config().chatChannelsChatFollowsTab(), tab, send);
+        if (target == null || client.player == null) return;
         client.player.connection.sendCommand(target.command());
+    }
+
+    /** The channel a click on the tab switches the chat to, or null: Chat Follows Tab is off, a DM tab, or already there. */
+    static ChatChannels.Send tabSendTarget(boolean chatFollowsTab, ChatChannels.Channel tab, ChatChannels.Send current) {
+        if (!chatFollowsTab) return null;
+        ChatChannels.Send target = ChatChannels.sendFor(tab);
+        return target == current ? null : target;
     }
 
     /**

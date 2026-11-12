@@ -27,7 +27,7 @@ public final class ChatChannelTest {
     public void aCoopLineIsItsOwnChannelAnsweredWithCc() {
         assertContext(ChatChannel.COOP, "Araqz", "!ca50", "Co-op > [MVP+] Araqz: !ca50");
         assertContext(ChatChannel.COOP, "Araqz", "!ca50", "[12:34:56] Co-op > Araqz: !ca50");
-        assertEquals("cc", ChatChannel.COOP.commandPrefix(""));
+        assertEquals("coopchat", ChatChannel.COOP.commandPrefix(""));
     }
 
     @Test

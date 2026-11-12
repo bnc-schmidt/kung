@@ -97,6 +97,8 @@ public final class ChatChannels {
         private static final Pattern OPENED = Pattern.compile(
             "Opened a chat conversation with (?:\\[[^\\]]+] )*(\\w{1,16}) for the next (\\d{1,3}) minutes?\\..*");
         private static final Pattern SENT = Pattern.compile("To (?:\\[[^\\]]+] )*(\\w{1,16}): .*");
+        /** The notice names 5 minutes; a conversation read from an echo alone has no notice to take it from. */
+        public static final long DEFAULT_WINDOW = 5 * 60_000L;
 
         /** The conversation a notice opens, or null for any other line. */
         public static Conversation opened(String text, long now) {
@@ -130,16 +132,56 @@ public final class ChatChannels {
         if (text == null) return null;
         String line = text.indexOf('\u00a7') >= 0 ? HypixelLocation.clean(text) : text;
         int length = line.length();
-        int start = skipSpaces(line, 0);
-        if (start < length && line.charAt(start) == '[') {
-            Matcher stamp = CLOCK_STAMP.matcher(line).region(start, length);
-            if (stamp.lookingAt()) start = skipSpaces(line, stamp.end());
-        }
+        int start = bodyStart(line);
         if (start >= length || FIRST_LETTERS.indexOf(line.charAt(start)) < 0) return null;
         for (Channel channel : Channel.values()) {
             if (channel.start.matcher(line).region(start, length).lookingAt()) return channel;
         }
         return null;
+    }
+
+    /** Where the text of a line starts: after the spaces and the clock stamp Chat Patches may put in front. */
+    private static int bodyStart(String line) {
+        int start = skipSpaces(line, 0);
+        if (start < line.length() && line.charAt(start) == '[') {
+            Matcher stamp = CLOCK_STAMP.matcher(line).region(start, line.length());
+            if (stamp.lookingAt()) start = skipSpaces(line, stamp.end());
+        }
+        return start;
+    }
+
+    /**
+     * The channel a plain message of yours landed in, read from the line Hypixel echoes back: "Party > [MVP+] You: text",
+     * the same for Guild, Officer and Co-op, and a public line with your name for All. Null when the line is not that
+     * echo: a DM, another player, or other text. A player who quotes your exact words with your name in front of them
+     * can still pass as the echo.
+     */
+    public static Send landedChannel(String text, String ownName, String sent) {
+        if (text == null || ownName == null || ownName.isBlank() || sent == null || sent.isBlank()) return null;
+        String line = HypixelLocation.clean(text);
+        String body = line.substring(bodyStart(line));
+        // Your name, after a rank or at the start, then a guild rank at most, then your text to the end of the line.
+        Pattern author = Pattern.compile("(?:^|[\\s\\]])" + Pattern.quote(ownName) + "(?: \\[[^\\]]+])?: "
+            + Pattern.quote(sent.strip()) + "\\s*$");
+        if (body.startsWith("From ") || body.startsWith("To ") || !author.matcher(body).find()) return null;
+        if (body.startsWith("Party > ")) return Send.PARTY;
+        if (body.startsWith("Guild > ")) return Send.GUILD;
+        if (body.startsWith("Officer > ")) return Send.OFFICER;
+        if (body.startsWith("Co-op > ")) return Send.COOP;
+        return Send.ALL;
+    }
+
+    /**
+     * The player a plain message of yours went to, read from its echo "To [MVP+] Name: text": the chat is in a
+     * conversation with them, though no "Opened a chat conversation" notice came (it came before the game started).
+     * Null for any other line.
+     */
+    public static String directEcho(String text, String sent) {
+        if (text == null || sent == null || sent.isBlank()) return null;
+        String line = HypixelLocation.clean(text);
+        Matcher echo = Pattern.compile("To (?:\\[[^\\]]+] )*(\\w{1,16}): " + Pattern.quote(sent.strip()) + "\\s*$")
+            .matcher(line.substring(bodyStart(line)));
+        return echo.lookingAt() ? echo.group(1) : null;
     }
 
     private static int skipSpaces(String line, int from) {

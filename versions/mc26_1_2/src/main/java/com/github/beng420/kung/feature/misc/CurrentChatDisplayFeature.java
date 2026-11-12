@@ -17,7 +17,8 @@ import net.minecraft.resources.Identifier;
 
 /**
  * "Chat: Party": the channel Hypixel sends your next message to. {@link ChatChannelsFeature} reads it from the
- * "You are now in the PARTY channel" notices, from /chat sent by you and from the tabs. In a chat conversation it
+ * "You are now in the PARTY channel" notices, from /chat sent by you, from the tabs and from where a plain message of
+ * yours lands (its echo comes back as "Party > ..." or as a public line). In a chat conversation it
  * shows the player and the time left instead. It shows only while the chat is open, and the channel is saved, so it
  * is still there after a restart.
  */

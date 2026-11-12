@@ -179,6 +179,53 @@ public final class ChatChannelsTest {
         assertNull(ChatChannels.Conversation.opened(null, 0L));
     }
 
+    // The echo lines below are built from the real shapes above; no trace holds an echo of a plain message yet.
+    @Test
+    public void aPlainMessageLandsInTheChannelOfItsEcho() {
+        assertEquals(ChatChannels.Send.PARTY, ChatChannels.landedChannel("Party > [MVP+] Beng114: hello there", "Beng114", "hello there"));
+        assertEquals(ChatChannels.Send.GUILD, ChatChannels.landedChannel("Guild > [MVP+] Beng114 [Mod]: hello", "Beng114", "hello"));
+        assertEquals(ChatChannels.Send.OFFICER, ChatChannels.landedChannel("Officer > [MVP+] Beng114 [Mod]: hello", "Beng114", "hello"));
+        assertEquals(ChatChannels.Send.COOP, ChatChannels.landedChannel("Co-op > [MVP+] Beng114: hello", "Beng114", "hello"));
+        assertEquals(ChatChannels.Send.ALL, ChatChannels.landedChannel("[MVP+] Beng114: hello", "Beng114", "hello"));
+        assertEquals("a level and an emblem in front", ChatChannels.Send.ALL,
+            ChatChannels.landedChannel("[342] ✿ [MVP+] Beng114: hello", "Beng114", "hello"));
+        assertEquals("no rank", ChatChannels.Send.ALL, ChatChannels.landedChannel("Beng114: hello", "Beng114", "hello"));
+    }
+
+    @Test
+    public void theEchoIsReadThroughColorCodesAndAClockStamp() {
+        assertEquals(ChatChannels.Send.PARTY,
+            ChatChannels.landedChannel("§9Party §8> §b[MVP§c+§b] Beng114§f: hello", "Beng114", "hello"));
+        assertEquals(ChatChannels.Send.PARTY, ChatChannels.landedChannel("[12:34:56] Party > [MVP+] Beng114: hello", "Beng114", "hello"));
+        assertEquals("text with pattern characters", ChatChannels.Send.ALL,
+            ChatChannels.landedChannel("[MVP+] Beng114: what? (x1) [a]", "Beng114", "what? (x1) [a]"));
+    }
+
+    @Test
+    public void aPlainMessageThatLandsInAConversationShowsTheToEcho() {
+        assertEquals("araqz", ChatChannels.directEcho("To araqz: hello", "hello"));
+        assertEquals("araqz", ChatChannels.directEcho("To [MVP+] araqz: hello there", "hello there"));
+        assertEquals("araqz", ChatChannels.directEcho("§dTo §b[MVP§c+§b] araqz§7: §7hello", "hello"));
+        assertEquals("araqz", ChatChannels.directEcho("[12:34:56] To araqz: hello", "hello"));
+        assertNull("another text", ChatChannels.directEcho("To araqz: bye", "hello"));
+        assertNull("a message to you", ChatChannels.directEcho("From araqz: hello", "hello"));
+        assertNull("a public line", ChatChannels.directEcho("[MVP+] Beng114: hello", "hello"));
+        assertNull(ChatChannels.directEcho("To araqz: hello", " "));
+        assertNull(ChatChannels.directEcho(null, "hello"));
+    }
+
+    @Test
+    public void linesThatAreNoEchoOfYourMessageChangeNothing() {
+        assertNull("another player says the same", ChatChannels.landedChannel("Party > [MVP+] Other: hello", "Beng114", "hello"));
+        assertNull("a name that only contains yours", ChatChannels.landedChannel("Party > [MVP+] Benny: hello", "Ben", "hello"));
+        assertNull("another text", ChatChannels.landedChannel("Party > [MVP+] Beng114: bye", "Beng114", "hello"));
+        assertNull("your DM to someone", ChatChannels.landedChannel("To [MVP+] Other: hello", "Beng114", "hello"));
+        assertNull("a DM that quotes you", ChatChannels.landedChannel("From [MVP+] Other: Beng114: hello", "Beng114", "hello"));
+        assertNull(ChatChannels.landedChannel("Party > [MVP+] Beng114: hello", null, "hello"));
+        assertNull(ChatChannels.landedChannel("Party > [MVP+] Beng114: hello", "Beng114", " "));
+        assertNull(ChatChannels.landedChannel(null, "Beng114", "hello"));
+    }
+
     private static void assertKind(Channel expected, String line) {
         assertEquals(line, expected, ChatChannels.classify(line));
         if (expected == null) assertNull(ChatChannels.classify(line));
