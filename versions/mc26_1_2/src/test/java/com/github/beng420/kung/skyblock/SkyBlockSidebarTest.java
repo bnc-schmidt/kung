@@ -37,6 +37,13 @@ public final class SkyBlockSidebarTest {
     }
 
     @Test
+    public void aServerIdWithOneDigitIsRead() {
+        // The Crimson Isle trace of 2026-11-11 had "11/11/26 m3V" and the id was read as blank.
+        assertEquals("m3v", HypixelLocation.serverId(List.of("SKYBLOCK", "11/11/26 m3V", "⏣ Stronghold")));
+        assertEquals("m148ac", HypixelLocation.serverId(List.of("SKYBLOCK", "11/11/26 m148AC")));
+    }
+
+    @Test
     public void ownersNotUpdatedInThisWorldCannotOverrideFreshDungeonEvidence() {
         Fixture fixture = new Fixture();
         fixture.teamLine("old_area", "🍫", 14, "§7⏣ §bDungeon ", "§bHub");

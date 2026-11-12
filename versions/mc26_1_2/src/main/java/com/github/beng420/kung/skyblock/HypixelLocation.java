@@ -13,7 +13,7 @@ public record HypixelLocation(Kind kind, String name) {
     public static final HypixelLocation UNKNOWN = new HypixelLocation(Kind.UNKNOWN, "");
     private static final Pattern FIELD = Pattern.compile("^(?:Area|Location|Dungeon)\\s*:\\s*(.+)$", Pattern.CASE_INSENSITIVE);
     private static final Pattern CATACOMBS = Pattern.compile("^(?:The )?Catacombs(?:\\s*\\((?:E|[FM]?[0-7])\\))?$", Pattern.CASE_INSENSITIVE);
-    private static final Pattern SERVER = Pattern.compile("\\b(?:mini\\d{1,5}|mega\\d{1,5}|m\\d{2,5})[a-z]{0,4}\\b", Pattern.CASE_INSENSITIVE);
+    private static final Pattern SERVER = Pattern.compile("\\b(?:mini\\d{1,5}|mega\\d{1,5}|m\\d{1,5})[a-z]{0,4}\\b", Pattern.CASE_INSENSITIVE);
     // String.replaceAll, matches and split compile their regex on every call; these run per packet and chat line.
     private static final Pattern KUUDRA_AREA = Pattern.compile("kuudra's hollow(?:\\s*\\(t[1-5]\\))?");
     private static final Pattern SERVER_LINE = Pattern.compile(
