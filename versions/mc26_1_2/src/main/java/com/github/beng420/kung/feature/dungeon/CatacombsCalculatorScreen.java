@@ -8,6 +8,7 @@ import com.github.beng420.kung.compat.McInput;
 import com.github.beng420.kung.util.CatacombsAverageCalculator;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.Breakdown;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
+import com.github.beng420.kung.util.CatacombsAverageCalculator.Floor;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.FloorStats;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.PlayerData;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.ProfileData;
@@ -61,7 +62,7 @@ public final class CatacombsCalculatorScreen extends Screen {
     private String statusMessage = "Optional: load a player to autofill stats.";
     private PlayerData loadedPlayer;
     private int selectedProfileIndex;
-    private FloorOption selectedFloor = FloorOption.M7;
+    private Floor selectedFloor = Floor.M7;
     private boolean expertRing = true;
     private int hecatombLevel = 10;
     private ScarfAccessory scarfAccessory = ScarfAccessory.GRIMOIRE;
@@ -257,8 +258,8 @@ public final class CatacombsCalculatorScreen extends Screen {
 
         drawHeading(graphics, "Floor stats", x + 12, lineY);
         lineY += 24;
-        FloorStats stats = profile == null ? null : selectedFloor.masterMode ? profile.stats().master() : profile.stats().catacombs();
-        String floorNumber = selectedFloor.floorNumber;
+        FloorStats stats = profile == null ? null : selectedFloor.masterMode() ? profile.stats().master() : profile.stats().catacombs();
+        String floorNumber = selectedFloor.floorNumber();
         drawKV(graphics, x + 14, lineY, panelWidth - 28, "Best score", stats == null ? "..." : floorStat(stats.bestScore(), floorNumber), THEME.text());
         lineY += ROW;
         drawKV(graphics, x + 14, lineY, panelWidth - 28, "Personal best (S+)", stats == null ? "..." : duration(stats.sPlus(), floorNumber), THEME.text());
@@ -280,7 +281,7 @@ public final class CatacombsCalculatorScreen extends Screen {
         int leftX = x + 14;
         int rightX = leftX + columnWidth + 10;
         int rowY = lineY;
-        drawControl(graphics, leftX, rowY, columnWidth, "Floor", selectedFloor.label, mouseX, mouseY,
+        drawControl(graphics, leftX, rowY, columnWidth, "Floor", selectedFloor.label(), mouseX, mouseY,
             () -> selectedFloor = cycle(selectedFloor, -1),
             () -> selectedFloor = cycle(selectedFloor, 1));
         drawToggleControl(graphics, rightX, rowY, columnWidth, "Catacombs Expert Ring", expertRing,
@@ -652,7 +653,7 @@ public final class CatacombsCalculatorScreen extends Screen {
     }
 
     private Calculation calculate() {
-        double baseXp = selectedFloor.baseXp;
+        double baseXp = selectedFloor.baseXp();
         double hecatomb = CatacombsAverageCalculator.hecatombBonus(hecatombLevel);
         MayorBoost mayor = currentMayorBoost();
         long cataPerRun = CatacombsAverageCalculator.catacombsXpPerRun(baseXp, expertRing, hecatomb,
@@ -696,7 +697,7 @@ public final class CatacombsCalculatorScreen extends Screen {
             return "[Kung] Load a player to calculate ca" + calculation.classTargetLevel() + ".";
         }
         return "[Kung] " + CatacombsAverageCalculator.classAverageSummaryLine(
-            loadedPlayer.name(), selectedFloor.shortLabel, calculation.classTargetLevel(), calculation.breakdown());
+            loadedPlayer.name(), selectedFloor.shortLabel(), calculation.classTargetLevel(), calculation.breakdown());
     }
 
     private String catacombsSummaryLine(Calculation calculation) {
@@ -704,7 +705,7 @@ public final class CatacombsCalculatorScreen extends Screen {
             return "[Kung] Load a player to calculate c" + calculation.targetLevel() + ".";
         }
         return "[Kung] " + CatacombsAverageCalculator.catacombsSummaryLine(
-            loadedPlayer.name(), selectedFloor.shortLabel, calculation.targetLevel(), calculation.runsToCatacombs());
+            loadedPlayer.name(), selectedFloor.shortLabel(), calculation.targetLevel(), calculation.runsToCatacombs());
     }
 
     private MayorBoost currentMayorBoost() {
@@ -894,38 +895,6 @@ public final class CatacombsCalculatorScreen extends Screen {
         LOADING,
         LOADED,
         ERROR
-    }
-
-    private enum FloorOption {
-        ENTRANCE("Entrance", "E", "0", 55.0, false),
-        F1("Floor 1", "F1", "1", 110.0, false),
-        F2("Floor 2", "F2", "2", 220.0, false),
-        F3("Floor 3", "F3", "3", 560.0, false),
-        F4("Floor 4", "F4", "4", 1_420.0, false),
-        F5("Floor 5", "F5", "5", 2_400.0, false),
-        F6("Floor 6", "F6", "6", 4_880.0, false),
-        F7("Floor 7", "F7", "7", 28_000.0, false),
-        M1("Master 1", "M1", "1", 15_000.0, true),
-        M2("Master 2", "M2", "2", 20_000.0, true),
-        M3("Master 3", "M3", "3", 35_000.0, true),
-        M4("Master 4", "M4", "4", 55_000.0, true),
-        M5("Master 5", "M5", "5", 70_000.0, true),
-        M6("Master 6", "M6", "6", 100_000.0, true),
-        M7("Master 7", "M7", "7", 300_000.0, true);
-
-        private final String label;
-        private final String shortLabel;
-        private final String floorNumber;
-        private final double baseXp;
-        private final boolean masterMode;
-
-        FloorOption(String label, String shortLabel, String floorNumber, double baseXp, boolean masterMode) {
-            this.label = label;
-            this.shortLabel = shortLabel;
-            this.floorNumber = floorNumber;
-            this.baseXp = baseXp;
-            this.masterMode = masterMode;
-        }
     }
 
     private enum ScarfAccessory {

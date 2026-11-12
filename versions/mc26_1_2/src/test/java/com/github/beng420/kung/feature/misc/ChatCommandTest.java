@@ -3,6 +3,7 @@ package com.github.beng420.kung.feature.misc;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.feature.misc.ChatCommandsFeature.ChatChannel;
 import com.github.beng420.kung.util.CatacombsAverageCalculator.DungeonClass;
+import com.github.beng420.kung.util.CatacombsAverageCalculator.Floor;
 import com.github.beng420.kung.util.ServerTpsTracker;
 import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
 import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
@@ -22,7 +23,8 @@ public final class ChatCommandTest {
         for (ChatCommand command : ChatCommand.values()) {
             String name = "!" + command.name().toLowerCase(java.util.Locale.ROOT);
             assertFalse(command.pattern.matcher(name + "extra").matches());
-            assertFalse(command.pattern.matcher(name + " Player Second").matches());
+            // !bestiary takes any number of mob words.
+            if (command != ChatCommand.BESTIARY) assertFalse(command.pattern.matcher(name + " Player Second").matches());
             assertFalse(command.pattern.matcher("hello " + name).matches());
         }
         assertFalse(ChatCommand.TPS.pattern.matcher("!tps Player").matches());
@@ -33,9 +35,9 @@ public final class ChatCommandTest {
     @Test
     public void eachCommandKeepsItsOwnLiveChannelAndMasterSwitches() {
         MiscConfig config = new MiscConfig();
-        for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, false, false, false, false);
+        for (ChatCommand command : switchable()) assertChannels(config, command, false, false, false, false);
         config.setChatCommandsEnabled(true);
-        for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, true, true, false, false);
+        for (ChatCommand command : switchable()) assertChannels(config, command, true, true, false, false);
 
         config.setUseDefaultChannels(ChatCommandSetting.C50, false);
         config.setUseDefaultChannels(ChatCommandSetting.CA50, false);
@@ -65,7 +67,65 @@ public final class ChatCommandTest {
         config.setCommandEnabled(ChatCommandSetting.CA50, true);
         config.setCommandEnabled(ChatCommandSetting.TPS, true);
         config.setChatCommandsEnabled(false);
-        for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, false, false, false, false);
+        for (ChatCommand command : switchable()) assertChannels(config, command, false, false, false, false);
+    }
+
+    @Test
+    public void theVersionLineAndTheHelpAnswerToTheirOwnNamesAndNothingLonger() {
+        for (String body : new String[] {"!kung", "!KUNG", "!Kung  "}) {
+            assertEquals(body, List.of(ChatCommand.KUNG), matching(body));
+        }
+        for (String body : new String[] {"!kunghelp", "!helpkung", "!kung help", "!Kung   Help  "}) {
+            assertEquals(body, List.of(ChatCommand.KUNG_HELP), matching(body));
+        }
+        for (String body : new String[] {"!kungfu", "!kung helpme", "!kung help me", "!help", "kung", "!kung Beng114"}) {
+            assertEquals(body, List.of(), matching(body));
+        }
+    }
+
+    @Test
+    public void theVersionLineHasNoSwitchAndStaysOutOfAllChat() {
+        MiscConfig config = new MiscConfig();
+        assertFalse(config.chatCommandsEnabled());
+        assertChannels(config, ChatCommand.KUNG, true, true, false, true);
+        config.setChatCommandsEnabled(true);
+        assertChannels(config, ChatCommand.KUNG, true, true, false, true);
+        assertTrue(ChatCommand.KUNG.isEnabled(config, ChatChannel.COOP));
+    }
+
+    @Test
+    public void theHelpListsExactlyTheCommandsThatAnswerInTheChannel() {
+        MiscConfig config = new MiscConfig();
+        // The help needs the Chat Commands feature.
+        assertEquals("", ChatCommand.helpMessage(config, ChatChannel.PARTY));
+        assertFalse(ChatCommand.KUNG_HELP.isEnabled(config, ChatChannel.PARTY));
+        config.setChatCommandsEnabled(true);
+        assertEquals("Kung commands: !c<lvl> [name] [-floor] [-profile], !ca<lvl> [name] [-class] [-floor] [-profile], !tps, !jerry, !scorp, "
+            + "!derpy, !yotp, !yotw, !yots, !a/b/h/m/t<lvl> [name] [-floor] [-profile], !be <mob> [-name] [-profile]",
+            ChatCommand.helpMessage(config, ChatChannel.PARTY));
+        // One chat message holds at most 256 characters.
+        assertTrue(ChatCommand.helpMessage(config, ChatChannel.PARTY).length() <= 256);
+        assertTrue(ChatCommand.KUNG_HELP.isEnabled(config, ChatChannel.PARTY));
+        // All chat has no command on by default, so the help stays quiet there too.
+        assertEquals("", ChatCommand.helpMessage(config, ChatChannel.ALL));
+        assertFalse(ChatCommand.KUNG_HELP.isEnabled(config, ChatChannel.ALL));
+        // A switched-off command or group leaves the list, and the version line never appears in it.
+        config.setCommandEnabled(ChatCommandSetting.TPS, false);
+        config.setCommandEnabled(ChatCommandSetting.CLASS_LEVEL, false);
+        config.setCommandEnabled(ChatCommandSetting.BESTIARY, false);
+        config.setSpecialMayorsChatCommandsEnabled(false);
+        config.setYearlyEventsChatCommandsEnabled(false);
+        assertEquals("Kung commands: !c<lvl> [name] [-floor] [-profile], !ca<lvl> [name] [-class] [-floor] [-profile]",
+            ChatCommand.helpMessage(config, ChatChannel.PARTY));
+        config.setCommandEnabled(ChatCommandSetting.C50, false);
+        config.setCommandEnabled(ChatCommandSetting.CA50, false);
+        assertEquals("", ChatCommand.helpMessage(config, ChatChannel.PARTY));
+        assertFalse(ChatCommand.KUNG_HELP.isEnabled(config, ChatChannel.PARTY));
+    }
+
+    /** Every command with a switch: the version line is always on and has none. */
+    private static List<ChatCommand> switchable() {
+        return java.util.Arrays.stream(ChatCommand.values()).filter(command -> command != ChatCommand.KUNG).toList();
     }
 
     @Test
@@ -83,6 +143,121 @@ public final class ChatCommandTest {
             "!ca50 Beng114 arch", "!ca50 Beng114 -archers", "!c50 -arch", "!tps -arch"}) {
             assertEquals(body, List.of(), matching(body));
         }
+    }
+
+    @Test
+    public void ca50TakesAFloorAloneOrWithAClassInEitherOrder() {
+        assertFloor("!ca50 -f7", ChatCommand.CA, null, Floor.F7);
+        assertFloor("!ca50 Beng114 -M3", ChatCommand.CA, "Beng114", Floor.M3);
+        assertFloor("!CA60 -e", ChatCommand.CA, null, Floor.ENTRANCE);
+        assertFloor("!ca60 Beng114 -Entrance", ChatCommand.CA, "Beng114", Floor.ENTRANCE);
+        assertFloor("!ca60 -entrance -mage", ChatCommand.CA_MAGE, null, Floor.ENTRANCE);
+        assertFloor("!ca60 -h -e", ChatCommand.CA_HEALER, null, Floor.ENTRANCE);
+        assertFloor("!ca50 Beng114", ChatCommand.CA, "Beng114", null);
+        // The class first or the floor first: the same command, the same floor.
+        assertFloor("!ca50 -arch -f1", ChatCommand.CA_ARCHER, null, Floor.F1);
+        assertFloor("!ca50 -f1 -arch", ChatCommand.CA_ARCHER, null, Floor.F1);
+        assertFloor("!ca50 Beng114 -Tank -M5  ", ChatCommand.CA_TANK, "Beng114", Floor.M5);
+        assertFloor("!ca50 Beng114 -m5 -tank", ChatCommand.CA_TANK, "Beng114", Floor.M5);
+        // -m is the Mage and -m7 is Master 7; the digit tells them apart, in every position.
+        assertFloor("!ca60 -m7 -m", ChatCommand.CA_MAGE, null, Floor.M7);
+        assertFloor("!ca60 -m -m7", ChatCommand.CA_MAGE, null, Floor.M7);
+        assertFloor("!ca60 -m", ChatCommand.CA_MAGE, null, null);
+        assertFloor("!ca60 -tank", ChatCommand.CA_TANK, null, null);
+        for (int number = 1; number <= 7; number++) {
+            assertFloor("!ca50 -f" + number, ChatCommand.CA, null, Floor.valueOf("F" + number));
+            assertFloor("!ca50 -m" + number, ChatCommand.CA, null, Floor.valueOf("M" + number));
+            assertFloor("!ca50 -healer -F" + number, ChatCommand.CA_HEALER, null, Floor.valueOf("F" + number));
+        }
+        // Each flag once, nothing else after them, and a floor that does not exist matches nothing.
+        for (String body : new String[] {"!ca50 -f8", "!ca50 -f0", "!ca50 -f", "!ca50 -f77", "!ca50 -fl7", "!ca50 -f7 -f6",
+            "!ca50 -ent", "!ca50 -entrances", "!ca50 -e -f7", "!ca50 -entrance -entrance",
+            "!ca50 -f7 -m3", "!ca50 -arch -mage -f7", "!ca50 -f7 -arch -mage", "!ca50 -arch -f7 -f6", "!ca50 -f7 -arch extra",
+            "!ca50 -f7 Beng114", "!ca50 -arch -f7 Beng114", "!ca50 -arch f7"}) {
+            assertEquals(body, List.of(), matching(body));
+        }
+        // Without the dash it is a player name, as before.
+        assertFloor("!ca50 f7", ChatCommand.CA, "f7", null);
+        // The other commands take no floor.
+        for (String body : new String[] {"!tps -f7", "!jerry -f7"}) assertEquals(body, List.of(), matching(body));
+    }
+
+    @Test
+    public void classLevelCommandsTakeOneFloorButNoClass() {
+        assertFloor("!a50", ChatCommand.A, null, null);
+        assertFloor("!t50 -m6", ChatCommand.T, null, Floor.M6);
+        assertFloor("!B50 Beng114 -F3", ChatCommand.B, "Beng114", Floor.F3);
+        assertFloor("!tank60 -e", ChatCommand.T, null, Floor.ENTRANCE);
+        assertFloor("!mage60 Beng114 -Entrance  ", ChatCommand.M, "Beng114", Floor.ENTRANCE);
+        assertFloor("!m50 -m6", ChatCommand.M, null, Floor.M6);
+        for (int number = 1; number <= 7; number++) {
+            assertFloor("!h50 -f" + number, ChatCommand.H, null, Floor.valueOf("F" + number));
+            assertFloor("!arch50 -m" + number, ChatCommand.A, null, Floor.valueOf("M" + number));
+        }
+        // A class flag, a second floor, a flag before the name or no dash match nothing; without the dash it is a name.
+        for (String body : new String[] {"!a50 -arch", "!a50 -m", "!t50 -f7 -f6", "!t50 -f7 Beng114", "!t50 -f8", "!t50 -ent"}) {
+            assertEquals(body, List.of(), matching(body));
+        }
+        assertFloor("!t50 f7", ChatCommand.T, "f7", null);
+        // A lone !m6 and !t5 stay with Hypixel, but with a floor flag they are level commands.
+        assertEquals(List.of(), matching("!m6"));
+        assertFloor("!t5 -f7", ChatCommand.T, null, Floor.F7);
+    }
+
+    @Test
+    public void c50TakesAnOptionalNameAndOneFloorButNoClass() {
+        assertFloor("!c50", ChatCommand.C, null, null);
+        assertFloor("!c67 -f7", ChatCommand.C, null, Floor.F7);
+        assertFloor("!C67 Beng114 -M3", ChatCommand.C, "Beng114", Floor.M3);
+        assertFloor("!c50 -e", ChatCommand.C, null, Floor.ENTRANCE);
+        assertFloor("!c50 Beng114 -Entrance  ", ChatCommand.C, "Beng114", Floor.ENTRANCE);
+        for (int number = 1; number <= 7; number++) {
+            assertFloor("!c50 -f" + number, ChatCommand.C, null, Floor.valueOf("F" + number));
+            assertFloor("!c50 -m" + number, ChatCommand.C, null, Floor.valueOf("M" + number));
+        }
+        // A class flag, a second floor, a flag before the name or no dash match nothing; without the dash it is a name.
+        for (String body : new String[] {"!c50 -arch", "!c50 -m", "!c50 -f7 -f6", "!c50 -arch -f7", "!c50 -f7 -arch", "!c50 -f7 Beng114",
+            "!c50 -f8", "!c50 -f0", "!c50 -ent", "!c50 invalid-name"}) {
+            assertEquals(body, List.of(), matching(body));
+        }
+        assertFloor("!c50 f7", ChatCommand.C, "f7", null);
+    }
+
+    @Test
+    public void everyLevelCommandTakesOneProfileAlongsideItsOtherFlags() {
+        assertProfile("!c50 -coconut", ChatCommand.C, null, "Coconut", null);
+        assertProfile("!c50 Beng114 -MANGO", ChatCommand.C, "Beng114", "Mango", null);
+        assertProfile("!c50 -mango -m6", ChatCommand.C, null, "Mango", Floor.M6);
+        assertProfile("!c50 -f7 -mango", ChatCommand.C, null, "Mango", Floor.F7);
+        assertProfile("!ca60 Beng114 -pear -e", ChatCommand.CA, "Beng114", "Pear", Floor.ENTRANCE);
+        assertProfile("!t50 -m6 -lime", ChatCommand.T, null, "Lime", Floor.M6);
+        assertProfile("!mage50 Beng114 -kiwi", ChatCommand.M, "Beng114", "Kiwi", null);
+        // The !ca class flag goes first, last or between the other two.
+        assertProfile("!ca60 -arch -lemon -f7", ChatCommand.CA_ARCHER, null, "Lemon", Floor.F7);
+        assertProfile("!ca60 -lemon -arch -f7", ChatCommand.CA_ARCHER, null, "Lemon", Floor.F7);
+        assertProfile("!ca60 -f7 -lemon -arch", ChatCommand.CA_ARCHER, null, "Lemon", Floor.F7);
+        assertProfile("!ca60 Beng114 -mage -papaya", ChatCommand.CA_MAGE, "Beng114", "Papaya", null);
+        // -m is the Mage, -mango a profile: the whole word tells them apart.
+        assertProfile("!ca60 -m -mango", ChatCommand.CA_MAGE, null, "Mango", null);
+        assertProfile("!ca60 -mango -m", ChatCommand.CA_MAGE, null, "Mango", null);
+        for (String name : new String[] {"apple", "banana", "blueberry", "coconut", "cucumber", "grapes", "kiwi", "lemon", "lime", "mango",
+            "orange", "papaya", "pear", "peach", "pineapple", "pomegranate", "raspberry", "strawberry", "tomato", "watermelon", "zucchini"}) {
+            assertProfile("!c50 -" + name, ChatCommand.C, null, Character.toUpperCase(name.charAt(0)) + name.substring(1), null);
+        }
+        assertProfile("!c50", ChatCommand.C, null, null, null);
+        // A second profile, a profile before the name, no dash or a word that is no profile match nothing or stay a name.
+        for (String body : new String[] {"!c50 -mango -kiwi", "!c50 -mango Beng114", "!c50 -fig", "!c50 -mangoes", "!a50 -arch -mango",
+            "!ca60 -arch -mage -mango", "!ca60 -mango -arch -mango", "!tps -mango", "!jerry -mango"}) {
+            assertEquals(body, List.of(), matching(body));
+        }
+        assertProfile("!c50 mango", ChatCommand.C, "mango", null, null);
+    }
+
+    private static void assertProfile(String body, ChatCommand expected, String name, String profile, Floor floor) {
+        assertFloor(body, expected, name, floor);
+        var match = expected.pattern.matcher(body);
+        assertTrue(body, match.matches());
+        assertEquals(body, profile, expected.profile(match));
     }
 
     @Test
@@ -143,11 +318,29 @@ public final class ChatCommandTest {
         assertLevel("!c43", ChatCommand.C, 43);
         assertLevel("!c98 Beng114", ChatCommand.C, 98);
         assertLevel("!ca60 -tank", ChatCommand.CA_TANK, 60);
-        // No level, level 0, a leading zero, or more than 200 is no command; the old names stay plain levels.
-        for (String body : new String[] {"!c", "!ca", "!c0", "!c00", "!c050", "!c201", "!c1000", "!ca0", "!ca201 -arch",
-            "!a0", "!t999", "!c 50", "!c-5", "!c5.5", "!ca60x", "!c50Beng114", "!mage", "!tank", "!mage0", "!tank201"}) {
+        // No level, level 0, or a leading zero is no command; the old names stay plain levels.
+        for (String body : new String[] {"!c", "!ca", "!c0", "!c00", "!c050", "!ca0",
+            "!a0", "!c 50", "!c-5", "!c5.5", "!ca60x", "!c50Beng114", "!mage", "!tank", "!mage0"}) {
             assertEquals(body, List.of(), matching(body));
         }
+    }
+
+    @Test
+    public void aLevelHasNoUpperLimit() {
+        assertLevel("!c201", ChatCommand.C, 201);
+        assertLevel("!c1000", ChatCommand.C, 1000);
+        assertLevel("!ca201 -arch", ChatCommand.CA_ARCHER, 201);
+        assertLevel("!t999", ChatCommand.T, 999);
+        assertLevel("!tank201", ChatCommand.T, 201);
+        assertLevel("!ca999999999999 Beng114 -f7", ChatCommand.CA, 999_999_999_999L);
+        // A number too big for a long reads as the largest one, so it still gets an answer.
+        var huge = ChatCommand.C.pattern.matcher("!c" + "9".repeat(40));
+        assertTrue(huge.matches());
+        assertEquals(Long.MAX_VALUE, ChatCommand.C.level(huge));
+    }
+
+    @Test
+    public void aCommandWithoutALevelReadsLevelZero() {
         var tps = ChatCommand.TPS.pattern.matcher("!tps");
         assertTrue(tps.matches());
         assertEquals(0, ChatCommand.TPS.level(tps));
@@ -189,7 +382,7 @@ public final class ChatCommandTest {
         config.setChatCommandsEnabled(true);
         config.setDefaultChannelEnabled(CommandChannel.PARTY, false);
         config.setDefaultChannelEnabled(CommandChannel.ALL_CHAT, true);
-        for (ChatCommand command : ChatCommand.values()) assertChannels(config, command, false, true, true, false);
+        for (ChatCommand command : switchable()) assertChannels(config, command, false, true, true, false);
 
         // A command that takes its own channels starts from the shipped ones, whatever the defaults say.
         config.setUseDefaultChannels(ChatCommandSetting.TPS, false);
@@ -261,7 +454,7 @@ public final class ChatCommandTest {
     public void tpsRepliesSynchronouslyOnceWithoutAPlayerOrCalculation() {
         List<String> responses = new ArrayList<>();
         String expected = ServerTpsTracker.INSTANCE.snapshot().message();
-        ChatCommand.TPS.execute(null, ChatChannel.PRIVATE, "Player", 0, responses::add);
+        ChatCommand.TPS.execute(null, ChatChannel.PRIVATE, "Player", 0, null, responses::add);
         assertEquals(List.of(expected), responses);
     }
 
@@ -272,7 +465,7 @@ public final class ChatCommandTest {
         return hits;
     }
 
-    private static void assertLevel(String body, ChatCommand expected, int level) {
+    private static void assertLevel(String body, ChatCommand expected, long level) {
         assertEquals(body, List.of(expected), matching(body));
         var match = expected.pattern.matcher(body);
         assertTrue(body, match.matches());
@@ -282,6 +475,18 @@ public final class ChatCommandTest {
     private static void assertClass(String body, ChatCommand expected, String name) {
         assertEquals(body, List.of(expected), matching(body));
         assertTarget(expected, body, name);
+    }
+
+    private static void assertFloor(String body, ChatCommand expected, String name, Floor floor) {
+        assertEquals(body, List.of(expected), matching(body));
+        assertTarget(expected, body, name);
+        assertEquals(body, floor, floorOf(expected, body));
+    }
+
+    private static Floor floorOf(ChatCommand command, String body) {
+        var match = command.pattern.matcher(body);
+        assertTrue(body, match.matches());
+        return command.floor(match);
     }
 
     private static void assertTarget(ChatCommand command, String text, String expected) {

@@ -36,9 +36,10 @@ public final class CatacombsAverageCalculator {
      * keep the M7 max-bonus preset so they don't depend on whichever floor you ran last.
      * {@code level} is the target of every goal. {@code dungeonClass} narrows two goals: with
      * {@link Goal#CLASS_AVERAGE} it is the only class played, with {@link Goal#CLASS_LEVEL} the class to level.
+     * {@code floor} is the floor the runs are played on, for every goal; null is M7.
      */
-    public static CompletableFuture<Result> calculateAsync(String username, Goal goal, int level, DungeonClass dungeonClass,
-                                                    boolean useLastRunXp) {
+    public static CompletableFuture<Result> calculateAsync(String username, Goal goal, long level, DungeonClass dungeonClass,
+                                                    Floor floor, String profileName, boolean useLastRunXp) {
         String normalized = HypixelLocation.trimmedName(username);
         if (!HypixelLocation.isPlayerName(normalized)) {
             return CompletableFuture.completedFuture(Result.error("invalid username"));
@@ -50,47 +51,58 @@ public final class CatacombsAverageCalculator {
                     return Result.error(externalProfileError(result.error()), "profileError=" + result.error());
                 }
                 Result calculated = calculate(result.player(), "source=" + result.source() + " secrets=" + result.secretsFound(),
-                    normalized, goal, level, dungeonClass, useLastRunXp);
+                    normalized, goal, level, dungeonClass, floor, profileName, useLastRunXp);
                 return result.local() && calculated.success()
                     ? Result.ok(calculated.message() + " (local)", calculated.debugDetails())
                     : calculated;
             });
     }
 
-    static Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, int level,
-                     DungeonClass dungeonClass, boolean useLastRunXp) {
+    static Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, long level,
+                     DungeonClass dungeonClass, Floor floor, boolean useLastRunXp) {
+        return calculate(player, requestDebug, requestedName, goal, level, dungeonClass, floor, null, useLastRunXp);
+    }
+
+    /** {@code profileName} is the cute name of the profile to read ("Coconut"); null reads the selected profile. */
+    static Result calculate(PlayerData player, String requestDebug, String requestedName, Goal goal, long level,
+                     DungeonClass dungeonClass, Floor floor, String profileName, boolean useLastRunXp) {
         if (player == null || player.profiles().isEmpty()) {
             return Result.error("no SkyBlock profile found");
         }
-        ProfileData profile = player.selectedProfile();
+        ProfileData profile = profileName == null ? player.selectedProfile() : player.profileNamed(profileName);
+        if (profile == null) {
+            return Result.error("no " + profileName + " profile (has " + player.profileNames() + ")");
+        }
         if (!profile.stats().available() && profile.totalDungeonXp() <= 0) {
             return Result.error("selected profile has no Dungeon stats", requestDebug
                 + " profile=" + profile.cuteName());
         }
-        EnumMap<DungeonClass, Double> classXpPerRun = classXpPerRun(profile.classPerks());
+        Floor played = floor != null ? floor : Floor.M7;
+        EnumMap<DungeonClass, Double> classXpPerRun = classXpPerRun(profile.classPerks(), played.baseXp());
         Map<DungeonClass, Double> lastRunXp = useLastRunXp
             ? CatacombsRecentXpTracker.INSTANCE.localClassXpPerRun(requestedName)
             : Map.of();
         classXpPerRun.putAll(lastRunXp);
         Breakdown breakdown = calculateBreakdown(profile.classXp(), classXpPerRun, level);
-        long cataXpPerRun = catacombsXpPerRun();
+        long cataXpPerRun = catacombsXpPerRun(played.baseXp());
         long cataRuns = runsToCatacombs(profile.cataXp(), level, cataXpPerRun);
         String message = switch (goal) {
-            case CATACOMBS -> catacombsSummaryLine(player.name(), "M7", level, cataRuns);
-            case CLASS_LEVEL -> classLevelSummaryLine(player.name(), "M7", dungeonClass, level, profile.classXp(dungeonClass),
+            case CATACOMBS -> catacombsSummaryLine(player.name(), played.shortLabel(), level, cataRuns);
+            case CLASS_LEVEL -> classLevelSummaryLine(player.name(), played.shortLabel(), dungeonClass, level, profile.classXp(dungeonClass),
                 runsToClassLevel(profile.classXp(dungeonClass), classXpPerRun.get(dungeonClass), level));
             case CLASS_AVERAGE -> dungeonClass == null
-                ? classAverageSummaryLine(player.name(), "M7", level, breakdown)
-                : oneClassSummaryLine(player.name(), "M7", dungeonClass, level,
+                ? classAverageSummaryLine(player.name(), played.shortLabel(), level, breakdown)
+                : oneClassSummaryLine(player.name(), played.shortLabel(), dungeonClass, level,
                     runsWithOnly(dungeonClass, profile.classXp(), classXpPerRun, level));
         };
         return Result.ok(message, resultDebug(player, profile, breakdown, cataRuns, cataXpPerRun, classXpPerRun,
-            requestDebug + " level=" + level + (dungeonClass == null ? "" : " class=" + dungeonClass.id()),
+            requestDebug + " level=" + level + (dungeonClass == null ? "" : " class=" + dungeonClass.id())
+                + " floor=" + played.shortLabel(),
             useLastRunXp ? "lastRunXp=" + lastRunXp : "lastRunXp=disabled", goal));
     }
 
-    private static EnumMap<DungeonClass, Double> classXpPerRun(Map<DungeonClass, Integer> classPerks) {
-        return classXpPerRun(classPerks, 300_000.0, HECATOMB_BONUSES[10], 0.06, 0.20, 0,
+    private static EnumMap<DungeonClass, Double> classXpPerRun(Map<DungeonClass, Integer> classPerks, double baseXp) {
+        return classXpPerRun(classPerks, baseXp, HECATOMB_BONUSES[10], 0.06, 0.20, 0,
             SkyBlockMayorTracker.INSTANCE.catacombsXpMultiplier());
     }
 
@@ -108,8 +120,8 @@ public final class CatacombsAverageCalculator {
         return classXpPerRun;
     }
 
-    private static long catacombsXpPerRun() {
-        return catacombsXpPerRun(300_000.0, true, HECATOMB_BONUSES[10], 10, 0,
+    private static long catacombsXpPerRun(double baseXp) {
+        return catacombsXpPerRun(baseXp, true, HECATOMB_BONUSES[10], 10, 0,
             SkyBlockMayorTracker.INSTANCE.catacombsXpMultiplier());
     }
 
@@ -132,17 +144,17 @@ public final class CatacombsAverageCalculator {
         return (long) Math.ceil(baseXp * cataMultiplier * (1.0 + globalBonus) - 0.0000001);
     }
 
-    public static long runsToCatacombs(double currentXp, int targetLevel, long xpPerRun) {
-        double remaining = xpForLevel(targetLevel) - currentXp;
+    public static long runsToCatacombs(double currentXp, long targetLevel, long xpPerRun) {
+        double remaining = xpAt(targetLevel) - currentXp;
         return remaining <= 0.0 ? 0L : xpPerRun <= 0 ? Long.MAX_VALUE : (long) Math.ceil(remaining / xpPerRun);
     }
 
     public static Breakdown calculateBreakdown(
         Map<DungeonClass, Double> currentClassXp,
         Map<DungeonClass, Double> classXpPerRun,
-        int targetLevel
+        long targetLevel
     ) {
-        long targetXp = xpForLevel(targetLevel);
+        double targetXp = xpAt(targetLevel);
         EnumMap<DungeonClass, Double> remaining = new EnumMap<>(DungeonClass.class);
         EnumMap<DungeonClass, Long> perClass = new EnumMap<>(DungeonClass.class);
         double totalRemaining = 0.0;
@@ -158,22 +170,23 @@ public final class CatacombsAverageCalculator {
 
         for (DungeonClass dungeonClass : CLASSES) {
             if (remaining.get(dungeonClass) > 0.0 && classXpPerRun.getOrDefault(dungeonClass, 0.0) <= 0.0) {
-                for (DungeonClass classKey : CLASSES) {
-                    perClass.put(classKey, remaining.get(classKey) > 0.0 ? Long.MAX_VALUE : 0L);
-                }
-                return new Breakdown(Long.MAX_VALUE, perClass);
+                return unreachable(remaining);
             }
         }
 
         long low = 0L;
-        long high = 0L;
+        double estimate = 0.0;
         for (DungeonClass dungeonClass : CLASSES) {
             double xpPerRun = classXpPerRun.getOrDefault(dungeonClass, 0.0);
             if (xpPerRun > 0.0) {
-                high += (long) Math.ceil(remaining.get(dungeonClass) / xpPerRun);
+                estimate += Math.ceil(remaining.get(dungeonClass) / xpPerRun);
             }
         }
-        high = Math.max(1L, high);
+        // Past 10^17 runs the sums below would overflow a long: such a level is out of reach and reads "infinite".
+        if (estimate > 1e17) {
+            return unreachable(remaining);
+        }
+        long high = Math.max(1L, (long) estimate);
         while (requiredRunCount(remaining, classXpPerRun, high) > high && high < Long.MAX_VALUE / 2L) {
             high *= 2L;
         }
@@ -198,6 +211,15 @@ public final class CatacombsAverageCalculator {
             assigned++;
         }
         return new Breakdown(low, perClass);
+    }
+
+    /** Every class that still needs XP needs infinite runs. */
+    private static Breakdown unreachable(Map<DungeonClass, Double> remaining) {
+        EnumMap<DungeonClass, Long> perClass = new EnumMap<>(DungeonClass.class);
+        for (DungeonClass dungeonClass : CLASSES) {
+            perClass.put(dungeonClass, remaining.get(dungeonClass) > 0.0 ? Long.MAX_VALUE : 0L);
+        }
+        return new Breakdown(Long.MAX_VALUE, perClass);
     }
 
     private static long requiredRunCount(
@@ -258,7 +280,7 @@ public final class CatacombsAverageCalculator {
         return best;
     }
 
-    public static String classAverageSummaryLine(String playerName, String floor, int targetLevel, Breakdown breakdown) {
+    public static String classAverageSummaryLine(String playerName, String floor, long targetLevel, Breakdown breakdown) {
         java.util.ArrayList<String> parts = new java.util.ArrayList<>();
         for (DungeonClass dungeonClass : CLASSES) {
             parts.add(dungeonClass.label().substring(0, 4) + " " + format(breakdown.perClass(dungeonClass)));
@@ -267,7 +289,7 @@ public final class CatacombsAverageCalculator {
             + " runs away from ca" + targetLevel + " (" + String.join(" | ", parts) + ")";
     }
 
-    public static String catacombsSummaryLine(String playerName, String floor, int targetLevel, long runs) {
+    public static String catacombsSummaryLine(String playerName, String floor, long targetLevel, long runs) {
         return playerName + " is " + format(runs) + " " + floor + " runs away from c" + targetLevel;
     }
 
@@ -279,9 +301,9 @@ public final class CatacombsAverageCalculator {
         DungeonClass played,
         Map<DungeonClass, Double> currentClassXp,
         Map<DungeonClass, Double> classXpPerRun,
-        int targetLevel
+        long targetLevel
     ) {
-        long targetXp = xpForLevel(targetLevel);
+        double targetXp = xpAt(targetLevel);
         long runs = 0L;
         for (DungeonClass dungeonClass : CLASSES) {
             double share = classXpPerRun.getOrDefault(dungeonClass, 0.0) * (dungeonClass == played ? 1.0 : 0.25);
@@ -291,22 +313,22 @@ public final class CatacombsAverageCalculator {
     }
 
     /** Runs played as that class until it reaches the level; the other classes' share does not matter. */
-    public static long runsToClassLevel(double currentClassXp, double classXpPerRun, int targetLevel) {
-        return ceilRuns(xpForLevel(targetLevel) - currentClassXp, classXpPerRun);
+    public static long runsToClassLevel(double currentClassXp, double classXpPerRun, long targetLevel) {
+        return ceilRuns(xpAt(targetLevel) - currentClassXp, classXpPerRun);
     }
 
     private static long ceilRuns(double remainingXp, double xpPerRun) {
         return remainingXp <= 0.0 ? 0L : xpPerRun <= 0.0 ? Long.MAX_VALUE : (long) Math.ceil(remainingXp / xpPerRun - 0.0000001);
     }
 
-    public static String oneClassSummaryLine(String playerName, String floor, DungeonClass played, int targetLevel, long runs) {
+    public static String oneClassSummaryLine(String playerName, String floor, DungeonClass played, long targetLevel, long runs) {
         return runs == 0L
             ? playerName + " already has ca" + targetLevel
             : playerName + " is " + format(runs) + " " + floor + " runs away from ca" + targetLevel + " with only "
                 + played.label();
     }
 
-    public static String classLevelSummaryLine(String playerName, String floor, DungeonClass dungeonClass, int targetLevel,
+    public static String classLevelSummaryLine(String playerName, String floor, DungeonClass dungeonClass, long targetLevel,
                                                double classXp, long runs) {
         // Floored, so 49.99 doesn't read as 50.0.
         double level = Math.floor(levelFromXp(classXp) * 10.0) / 10.0;
@@ -363,8 +385,14 @@ public final class CatacombsAverageCalculator {
         return builder.toString();
     }
 
-    public static long xpForLevel(int level) {
-        return level <= 50 ? CATACOMBS_XP[Math.max(0, level)] : CATACOMBS_XP[50] + (level - 50L) * POST_50_XP;
+    /** The XP a level needs; a level past what a long holds saturates at Long.MAX_VALUE. */
+    public static long xpForLevel(long level) {
+        return (long) xpAt(level);
+    }
+
+    /** The XP a level needs as a double, so a level of any size has a value (exact up to 45 million levels past 50). */
+    private static double xpAt(long level) {
+        return level <= 50 ? CATACOMBS_XP[(int) Math.max(0L, level)] : CATACOMBS_XP[50] + (level - 50L) * (double) POST_50_XP;
     }
 
     public static double levelFromXp(double xp) {
@@ -443,6 +471,58 @@ public final class CatacombsAverageCalculator {
         }
     }
 
+    /** A dungeon floor with the base XP of one run; the Catacombs Calculator screen and "!ca ... -f7" both read this table. */
+    public enum Floor {
+        ENTRANCE("Entrance", "E", "0", 55.0, false),
+        F1("Floor 1", "F1", "1", 110.0, false),
+        F2("Floor 2", "F2", "2", 220.0, false),
+        F3("Floor 3", "F3", "3", 560.0, false),
+        F4("Floor 4", "F4", "4", 1_420.0, false),
+        F5("Floor 5", "F5", "5", 2_400.0, false),
+        F6("Floor 6", "F6", "6", 4_880.0, false),
+        F7("Floor 7", "F7", "7", 28_000.0, false),
+        M1("Master 1", "M1", "1", 15_000.0, true),
+        M2("Master 2", "M2", "2", 20_000.0, true),
+        M3("Master 3", "M3", "3", 35_000.0, true),
+        M4("Master 4", "M4", "4", 55_000.0, true),
+        M5("Master 5", "M5", "5", 70_000.0, true),
+        M6("Master 6", "M6", "6", 100_000.0, true),
+        M7("Master 7", "M7", "7", 300_000.0, true);
+
+        private final String label;
+        private final String shortLabel;
+        private final String floorNumber;
+        private final double baseXp;
+        private final boolean masterMode;
+
+        Floor(String label, String shortLabel, String floorNumber, double baseXp, boolean masterMode) {
+            this.label = label;
+            this.shortLabel = shortLabel;
+            this.floorNumber = floorNumber;
+            this.baseXp = baseXp;
+            this.masterMode = masterMode;
+        }
+
+        public String label() { return label; }
+
+        public String shortLabel() { return shortLabel; }
+
+        public String floorNumber() { return floorNumber; }
+
+        public double baseXp() { return baseXp; }
+
+        public boolean masterMode() { return masterMode; }
+
+        /** The floor a short name like "f7", "M3", "e" or "entrance" stands for, in any case; null for any other text. */
+        public static Floor of(String name) {
+            if ("entrance".equalsIgnoreCase(name)) return ENTRANCE;
+            for (Floor floor : values()) {
+                if (floor.shortLabel.equalsIgnoreCase(name)) return floor;
+            }
+            return null;
+        }
+    }
+
     public enum Goal {
         CLASS_AVERAGE("ca"),
         CATACOMBS("c"),
@@ -480,6 +560,16 @@ public final class CatacombsAverageCalculator {
 
         public ProfileData selectedProfile() {
             return profiles.get(Math.clamp(selectedIndex, 0, profiles.size() - 1));
+        }
+
+        /** The profile with that cute name ("Coconut", any case), or null when the player has none. */
+        public ProfileData profileNamed(String cuteName) {
+            return profiles.stream().filter(profile -> profile.cuteName().equalsIgnoreCase(cuteName)).findFirst().orElse(null);
+        }
+
+        /** The cute names of all profiles, for a reply that says which ones exist. */
+        public String profileNames() {
+            return profiles.stream().map(ProfileData::cuteName).collect(java.util.stream.Collectors.joining(", "));
         }
     }
 

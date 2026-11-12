@@ -2,6 +2,7 @@ package com.github.beng420.kung.util;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.util.CatacombsAverageCalculator.Breakdown;
@@ -135,6 +136,23 @@ public final class CatacombsCalculatorTest {
         assertEquals(1124, CatacombsAverageCalculator.runsToCatacombs(LEVEL_50_XP, 53, 534_000));
         assertEquals(0, CatacombsAverageCalculator.runsToCatacombs(1_169_809_640, 53, 0));
         assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.runsToCatacombs(LEVEL_50_XP, 53, 0));
+    }
+
+    @Test
+    public void aLevelOfAnySizeIsCalculatedAndOnlyOutOfReachGoalsReadInfinite() {
+        assertEquals(569_809_640L + 999_950L * 200_000_000L, CatacombsAverageCalculator.xpForLevel(1_000_000));
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.xpForLevel(Long.MAX_VALUE));
+        assertEquals((long) Math.ceil(999_950.0 * 200_000_000 / 534_000),
+            CatacombsAverageCalculator.runsToCatacombs(LEVEL_50_XP, 1_000_000, 534_000));
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.runsToCatacombs(LEVEL_50_XP, Long.MAX_VALUE, 534_000));
+        var xp = selectedXp(Map.of(), 1.5);
+        Breakdown big = CatacombsAverageCalculator.calculateBreakdown(Map.of(), xp, 100_000);
+        assertTrue(big.total() > 0 && big.total() < Long.MAX_VALUE);
+        assertCompletes(Map.of(), xp, big, CatacombsAverageCalculator.xpForLevel(100_000));
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.calculateBreakdown(Map.of(), xp, Long.MAX_VALUE).total());
+        assertEquals(Long.MAX_VALUE, CatacombsAverageCalculator.runsWithOnly(DungeonClass.ARCHER, Map.of(), xp, Long.MAX_VALUE));
+        assertEquals("Beng114 is infinite M7 runs away from c9223372036854775807",
+            CatacombsAverageCalculator.catacombsSummaryLine("Beng114", "M7", Long.MAX_VALUE, Long.MAX_VALUE));
     }
 
     @Test
@@ -313,17 +331,17 @@ public final class CatacombsCalculatorTest {
     public void everyGoalAnswersFromTheSameProfileData() {
         var player = parse(fixture("salty-whale-profiles.json")).player();
 
-        var level = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_LEVEL, 50, DungeonClass.MAGE, false);
+        var level = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_LEVEL, 50, DungeonClass.MAGE, null, false);
         assertTrue(level.message(), level.success());
         assertTrue(level.message(), level.message().startsWith(player.name() + " is ") && level.message().contains(" M7 runs away from Mage 50 (now ")
             || level.message().equals(player.name() + "'s Mage is already 50"));
         assertTrue(level.debugDetails().contains("class=mage"));
 
-        var solo = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, DungeonClass.TANK, false);
+        var solo = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, DungeonClass.TANK, null, false);
         assertTrue(solo.message(), solo.success());
         assertTrue(solo.message(), solo.message().endsWith("with only Tank") || solo.message().endsWith("already has ca50"));
 
-        var plain = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, false);
+        var plain = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, null, false);
         assertTrue(plain.message(), plain.message().contains("runs away from ca50 (Arch "));
         assertFalse(plain.debugDetails().contains("class="));
     }
@@ -355,20 +373,81 @@ public final class CatacombsCalculatorTest {
             DungeonClass.MAGE, 60, 0));
 
         var player = parse(fixture("salty-whale-profiles.json")).player();
-        var cata = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CATACOMBS, 67, null, false);
+        var cata = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CATACOMBS, 67, null, null, false);
         assertTrue(cata.message(), cata.message().startsWith(player.name() + " is ") && cata.message().endsWith(" M7 runs away from c67"));
         assertTrue(cata.debugDetails(), cata.debugDetails().contains("level=67"));
-        var average = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, null, false);
+        var average = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, null, null, false);
         assertTrue(average.message(), average.message().contains(" M7 runs away from ca60 (Arch "));
-        var solo = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, DungeonClass.HEALER, false);
+        var solo = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 60, DungeonClass.HEALER, null, false);
         assertTrue(solo.message(), solo.message().endsWith(" M7 runs away from ca60 with only Healer"));
         // A higher goal never needs fewer runs than a lower one.
-        var lower = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, false);
+        var lower = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_AVERAGE, 50, null, null, false);
         assertTrue(runsIn(average.message()) >= runsIn(lower.message()));
     }
 
+    @Test
+    public void aFloorSetsTheLabelAndTheXpOfEveryGoal() {
+        var player = parse(fixture("salty-whale-profiles.json")).player();
+        var average = CatacombsAverageCalculator.Goal.CLASS_AVERAGE;
+        var m7 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", average, 60, null, null, false);
+        var m3 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", average, 60, null, CatacombsAverageCalculator.Floor.M3, false);
+        var f1 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", average, 60, null, CatacombsAverageCalculator.Floor.F1, false);
+        assertTrue(m3.message(), m3.message().contains(" M3 runs away from ca60 (Arch "));
+        assertTrue(f1.message(), f1.message().contains(" F1 runs away from ca60 (Arch "));
+        assertTrue(m3.debugDetails(), m3.debugDetails().contains("floor=M3"));
+        // A run on a lower floor pays less XP, so the same goal takes more runs.
+        assertTrue(runsIn(m3.message()) > runsIn(m7.message()));
+        assertTrue(runsIn(f1.message()) > runsIn(m3.message()));
+        var solo = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", average, 60, DungeonClass.HEALER,
+            CatacombsAverageCalculator.Floor.F5, false);
+        assertTrue(solo.message(), solo.message().endsWith(" F5 runs away from ca60 with only Healer"));
+        // Catacombs counts the runs on the floor too: a lower floor pays less, so it takes more of them.
+        var cataM7 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CATACOMBS, 67, null,
+            null, false);
+        var cataF1 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CATACOMBS, 67, null,
+            CatacombsAverageCalculator.Floor.F1, false);
+        assertTrue(cataM7.message(), cataM7.message().endsWith(" M7 runs away from c67"));
+        assertTrue(cataF1.message(), cataF1.message().endsWith(" F1 runs away from c67"));
+        assertTrue(runsIn(cataF1.message()) > runsIn(cataM7.message()));
+        // The class level goal plays the floor too: a lower floor pays less, so it takes more runs, labelled with the floor.
+        var levelM7 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_LEVEL, 60,
+            DungeonClass.MAGE, null, false);
+        var levelF1 = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", CatacombsAverageCalculator.Goal.CLASS_LEVEL, 60,
+            DungeonClass.MAGE, CatacombsAverageCalculator.Floor.F1, false);
+        assertTrue(levelM7.message(), levelM7.message().contains(" M7 runs away from Mage 60 (now "));
+        assertTrue(levelF1.message(), levelF1.message().contains(" F1 runs away from Mage 60 (now "));
+        assertTrue(levelF1.debugDetails(), levelF1.debugDetails().contains("floor=F1"));
+        assertTrue(runsIn(levelF1.message()) > runsIn(levelM7.message()));
+        assertEquals(CatacombsAverageCalculator.Floor.M3, CatacombsAverageCalculator.Floor.of("m3"));
+        assertEquals(CatacombsAverageCalculator.Floor.ENTRANCE, CatacombsAverageCalculator.Floor.of("E"));
+        assertEquals(CatacombsAverageCalculator.Floor.ENTRANCE, CatacombsAverageCalculator.Floor.of("Entrance"));
+        assertNull(CatacombsAverageCalculator.Floor.of("f8"));
+        assertNull(CatacombsAverageCalculator.Floor.of("arch"));
+    }
+
+    @Test
+    public void aNamedProfileIsReadInsteadOfTheSelectedOne() {
+        var player = parse(fixture("salty-whale-profiles.json")).player();
+        var cata = CatacombsAverageCalculator.Goal.CATACOMBS;
+        assertTrue("the fixture has more than one profile", player.profiles().size() > 1);
+        for (var profile : player.profiles()) {
+            // Any case finds it, and the debug line names the profile that was read (also when it has no Dungeon stats).
+            var named = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", cata, 60, null, null,
+                profile.cuteName().toUpperCase(java.util.Locale.ROOT), false);
+            assertTrue(named.message(), named.success() || named.message().contains("no Dungeon stats"));
+            assertTrue(named.debugDetails(), named.debugDetails().contains("profile=" + profile.cuteName()));
+        }
+        var selected = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", cata, 60, null, null, null, false);
+        assertTrue(selected.debugDetails(), selected.debugDetails().contains("profile=" + player.selectedProfile().cuteName()));
+        // A profile the player lacks answers with the ones they have.
+        var missing = CatacombsAverageCalculator.calculate(player, "", "Salty_Whale", cata, 60, null, null, "Zucchini", false);
+        assertFalse(missing.success());
+        assertEquals("no Zucchini profile (has " + player.profileNames() + ")", missing.message());
+        assertNull(player.profileNamed("Zucchini"));
+    }
+
     private static long runsIn(String message) {
-        return Long.parseLong(message.replaceFirst("^.* is ([0-9]+) M7 runs away.*$", "$1"));
+        return Long.parseLong(message.replaceFirst("^.* is ([0-9]+) \\S+ runs away.*$", "$1"));
     }
 
     private static void assertSoloCompletes(DungeonClass played, Map<DungeonClass, Double> current,

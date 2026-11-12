@@ -34,6 +34,7 @@ public final class HypixelSkyBlockProfileClient {
     private static final URI HYPIXEL_PLAYER_API = URI.create("https://api.hypixel.net/v2/player");
     private static final URI HYPIXEL_PROFILES_API = URI.create("https://api.hypixel.net/v2/skyblock/profiles");
     static final String NO_SOURCE = "no Hypixel API key or Kung server set";
+    static final String NO_SERVER = "no Kung server set";
     private static final String ERROR_SEPARATOR = " | ";
     private static final int API_ATTEMPTS = 3;
     // Bonzo / Catacombs Explorer is Epic. API stacks count cumulative syphoned shards.
@@ -183,6 +184,50 @@ public final class HypixelSkyBlockProfileClient {
             + (inventory == null ? "; no inventory object" : "; inventory keys=" + String.join(",", new java.util.TreeSet<>(inventory.keySet())));
     }
 
+    /**
+     * The chat line for {@code !bestiary <mob>} about a player. The Kung server does all of it: it finds the mob from the
+     * typed words, reads the kills and works out the levels, so this sends the two values on and returns its line. One
+     * request; a 429 is not retried. A failed lookup is a line with the reason, not an error. {@code profile} is the
+     * cute name to read ("Coconut"), null for the player's selected profile.
+     */
+    public CompletableFuture<String> loadBestiaryAnswer(String player, String mob, String profile) {
+        if (!DungeonRoomDataSyncClient.INSTANCE.configured()) {
+            return CompletableFuture.completedFuture(bestiaryFailure(player, NO_SERVER));
+        }
+        URI uri = URI.create(DungeonRoomDataSyncClient.endpoint("bestiary")
+            + "?name=" + URLEncoder.encode(player, StandardCharsets.UTF_8) + "&mob=" + URLEncoder.encode(mob, StandardCharsets.UTF_8)
+            + (profile == null ? "" : "&profile=" + URLEncoder.encode(profile, StandardCharsets.UTF_8)));
+        return loadKungServerObject(uri, KungServerSession.INSTANCE)
+            .thenApply(root -> {
+                String message = Json.string(root, "message", "");
+                return message.isBlank() ? bestiaryFailure(player, "empty answer") : message;
+            })
+            .exceptionally(throwable -> bestiaryFailure(player, shortError(throwable)));
+    }
+
+    /** "Could not look up the Bestiary of Name: reason." The player is a checked name; the reason never repeats the error text. */
+    static String bestiaryFailure(String player, String error) {
+        String last = lastError(error);
+        String lower = last == null ? "" : last.toLowerCase(Locale.ROOT);
+        String reason;
+        if (NO_SERVER.equals(last)) {
+            reason = "no Kung server set";
+        } else if (KungServerSession.NOT_ALLOWED.equals(last)) {
+            reason = "not allowed on the Kung server";
+        } else if (KungServerSession.needsRestart(last)) {
+            reason = "Kung sign-in failed, the Kung user has to restart the game";
+        } else if (lower.contains("http 429")) {
+            reason = "rate limited, try again in a few minutes";
+        } else if (lower.contains("http 404")) {
+            reason = "the Kung server has no Bestiary lookup yet";
+        } else if (lower.contains("timed out") || lower.contains("timeout")) {
+            reason = "timed out";
+        } else {
+            reason = "service unavailable";
+        }
+        return "Could not look up the Bestiary of " + player + ": " + reason + ".";
+    }
+
     private CompletableFuture<ProfileResult> loadPlayerFromKungServer(String username) {
         String normalized = HypixelLocation.trimmedName(username);
         if (!HypixelLocation.isPlayerName(normalized)) {
@@ -225,7 +270,10 @@ public final class HypixelSkyBlockProfileClient {
     }
 
     private CompletableFuture<JsonObject> loadKungServerObject(URI baseUri, String parameter, String value, KungServerSession session) {
-        URI uri = URI.create(baseUri + "?" + parameter + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8));
+        return loadKungServerObject(URI.create(baseUri + "?" + parameter + "=" + URLEncoder.encode(value, StandardCharsets.UTF_8)), session);
+    }
+
+    private CompletableFuture<JsonObject> loadKungServerObject(URI uri, KungServerSession session) {
         HttpRequest.Builder request = KungHttp.json(uri, 15, "Kung-HypixelProfile").GET();
         // Sign in first: a refused sign-in fails once instead of being retried like a flaky connection.
         return session.token().thenCompose(ignored -> loadObject("Kung server", () -> session.send(request), 1));

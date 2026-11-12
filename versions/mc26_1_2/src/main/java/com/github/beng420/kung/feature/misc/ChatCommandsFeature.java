@@ -7,6 +7,7 @@ import com.github.beng420.kung.message.HypixelChatSender;
 import com.github.beng420.kung.skyblock.HypixelGuildTracker;
 import com.github.beng420.kung.skyblock.HypixelLocation;
 import com.github.beng420.kung.skyblock.HypixelPartyTracker;
+import com.github.beng420.kung.util.CatacombsAverageCalculator.Floor;
 import com.github.beng420.kung.util.KungDebugRecorder;
 import java.util.ArrayDeque;
 import java.util.EnumMap;
@@ -118,7 +119,10 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
             }
 
             String targetName = command.target(matcher);
-            int level = command.level(matcher);
+            long level = command.level(matcher);
+            Floor floor = command.floor(matcher);
+            String profile = command.profile(matcher);
+            String mob = command.mob(matcher);
             if (targetName == null || targetName.isBlank()) {
                 targetName = senderName;
             } else {
@@ -130,6 +134,9 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                         senderName,
                         targetName,
                         level,
+                        floor,
+                        profile,
+                        mob,
                         GUILD_RESOLVE_WAIT_TICKS,
                         chatContext.replyTarget()
                     ));
@@ -156,7 +163,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 return;
             }
 
-            command.execute(client, channel, targetName, level, response -> queue(channel, chatContext.replyTarget(), response));
+            command.execute(client, channel, targetName, level, floor, profile, mob, response -> queue(channel, chatContext.replyTarget(), response));
             return;
         }
     }
@@ -328,6 +335,9 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                     pending.senderName(),
                     pending.inputName(),
                     pending.level(),
+                    pending.floor(),
+                    pending.profile(),
+                    pending.mob(),
                     ticksLeft,
                     pending.replyTarget()
                 ));
@@ -344,7 +354,7 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 queue(pending.channel(), pending.replyTarget(), "Could not match " + pending.inputName() + " to a player.");
                 continue;
             }
-            pending.command().execute(client, pending.channel(), resolution.name(), pending.level(), response ->
+            pending.command().execute(client, pending.channel(), resolution.name(), pending.level(), pending.floor(), pending.profile(), pending.mob(), response ->
                 queue(pending.channel(), pending.replyTarget(), response));
         }
     }
@@ -410,7 +420,8 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
                 case PARTY -> "pc";
                 case GUILD -> "gc";
                 case ALL -> "ac";
-                case COOP -> "cc";
+                // Not "cc": the /cc shortcut of Kung is a client command and would swallow the reply as a wrong argument.
+                case COOP -> "coopchat";
                 case PRIVATE -> HypixelLocation.isPlayerName(replyTarget) ? "msg " + replyTarget : "";
             };
         }
@@ -445,7 +456,10 @@ public final class ChatCommandsFeature extends ConfigurableFeature<MiscConfig> {
         ChatChannel channel,
         String senderName,
         String inputName,
-        int level,
+        long level,
+        Floor floor,
+        String profile,
+        String mob,
         int ticksLeft,
         String replyTarget
     ) {
