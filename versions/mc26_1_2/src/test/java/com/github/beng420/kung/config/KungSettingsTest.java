@@ -28,11 +28,11 @@ public final class KungSettingsTest {
         Path file = temporary.getRoot().toPath().resolve("kung.json");
         var categories = KungSettings.categories(new KungConfig(file), () -> { });
 
-        assertEquals(List.of("Dungeon", "Foraging", "Garden", "Hunting", "Mining", "Slayer", "Util", "Debug"),
+        assertEquals(List.of("Dungeon", "Foraging", "Garden", "Hunting", "Mining", "Crimson Isle", "Slayer", "Util", "Debug"),
             categories.stream().map(CategoryEntry::name).toList());
         // The Modrinth build has no Blood Rush helper, no Auto Harp and no Skip NPC Dialogue.
         boolean modrinth = com.github.beng420.kung.KungBuild.MODRINTH;
-        assertEquals(List.of(modrinth ? 13 : 14, 1, 4, 3, 1, 2, modrinth ? 19 : 21, 4),
+        assertEquals(List.of(modrinth ? 13 : 14, 1, 4, 3, 1, 1, 2, modrinth ? 19 : 21, 4),
             categories.stream().map(category -> category.features().size()).toList());
         for (var category : categories) {
             for (var feature : category.features()) {
@@ -60,7 +60,7 @@ public final class KungSettingsTest {
         thickness.intConsumer().accept(4);
         assertEquals(4, config.invisibug.thickness());
         thickness.intConsumer().accept(99);
-        assertEquals(6, config.invisibug.thickness());
+        assertEquals(99, config.invisibug.thickness());
         config.invisibug.setColor(0x12FF8040);
         assertEquals(0xFFFF8040, config.invisibug.color());
     }
@@ -304,13 +304,13 @@ public final class KungSettingsTest {
         assertFalse(restored.dungeon.dragonDebuffEnabled());
         assertEquals(Math.round(30 * .85F), com.github.beng420.kung.feature.dungeon.DragonDebuffHud.overlayBounds(restored.dungeon).height());
         size.intConsumer().accept(900);
-        assertEquals(200, config.dungeon.iceSprayBoxSize());
+        assertEquals(900, config.dungeon.iceSprayBoxSize());
         size.intConsumer().accept(-1);
-        assertEquals(100, config.dungeon.iceSprayBoxSize());
+        assertEquals(1, config.dungeon.iceSprayBoxSize());
         var invalid = KungConfig.read(new java.io.StringReader("""
             {"dungeonMap":{"iceSprayBoxSize":999,"dragonDebuffScope":"unknown"}}
             """));
-        assertEquals(200, invalid.dungeon.iceSprayBoxSize());
+        assertEquals(999, invalid.dungeon.iceSprayBoxSize());
         assertEquals(DragonDebuffScope.ALL_DRAGONS, invalid.dungeon.dragonDebuffScope());
     }
 
@@ -461,9 +461,9 @@ public final class KungSettingsTest {
         assertEquals(DragonPart.BODY, config.dungeon.dragonTrailPart());
         assertEquals(100, config.dungeon.dragonLineThickness());
         config.dungeon.setDragonLineThickness(1);
-        assertEquals(25, config.dungeon.dragonLineThickness());
+        assertEquals(1, config.dungeon.dragonLineThickness());
         config.dungeon.setDragonLineThickness(999);
-        assertEquals(400, config.dungeon.dragonLineThickness());
+        assertEquals(999, config.dungeon.dragonLineThickness());
         assertTrue(config.misc.bowDrawDragonTicksEnabled());
         var tracker = setting(feature(KungSettings.categories(config, () -> { }, false), "Wither Dragons"), "Debuff Tracker");
         assertEquals(List.of("HUD", "Chat"), tracker.children().stream().map(SettingEntry::label).toList());
@@ -477,7 +477,7 @@ public final class KungSettingsTest {
         assertTrue(restored.dungeon.dragonDebuffHudShown());
         assertTrue(restored.dungeon.dragonDebuffEnabled());
         assertFalse(restored.dungeon.dragonDebuffChatEnabled());
-        assertEquals(400, restored.dungeon.dragonLineThickness());
+        assertEquals(999, restored.dungeon.dragonLineThickness());
     }
 
     @Test
@@ -512,7 +512,7 @@ public final class KungSettingsTest {
     }
 
     @Test
-    public void peekChatPeeksOnYAndScrollSpeedStaysInRangeAndPersists() {
+    public void peekChatPeeksOnYAndScrollSpeedKeepsItsFloorAndPersists() {
         Path file = temporary.getRoot().toPath().resolve("peek.json");
         KungConfig config = new KungConfig(file);
         FeatureEntry peek = feature(KungSettings.categories(config, () -> { }), "Peek Chat");
@@ -525,7 +525,7 @@ public final class KungSettingsTest {
         SettingEntry lines = scroll.children().getFirst();
         assertEquals("Minecraft's own chat scrolls 7 lines", 7, lines.intSupplier().getAsInt());
         lines.intConsumer().accept(99);
-        assertEquals(30, config.misc.peekChatScrollLines());
+        assertEquals(99, config.misc.peekChatScrollLines());
         lines.intConsumer().accept(0);
         assertEquals(1, config.misc.peekChatScrollLines());
         lines.intConsumer().accept(12);

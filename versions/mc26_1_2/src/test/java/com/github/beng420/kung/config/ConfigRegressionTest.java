@@ -85,7 +85,7 @@ public final class ConfigRegressionTest {
         equal(true, loaded.gardenAlarms.enabled(), "enabled setting retained");
         equal(true, loaded.gardenAlarms.noSpray(), "child setting retained");
         equal(false, loaded.gardenAlarms.noFfBuff(), "other child setting untouched");
-        equal(100, loaded.gardenAlarms.volume(), "volume upper bound");
+        equal(999, loaded.gardenAlarms.volume(), "a volume past the slider's top stays");
         equal(1, read("{\"gardenAlarms\":{\"volume\":0}}").gardenAlarms.volume(), "volume lower bound");
     }
 
@@ -158,12 +158,12 @@ public final class ConfigRegressionTest {
               "debug":null,"dungeonChatFilter":null
             }
             """);
-        equal(25, config.dungeon.scale(), "map scale clamped");
-        equal(200, config.dungeon.textScale(), "map text scale clamped");
+        equal(1, config.dungeon.scale(), "map scale floor");
+        equal(900, config.dungeon.textScale(), "map text scale past the slider stays");
         equal(100, config.dungeon.unopenedRoomAlpha(), "alpha clamped");
         equal("http://localhost:8765", config.dungeon.roomSyncServerUrl(), "server normalized");
         equal("", read("{\"dungeonMap\":{\"kungServerUrl\":\"  \"}}").dungeon.roomSyncServerUrl(), "blank server means none");
-        equal(50, config.bloodRush.titleDurationTenths(), "title duration clamped");
+        equal(100, config.bloodRush.titleDurationTenths(), "title duration past the slider stays");
         equal(300, config.splits.scale(), "splits scale clamped");
         equal(false, config.misc.directHypixelApiEnabled(), "null API key handled");
         equal("key:61:0", config.misc.loadoutKeybind(11), "partial keybind array expanded");

@@ -11,7 +11,7 @@
     TOGGLE Room Crypts visible=true dev=false value=false tip=[] resettable=false
     TOGGLE Local Data visible=true dev=true value=false tip=[] resettable=false
   * Ice Spray Highlight enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Light-blue mob boxes with 20% fill for observed Ice Spray effects., Includes other players' sprays. Overlapping or missing ice markers stay unknown.]
-    SLIDER Box Size (%) visible=true dev=false value=100 [100..200 step 5] 100% tip=[100% = normal size; 200% = twice the width, height and depth., Expands the highlight around the mob's center.] resettable=false
+    SLIDER Box Size (%) visible=true dev=false value=5 [100..200 step 5] 5% tip=[100% = normal size; 200% = twice the width, height and depth., Expands the highlight around the mob's center.] resettable=false
   * Wither Dragons enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[Everything for the M7 Wither Dragons in one place.]
     TOGGLE Debuff Tracker visible=true dev=false value=true tip=[Compact dragon times, early arrows and Ice Spray hits in the HUD and local chat., Right-click to turn the HUD or the chat report off on its own., Move and scale the HUD with /kung hud., Hover the chat report for first/fifth hits, rate and hit ticks., Arrow feedback counts for the first 40 server ticks at your nearest spawning statue., Other dragons show -- for arrows. Each respawn starts fresh.] resettable=false
       TOGGLE HUD visible=true dev=false value=true tip=[] resettable=false
@@ -65,7 +65,7 @@
     TOGGLE 5 Crypts Msg visible=true dev=false value=false tip=[] resettable=false
     TEXT Crypt Msg visible=true dev=false value=We got all 5 crypts (✿◠‿◠) tip=[] resettable=false
   * Quiz Reminder enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[]
-    SLIDER Delay (s) visible=true dev=false value=60 [5..60 step 1] 60 tip=[Seconds a Quiz question may stay unanswered before the reminder., Every new question starts the countdown over.] resettable=false
+    SLIDER Delay (s) visible=true dev=false value=9999 [5..60 step 1] 9999 tip=[Seconds a Quiz question may stay unanswered before the reminder., Every new question starts the countdown over.] resettable=false
     TEXT Message visible=true dev=false value=Quiz is waiting for an answer! tip=[] resettable=false
     TOGGLE Repeat visible=true dev=false value=false tip=[Remind again and again until the question is answered.] resettable=false
     SLIDER Repeat Every (s) visible=true dev=false value=0 [0..60 step 1] 0 tip=[0 repeats at the Delay., Below 5 seconds counts as 5.] resettable=false
@@ -97,6 +97,7 @@
       CHOICE Source visible=true dev=false value=AVG of [PB, AVG] tip=[PB uses personal best splits. AVG uses the last 20 finished runs on this floor. Reset AVG in /kung splits.] resettable=false
     TOGGLE Time Lost visible=true dev=false value=true tip=[] resettable=false
     TOGGLE Include PB Run visible=true dev=false value=false tip=[Shows the splits of your fastest recorded run behind a thin line,, and after " | " on every line of the chat paste., The run is kept per floor, whether or not this is on. See /kung pbs.] resettable=false
+      CHOICE Scope visible=true dev=false value=All Time of [All Time, Session] tip=[All Time compares with your fastest recorded run., Session compares with your fastest run since you started the game,, so it shows nothing on a floor until you finish a run there.] resettable=false
     TOGGLE Paste In Chat visible=true dev=false value=false tip=[Print all splits in your local chat when the run ends.] resettable=false
     TOGGLE PB Title visible=true dev=false value=true tip=[Shows a PERSONAL BEST! title when a split beats its best, and when Hypixel reports a new record for the whole floor., Run records are read once from the Hypixel API (your key, else the, Kung server), then kept up to date from Hypixel's chat lines.] resettable=false
 # Foraging
@@ -129,15 +130,17 @@
     TOGGLE All Zones Open visible=true dev=false value=false tip=[Lists every zone side by side., Off: only the zone you are in lists its critters, the others show a count.] resettable=false
   * Invisibug Line enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[Draws a line from your crosshair to the nearest Invisibug on Moonglade Marsh., An Invisibug is found by its crit particles and stays found 5 seconds after the last one., Only crits right above a stand count: a tree you chop or an NPC stays unmarked., A bug behind you or off screen keeps its direction: the line ends on the screen edge.]
     COLOR Color visible=true dev=false value=#00FF00 tip=[] resettable=false
-    SLIDER Thickness visible=true dev=false value=6 [1..6 step 1] 6 tip=[] resettable=false
+    SLIDER Thickness visible=true dev=false value=99 [1..6 step 1] 99 tip=[] resettable=false
   * Attribute Menu enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows each attribute's level as a number in the Attribute Menu, and marks every attribute you can still raise with a red slot.]
     TOGGLE Show Level visible=true dev=false value=true tip=[Shows each attribute's level as the number on its item., The level is read from the item's name: a Roman numeral, none for level 0.] resettable=false
       TOGGLE Only Below Level 10 visible=true dev=false value=true tip=[Hides the number once an attribute is level 10.] resettable=false
     TOGGLE Red Background visible=true dev=false value=true tip=[Fills the slot of every attribute below level 10 red., It covers the rarity backgrounds of other mods.] resettable=false
 # Mining
   * Gourmand Alert enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[Mithril Gourmand: warns you while you hold Tasty Mithril and Don Expresso is about to leave., A minute before: a yellow title and a chat link that runs /tptodonexpresso., Then a red countdown with a sound every second; its first second sends the link again., Don's time comes from Hypixel's chat lines and the 10 minutes since the event started.]
-    SLIDER Countdown (s) visible=true dev=false value=30 [3..30 step 1] 30 tip=[Seconds before Don Expresso leaves in which a red title counts down., Every second also plays a sound. Default: 10 seconds.] resettable=false
+    SLIDER Countdown (s) visible=true dev=false value=9999 [3..30 step 1] 9999 tip=[Seconds before Don Expresso leaves in which a red title counts down., Every second also plays a sound. Default: 10 seconds.] resettable=false
     SLIDER Volume (%) visible=true dev=false value=1 [1..100 step 1] 1% tip=[] resettable=false
+# Crimson Isle
+  * Miniboss Timer enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows when each Crimson Isle miniboss respawns, from its beacon and its death message., A seen death or a seen beacon end gives the time to the second; otherwise a range., Needs you within about 80 blocks (beacon) or at the spawn spot (no boss) to learn more., Move and resize in /kung hud.]
 # Slayer
   * Tarantula Helper enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[]
     TOGGLE Egg Sac Prediction visible=true dev=false value=false tip=[] resettable=false
@@ -149,7 +152,7 @@
   * Bow Draw Indicator enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows estimated bow power while drawing on Hypixel, paced by server ticks., Add or remove custom tick markers below. 3t: minimum shot. 20t: full power., Last Draw keeps the stopped value visible for 0.2 seconds between shots., Power rises between markers; network delay can shift the estimate., Move and resize in /kung hud. Shortbows do not charge.]
     BUTTON Add Threshold visible=true dev=false value=+ tip=[Add a marker from 0 to 20 server ticks. Maximum 20 entries.] resettable=false
     COLOR_REMOVE Threshold 1 visible=true dev=false value=Edit tip=[Click the color to change this marker's line; the red - removes it.] resettable=false
-    SLIDER Ticks visible=true dev=false value=20 [0..20 step 1] 20t tip=[3 ticks: minimum shot. 20 ticks: full power. Duplicate markers share one line.] resettable=false
+    SLIDER Ticks visible=true dev=false value=99 [0..20 step 1] 99t tip=[3 ticks: minimum shot. 20 ticks: full power. Duplicate markers share one line.] resettable=false
     COLOR_REMOVE Threshold 2 visible=true dev=false value=Edit tip=[Click the color to change this marker's line; the red - removes it.] resettable=false
     SLIDER Ticks visible=true dev=false value=0 [0..20 step 1] 0t tip=[3 ticks: minimum shot. 20 ticks: full power. Duplicate markers share one line.] resettable=false
     TOGGLE M7 Dragon Ticks visible=true dev=false value=true tip=[Live markers on the bar while an M7 dragon spawns. Needs Wither Dragons on., Kung predicts where the dragon's body will be and flies every draw from 3 to 20, ticks at it from where you stand. A block on the way, like the statue above you, is a miss., Cyan: the least draw that reaches the body. Red: the most that still gets there cleanly., White: the middle of that range. No markers: nothing gets there cleanly from this spot., They follow the nearest spawning dragon and your position, from the spawn particles, until shortly after the spawn. Right-click for each dragon's range at its last spawn.] resettable=false
@@ -163,7 +166,7 @@
   * Rag Tick Timer enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Ticks the Ragnarock Axe on screen, in server ticks: the 60-tick cast first., Swapping away or taking damage cancels the cast. The cast timer shows while this is on., Move and resize in /kung hud.]
     TOGGLE Effect Timer visible=true dev=false value=false tip=[Counts the 200 ticks of the strength after the cast.] resettable=false
     TOGGLE Cooldown Timer visible=true dev=false value=false tip=[Counts what is left of the cooldown once the strength has ended.] resettable=false
-    SLIDER Cooldown (ticks) visible=true dev=false value=400 [60..400 step 10] 400t tip=[Cooldown counted from the right-click. 400 without cooldown reduction., The game's "on cooldown for Ns" message corrects a single run.] resettable=false
+    SLIDER Cooldown (ticks) visible=true dev=false value=5000 [60..400 step 10] 5000t tip=[Cooldown counted from the right-click. 400 without cooldown reduction., The game's "on cooldown for Ns" message corrects a single run.] resettable=false
   * Storage HUD enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows what is in your Builder's Ruler, Basket of Seeds or Nether Wart Basket while you hold it., Open the storage once (left-click) to read it. The ruler then counts down by its, "You built N blocks!" line; a basket by the soil row it plants ahead of you., Open the storage again if the numbers drift. An Infinidirt Wand in the ruler is never, used up. Move and resize in /kung hud.]
     TOGGLE Background visible=true dev=false value=false tip=[Draws a dark panel behind the blocks.] resettable=false
     SLIDER Scale (%) visible=true dev=false value=100 [25..300 step 5] 100% tip=[] resettable=false
@@ -173,13 +176,14 @@
       SLIDER Line Thickness (%) visible=true dev=false value=100 [25..400 step 25] 100% tip=[100% = the normal outline; 400% = four times as thick., Thicker lines stay visible through water and at a distance.] resettable=false
       SLIDER Box Size (%) visible=true dev=false value=100 [50..200 step 10] 100% tip=[50% = x0.5, 100% = normal, 200% = x2.0, around the box's center., Only the drawn outline changes; the real hitbox stays the same.] resettable=false
     COLOR_REMOVE Zombie visible=true dev=false value=Edit tip=[minecraft:zombie, Expand for line thickness and box size., Click the color to edit; click - to remove.] rowToggle=Enabled=false [Turn this hitbox off without deleting it., A switched-off hitbox shows a dimmed color.] resettable=false
-      SLIDER Line Thickness (%) visible=true dev=false value=400 [25..400 step 25] 400% tip=[100% = the normal outline; 400% = four times as thick., Thicker lines stay visible through water and at a distance.] resettable=false
-      SLIDER Box Size (%) visible=true dev=false value=50 [50..200 step 10] 50% tip=[50% = x0.5, 100% = normal, 200% = x2.0, around the box's center., Only the drawn outline changes; the real hitbox stays the same.] resettable=false
+      SLIDER Line Thickness (%) visible=true dev=false value=9999 [25..400 step 25] 9999% tip=[100% = the normal outline; 400% = four times as thick., Thicker lines stay visible through water and at a distance.] resettable=false
+      SLIDER Box Size (%) visible=true dev=false value=1 [50..200 step 10] 1% tip=[50% = x0.5, 100% = normal, 200% = x2.0, around the box's center., Only the drawn outline changes; the real hitbox stays the same.] resettable=false
   * Lobby Hop Helper enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Warns when you join a lobby you were in before, and how long ago you left it.]
     TOGGLE Title visible=true dev=false value=true tip=[] resettable=false
     TOGGLE Chat Message visible=true dev=false value=true tip=[] resettable=false
+    SLIDER Warn Within (s) visible=true dev=false value=30 [0..300 step 5] 30 tip=[The title and the sound only come when you left that lobby less than this many seconds ago., The chat message always comes. 0 never shows the title or plays the sound., Type a number in the box to go past the slider's 300.] resettable=false
   * Performance enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows TPS, FPS and ping. TPS is measured from the server's own tick packets,, so a bad ping does not look like server lag., Each graph draws the last 30 seconds of that stat; pick any combination., Move and resize in /kung hud.]
-    SLIDER Refresh Time visible=true dev=false value=10 [1..10 step 1] 1.0s tip=[] resettable=false
+    SLIDER Refresh Time visible=true dev=false value=99 [1..10 step 1] 9.9s tip=[] resettable=false
     TOGGLE Graph TPS visible=true dev=false value=false tip=[] resettable=false
     TOGGLE Graph FPS visible=true dev=false value=false tip=[] resettable=false
     TOGGLE Graph Ping visible=true dev=false value=false tip=[] resettable=false
@@ -197,7 +201,8 @@
     TOGGLE Peek In Menus visible=true dev=false value=false tip=[The key also shows the chat while an inventory or other menu is open., Drawn above the menu, so it stays sharp. The wheel scrolls it there too., Not in the chat screen, and not while a text box has focus.] resettable=false
     TOGGLE Scroll Chat visible=true dev=false value=true tip=[Scroll the wheel while holding the key to scroll the chat, not the hotbar.] resettable=false
       SLIDER Scroll Speed (Lines) visible=true dev=false value=1 [1..30 step 1] 1 tip=[Lines per wheel notch. Minecraft's own chat scrolls 7.] resettable=false
-  * Chat Channels enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Tabs under the open chat: All, Party, Guild, Co-op and DMs., A tab shows only its own lines and sends /chat to its channel., All shows everything except the channels you switch off:, hover All to open the list, or set them under Shown Channels., Hidden lines are kept, so switching a channel on brings them all back.]
+  * Chat Channels enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Tabs under the open chat: All, Party, Guild, Co-op and DMs., A tab shows only its own lines and, with Chat Follows Tab on, sends /chat to its channel., All shows everything except the channels you switch off:, hover All to open the list, or set them under Shown Channels., Hidden lines are kept, so switching a channel on brings them all back.]
+    TOGGLE Chat Follows Tab visible=true dev=false value=true tip=[On: a click on a tab also sends /chat to its channel, so your messages go there., Off: a click only changes what the chat shows; your messages keep going where they went.] resettable=false
     TOGGLE Tab Follows /chat visible=true dev=false value=false tip=[On: /chat party, or Hypixel's "You are now in the PARTY channel", also switches the tab., Off: only a click on a tab changes what the chat shows.] resettable=false
     GROUP Shown Channels visible=true dev=false value= tip=[An off channel vanishes from the chat, old lines too; on brings them back.] resettable=false
       TOGGLE Guild visible=true dev=false value=true tip=[Guild and Officer chat, and the joined and left lines of members.] resettable=false
@@ -207,13 +212,13 @@
   * Current Chat Display enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows which chat your messages go to: All, Party, Guild, Officer or Co-op., Follows /chat and the Chat Channels tabs, from Hypixel's own notices., Move and resize in /kung hud.]
   * Skip NPC Dialogue enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Answers NPC dialogue prompts: a single option, a known choice, else the first option., Prompts that cost coins or swap items stay yours., Clicks the NPC a "Talk to", "Check on" or "Give" quest objective names once it is in reach., Never clicks in menus, sends chat or moves you. Off in dungeons and Kuudra., Automates gameplay, which Hypixel's rules forbid. Use at your own risk.]
   * Auto Harp enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Melody's Harp: clicks each note's button when it lights up, in every song., Automates gameplay, which Hypixel's rules forbid. Use at your own risk.]
-    SLIDER Click Delay (ms) visible=true dev=false value=300 [30..300 step 10] 300 tip=[Average time from a note lighting up until its click arrives., Your ping counts towards it, so a high ping shortens the wait, down to 20 ms., Every wait varies by up to a quarter either way.] resettable=false
+    SLIDER Click Delay (ms) visible=true dev=false value=5000 [30..300 step 10] 5000 tip=[Average time from a note lighting up until its click arrives., Your ping counts towards it, so a high ping shortens the wait, down to 20 ms., Every wait varies by up to a quarter either way.] resettable=false
   * Hypixel API enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[]
     LABEL Off, no key set visible=true dev=false value= tip=[] resettable=false
     TEXT API Key visible=true dev=false value=test-key-123 tip=[Create one at developer.hypixel.net; it looks like a UUID.] resettable=false
     BUTTON Get API Key visible=true dev=false value=Open tip=[Opens the Hypixel developer dashboard in your browser.] resettable=false
     BUTTON Test Key visible=true dev=false value=Run tip=[Asks Hypixel once with your key and shows the answer above.] resettable=false
-  * Chat Commands enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[]
+  * Chat Commands enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Answers messages such as !c50 or !tps typed in chat., !kung help (or !kunghelp, !helpkung) lists the commands that answer in that chat., !kung always answers with the installed and the newest Kung versions.]
     GROUP Default Channels visible=true dev=false value= tip=[Where every command answers, unless it has channels of its own., Each command follows these until you turn its "Use Default" off.] resettable=false
       TOGGLE Party visible=true dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=true dev=false value=true tip=[] resettable=false
@@ -221,14 +226,14 @@
       TOGGLE All Chat visible=true dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=true dev=false value=false tip=[] resettable=false
     BUTTON Reset All visible=true dev=false value=Reset tip=[Turns "Use Default" back on for every command., The default channels and the command switches stay as they are.] resettable=false
-    TOGGLE !c50 visible=true dev=false value=false tip=[Runs left for Catacombs 50. Add a player name to look up someone else., Any level from 1 to 200 works: !c67 for Catacombs 67.] resettable=true
+    TOGGLE !c50 visible=true dev=false value=false tip=[Runs left for Catacombs 50. Add a player name to look up someone else., Any level from 1 to 200 works: !c67 for Catacombs 67., Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),, for example "!c50 -f7".] resettable=true
       TOGGLE Use Default visible=false dev=false value=false tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=true dev=false value=false tip=[] resettable=false
       TOGGLE Guild visible=true dev=false value=false tip=[] resettable=false
       TOGGLE Co-op visible=true dev=false value=true tip=[] resettable=false
       TOGGLE All Chat visible=true dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=true dev=false value=true tip=[] resettable=false
-    TOGGLE !ca50 visible=true dev=false value=false tip=[Runs left for class average 50. Add a player name to look up someone else., Any level from 1 to 200 works: !ca60 for class average 60., Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,, for example "!ca50 Name -arch". The other classes still earn their 25% team share.] resettable=true
+    TOGGLE !ca50 visible=true dev=false value=false tip=[Runs left for class average 50. Add a player name to look up someone else., Any level from 1 to 200 works: !ca60 for class average 60., Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,, for example "!ca50 Name -arch". The other classes still earn their 25% team share., Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),, for example "!ca50 -m3". Both flags work together in either order: "!ca50 -f7 -arch".] resettable=true
       TOGGLE Use Default visible=false dev=false value=false tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=true dev=false value=false tip=[] resettable=false
       TOGGLE Guild visible=true dev=false value=false tip=[] resettable=false
@@ -236,6 +241,13 @@
       TOGGLE All Chat visible=true dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=true dev=false value=false tip=[] resettable=false
     TOGGLE Class Level visible=true dev=false value=true tip=[!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50., Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else., Any level from 1 to 200 works: !a60 for Archer 60., Hypixel and other mods use !m1-!m7 and !t1-!t5 alone: type !mage1 or !tank1 for those.] resettable=false
+      TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
+      TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE Co-op visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE All Chat visible=false dev=false value=false tip=[] resettable=false
+      TOGGLE DMs visible=false dev=false value=false tip=[] resettable=false
+    TOGGLE !bestiary visible=true dev=false value=true tip=[!be barb: your Bestiary kills of the mob whose name starts that way (Barbarian Duke X)., Add a dash and a player name to look up someone else: "!be barb -Notch". Several words work: "!be duke x"., A start that fits several mobs lists the best three instead of guessing; type more letters., Not at max level it also shows the level and the kills to the next level and to max., The Kung server looks it up, so it needs the Kung server.] resettable=false
       TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
@@ -331,11 +343,11 @@
     TOGGLE Mark Pairs visible=true dev=false value=true tip=[Superpairs: a thin white frame on both cards of every pair you can click,, that is, both cards are known and the pair is not taken yet.] resettable=false
     TOGGLE Mark Best Click visible=true dev=false value=true tip=[Superpairs: a green frame shows the next click worth making once nothing unseen, is left: the best known pair, its twin, or after an Instant Find a known Titanic or T7., Titanic bottles and T7 enchantments always get a gold frame.] resettable=false
     TOGGLE Add-on Solvers visible=true dev=false value=true tip=[Chronomatron and Ultrasequencer: marks the next click in the add-ons., Turn it off to keep only the Superpairs help., Also stops Auto Click Add-ons, which needs the solver.] resettable=false
-    SLIDER Max Buffs Round visible=true dev=false value=30 [0..30 step 1] 30 tip=[Chronomatron and Ultrasequencer: the round after which the add-on's buffs are maxed., 0 = automatic: Kung reads it from the Stakes menu of the tier you picked., A chat hint tells you when you finished it: close the window to keep the buffs., With Auto Click Add-ons on, Kung closes the window for you.] resettable=false
+    SLIDER Max Buffs Round visible=true dev=false value=99 [0..30 step 1] 99 tip=[Chronomatron and Ultrasequencer: the round after which the add-on's buffs are maxed., 0 = automatic: Kung reads it from the Stakes menu of the tier you picked., A chat hint tells you when you finished it: close the window to keep the buffs., With Auto Click Add-ons on, Kung closes the window for you.] resettable=false
     TOGGLE Auto Click Main Game visible=true dev=false value=false tip=[Superpairs main game only (the add-ons have their own switch):, clicks hidden cards for you until Unseen pairs is 0, then stops., Meanwhile it uses an Instant Find on a known Titanic or T7, if there is one., The remaining clicks are yours; the green frame shows the best next one., Automates gameplay, which Hypixel's rules forbid. Use at your own risk.] resettable=false
     TOGGLE Auto Claim Pairs visible=true dev=false value=false tip=[Superpairs main game: after Auto Click Main Game is done, also claims, the known pairs, best first:, Titanic bottles, T7 enchantments, other enchantments, bottles, then XP., It uses up the remaining clicks. Automates gameplay: use at your own risk.] resettable=false
     TOGGLE Auto Click Add-ons visible=true dev=false value=false tip=[Clicks the solution of Chronomatron and Ultrasequencer for you., The Superpairs main game stays yours., Automates gameplay, which Hypixel's rules forbid. Use at your own risk.] resettable=false
-    SLIDER Click Delay (ms) visible=true dev=false value=100 [100..1000 step 25] 100 tip=[Average wait before each automatic click, for Auto Click Main Game and Auto Click Add-ons., Every click varies by up to a quarter either way; the first of a round waits twice.] resettable=false
+    SLIDER Click Delay (ms) visible=true dev=false value=5 [100..1000 step 25] 5 tip=[Average wait before each automatic click, for Auto Click Main Game and Auto Click Add-ons., Every click varies by up to a quarter either way; the first of a round waits twice.] resettable=false
   * Waypoints enabled=true clickable=true actionOnly=false pinned=false dev=false tip=[Saves waypoints and routes per island and shows them in the world., They are kept in config/kung/waypoints.json, also across restarts., A route is a group whose waypoints show one after the other., Share groups as a Skyblocker waypoint string with /kung waypoints export and import.]
     BUTTON Editor visible=true dev=false value=Open tip=[Opens the waypoint editor. /kung waypoints does the same.] resettable=false
     KEYBIND Add Waypoint Key visible=true dev=false value=None raw= tip=[Adds a waypoint at the block you look at to every marked group of this island., Mark a group with the * in the waypoint editor. Works in the world with no menu open., Unbound by default.] resettable=false
@@ -343,7 +355,7 @@
     CHOICE Default Type visible=true dev=false value=Waypoint of [Waypoint, Outlined Waypoint, Highlight, Outlined Highlight, Outline] tip=[The draw type a new group starts with. Change a group's type with /kung waypoints group type.] resettable=false
     TOGGLE Route Line visible=true dev=false value=true tip=[Draws a line from your crosshair to the next waypoint of a route.] resettable=false
     COLOR Line Color visible=true dev=false value=#FF0000 tip=[] resettable=false
-    SLIDER Line Thickness visible=true dev=false value=6 [1..6 step 1] 6 tip=[] resettable=false
+    SLIDER Line Thickness visible=true dev=false value=99 [1..6 step 1] 99 tip=[] resettable=false
     SLIDER Activation Radius visible=true dev=false value=1 [1..10 step 1] 1 tip=[Blocks from a route waypoint within which it counts as reached.] resettable=false
     TOGGLE Allow Skipping Waypoints visible=true dev=false value=true tip=[Lets a route move to a waypoint that is not next to the current one.] resettable=false
     TOGGLE Allow Going Backwards visible=true dev=false value=true tip=[Lets a route move back to the previous waypoint.] resettable=false

@@ -20,7 +20,7 @@ public final class BowDrawThresholdSettingsTest {
         var config = KungConfig.read(new StringReader("""
             {"misc":{"bowDrawThresholds":[null, {"ticks":-4}, {"ticks":99}, {"ticks":7}]}}
             """));
-        assertEquals(List.of(0, 20, 7), ticks(config.misc));
+        assertEquals(List.of(0, 99, 7), ticks(config.misc));
         // Thresholds saved before colors existed keep white lines.
         assertEquals(0xFFFFFFFF, config.misc.bowDrawThresholds().getLast().color());
         assertFalse(config.misc.bowDrawIndicatorEnabled());
@@ -62,13 +62,13 @@ public final class BowDrawThresholdSettingsTest {
     }
 
     @Test
-    public void editorsClampTicksAndAddedRowsUseAnUnusedValue() {
+    public void editorsKeepTicksFromZeroUpAndAddedRowsUseAnUnusedValue() {
         var config = new MiscConfig();
         var first = config.bowDrawThresholds().getFirst();
         config.setBowDrawThreshold(first, -20);
         assertEquals(0, first.ticks());
         config.setBowDrawThreshold(first, 99);
-        assertEquals(20, first.ticks());
+        assertEquals(99, first.ticks());
         config.addBowDrawThreshold();
         assertEquals(10, config.bowDrawThresholds().getLast().ticks());
         config.addBowDrawThreshold();

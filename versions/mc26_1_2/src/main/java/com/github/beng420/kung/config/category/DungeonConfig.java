@@ -148,8 +148,8 @@ public final class DungeonConfig extends ConfigCategory {
     public void setMimicEspEnabled(boolean value) { mimicEspEnabled = value; save(); }
     public boolean iceSprayHighlightEnabled() { return iceSprayHighlightEnabled; }
     public void setIceSprayHighlightEnabled(boolean value) { iceSprayHighlightEnabled = value; save(); }
-    public int iceSprayBoxSize() { return Math.clamp(iceSprayBoxSize, 100, 200); }
-    public void setIceSprayBoxSize(int value) { iceSprayBoxSize = Math.clamp(value, 100, 200); save(); }
+    public int iceSprayBoxSize() { return typed(iceSprayBoxSize, 1); }
+    public void setIceSprayBoxSize(int value) { iceSprayBoxSize = typed(value, 1); save(); }
     public boolean witherDragonsEnabled() {
         return witherDragonsEnabled != null ? witherDragonsEnabled : dragonDebuffEnabled || m7DragonHelperEnabled;
     }
@@ -218,8 +218,8 @@ public final class DungeonConfig extends ConfigCategory {
     public boolean m7DragonHelperEnabled() { return witherDragonsEnabled(); }
     public boolean dragonFlightPathsEnabled() { return dragonFlightPathsEnabled; }
     public void setDragonFlightPathsEnabled(boolean value) { dragonFlightPathsEnabled = value; save(); }
-    public int dragonLineThickness() { return Math.clamp(dragonLineThickness, 25, 400); }
-    public void setDragonLineThickness(int value) { dragonLineThickness = Math.clamp(value, 25, 400); save(); }
+    public int dragonLineThickness() { return typed(dragonLineThickness, 1); }
+    public void setDragonLineThickness(int value) { dragonLineThickness = typed(value, 1); save(); }
     public boolean dragonSpawnMarkersEnabled() { return dragonSpawnMarkersEnabled; }
     public void setDragonSpawnMarkersEnabled(boolean value) { dragonSpawnMarkersEnabled = value; save(); }
     public boolean dragonStatueBoxesEnabled() { return dragonStatueBoxesEnabled; }
@@ -228,8 +228,8 @@ public final class DungeonConfig extends ConfigCategory {
     public void setDragonCountNotificationsEnabled(boolean value) { dragonCountNotificationsEnabled = value; save(); }
     public boolean dragonHpEnabled() { return dragonHpEnabled; }
     public void setDragonHpEnabled(boolean value) { dragonHpEnabled = value; save(); }
-    public int dragonHpScale() { return Math.clamp(dragonHpScale, 50, 300); }
-    public void setDragonHpScale(int value) { dragonHpScale = Math.clamp(value, 50, 300); save(); }
+    public int dragonHpScale() { return typed(dragonHpScale, 1); }
+    public void setDragonHpScale(int value) { dragonHpScale = typed(value, 1); save(); }
     public boolean devDragonDiagnosticsEnabled() { return devDragonDiagnosticsEnabled && KungDeveloperAccess.allowed(); }
     public void setDevDragonDiagnosticsEnabled(boolean value) { devDragonDiagnosticsEnabled = value; save(); }
     public DragonMarkerMode dragonMarkerMode() { return dragonMarkerMode; }
@@ -319,7 +319,7 @@ public final class DungeonConfig extends ConfigCategory {
     public void setQuizReminderMessage(String value) { quizReminderMessage = value == null ? "" : value; save(); }
     /** Seconds a question may stay unanswered before the reminder. */
     public int quizReminderDelaySeconds() {
-        return Math.clamp(quizReminderDelaySeconds, QUIZ_REMINDER_MIN_SECONDS, QUIZ_REMINDER_MAX_SECONDS);
+        return typed(quizReminderDelaySeconds, QUIZ_REMINDER_MIN_SECONDS);
     }
     public void setQuizReminderDelaySeconds(int value) { quizReminderDelaySeconds = value; save(); }
     public boolean quizReminderRepeatEnabled() { return quizReminderRepeatEnabled; }
@@ -327,7 +327,7 @@ public final class DungeonConfig extends ConfigCategory {
     /** Seconds between repeats; 0 (the default) repeats at the delay. */
     public int quizReminderRepeatSeconds() {
         return quizReminderRepeatSeconds <= 0 ? quizReminderDelaySeconds()
-            : Math.clamp(quizReminderRepeatSeconds, QUIZ_REMINDER_MIN_SECONDS, QUIZ_REMINDER_MAX_SECONDS);
+            : typed(quizReminderRepeatSeconds, QUIZ_REMINDER_MIN_SECONDS);
     }
     /** The raw slider value: 0 means "same as the delay". */
     public int quizReminderRepeatSetting() { return quizReminderRepeatSeconds <= 0 ? 0 : quizReminderRepeatSeconds(); }
@@ -357,12 +357,12 @@ public final class DungeonConfig extends ConfigCategory {
     public String roomSyncServerUrl() { return roomSyncServerUrl == null ? "" : roomSyncServerUrl; }
 
     public void setScale(int scale) {
-        this.scale = Math.clamp(scale, 25, 300);
+        this.scale = typed(scale, 1);
         save();
     }
 
     public void setTextScale(int textScale) {
-        this.textScale = Math.clamp(textScale, 50, 200);
+        this.textScale = typed(textScale, 1);
         save();
     }
 

@@ -32,6 +32,8 @@ public final class MiscConfig extends ConfigCategory {
     private boolean lobbyHopHelperEnabled = false;
     private boolean lobbyHopTitleEnabled = true;
     private boolean lobbyHopChatEnabled = true;
+    /** The title and the sound only come for a lobby left less than this many seconds ago; the chat message always does. */
+    private int lobbyHopWarnSeconds = 30;
     private boolean bowDrawIndicatorEnabled = false;
     private int bowDrawIndicatorX = 6;
     private int bowDrawIndicatorY = 160;
@@ -88,6 +90,8 @@ public final class MiscConfig extends ConfigCategory {
     private Set<String> chatChannelsHidden = new LinkedHashSet<>();
     /** Whether a /chat switch (typed or a tab click's) also changes the tab; off, only a click on a tab does. */
     private boolean chatChannelsFollowChat = false;
+    /** Whether a click on a tab also sends /chat to its channel; off, a click only changes what the chat shows. */
+    private boolean chatChannelsChatFollowsTab = true;
     /** The {@code ChatChannels.Send} Hypixel was last seen in, by enum name, so a restart still has it. */
     private String chatSend = "ALL";
     private boolean currentChatDisplayEnabled = false;
@@ -173,8 +177,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setRagTimerEffectEnabled(boolean value) { ragTimerEffectEnabled = value; save(); }
     public boolean ragTimerCooldownEnabled() { return ragTimerCooldownEnabled; }
     public void setRagTimerCooldownEnabled(boolean value) { ragTimerCooldownEnabled = value; save(); }
-    public int ragTimerCooldownTicks() { return Math.clamp(ragTimerCooldownTicks, 60, 400); }
-    public void setRagTimerCooldownTicks(int value) { ragTimerCooldownTicks = Math.clamp(value, 60, 400); save(); }
+    public int ragTimerCooldownTicks() { return typed(ragTimerCooldownTicks, 1); }
+    public void setRagTimerCooldownTicks(int value) { ragTimerCooldownTicks = typed(value, 1); save(); }
     public int ragTimerX() { return ragTimerX; }
     public void setRagTimerX(int value) { ragTimerX = value; save(); }
     public int ragTimerY() { return ragTimerY; }
@@ -190,7 +194,7 @@ public final class MiscConfig extends ConfigCategory {
     public int storageHudY() { return storageHudY; }
     public void setStorageHudY(int value) { storageHudY = value; save(); }
     public int storageHudScale() { return storageHudScale; }
-    public void setStorageHudScale(int value) { storageHudScale = Math.clamp(value, 25, 300); save(); }
+    public void setStorageHudScale(int value) { storageHudScale = typed(value, 1); save(); }
     public boolean performanceHudEnabled() { return performanceHudEnabled; }
     public void setPerformanceHudEnabled(boolean value) { performanceHudEnabled = value; save(); }
     public int performanceHudX() { return performanceHudX; }
@@ -200,7 +204,7 @@ public final class MiscConfig extends ConfigCategory {
     public int performanceHudScale() { return performanceHudScale; }
     public void setPerformanceHudScale(int value) { performanceHudScale = Math.clamp(value, 25, 300); save(); }
     public int performanceRefreshTenths() { return performanceRefreshTenths; }
-    public void setPerformanceRefreshTenths(int value) { performanceRefreshTenths = Math.clamp(value, 1, 10); save(); }
+    public void setPerformanceRefreshTenths(int value) { performanceRefreshTenths = typed(value, 1); save(); }
     public boolean performanceGraphTps() { return performanceGraphTps; }
     public void setPerformanceGraphTps(boolean value) { performanceGraphTps = value; save(); }
     public boolean performanceGraphFps() { return performanceGraphFps; }
@@ -258,14 +262,16 @@ public final class MiscConfig extends ConfigCategory {
     public void setPeekChatKeybind(String value) { peekChatKeybind = value == null ? "" : value; save(); }
     public boolean peekChatScrollEnabled() { return peekChatScrollEnabled; }
     public void setPeekChatScrollEnabled(boolean value) { peekChatScrollEnabled = value; save(); }
-    public int peekChatScrollLines() { return Math.clamp(peekChatScrollLines, 1, 30); }
-    public void setPeekChatScrollLines(int value) { peekChatScrollLines = Math.clamp(value, 1, 30); save(); }
+    public int peekChatScrollLines() { return typed(peekChatScrollLines, 1); }
+    public void setPeekChatScrollLines(int value) { peekChatScrollLines = typed(value, 1); save(); }
     public boolean peekChatInMenus() { return peekChatInMenus; }
     public void setPeekChatInMenus(boolean value) { peekChatInMenus = value; save(); }
     public boolean chatChannelsEnabled() { return chatChannelsEnabled; }
     public void setChatChannelsEnabled(boolean value) { chatChannelsEnabled = value; save(); }
     public boolean chatChannelsFollowChat() { return chatChannelsFollowChat; }
     public void setChatChannelsFollowChat(boolean value) { chatChannelsFollowChat = value; save(); }
+    public boolean chatChannelsChatFollowsTab() { return chatChannelsChatFollowsTab; }
+    public void setChatChannelsChatFollowsTab(boolean value) { chatChannelsChatFollowsTab = value; save(); }
     public String chatSend() { return chatSend; }
     public void setChatSend(String value) {
         if (value.equals(chatSend)) return;
@@ -405,7 +411,7 @@ public final class MiscConfig extends ConfigCategory {
 
     public void setBowDrawThreshold(BowDrawThreshold entry, int ticks) {
         if (!bowDrawThresholds.contains(entry)) return;
-        entry.ticks = Math.clamp(ticks, 0, 20);
+        entry.ticks = typed(ticks, 0);
         save();
     }
 
@@ -437,6 +443,8 @@ public final class MiscConfig extends ConfigCategory {
     public void setLobbyHopTitleEnabled(boolean value) { lobbyHopTitleEnabled = value; save(); }
     public boolean lobbyHopChatEnabled() { return lobbyHopChatEnabled; }
     public void setLobbyHopChatEnabled(boolean value) { lobbyHopChatEnabled = value; save(); }
+    public int lobbyHopWarnSeconds() { return typed(lobbyHopWarnSeconds, 0); }
+    public void setLobbyHopWarnSeconds(int value) { lobbyHopWarnSeconds = typed(value, 0); save(); }
     public boolean hypixelApiEnabled() { return hypixelApiEnabled; }
     public void setHypixelApiEnabled(boolean value) { hypixelApiEnabled = value; save(); }
     public boolean directHypixelApiEnabled() { return hypixelApiEnabled && !hypixelApiKey().isBlank(); }
@@ -518,7 +526,7 @@ public final class MiscConfig extends ConfigCategory {
     /** The chat commands with settings of their own; {@code prefix} starts their saved keys, as in c50PartyCommandsEnabled. */
     public enum ChatCommandSetting {
         C50("c50"), CA50("ca50"), TPS("tps"), JERRY("jerry"), SCORP("scorp"), DERPY("derpy"),
-        YOTP("yotp"), YOTW("yotw"), YOTS("yots"), CLASS_LEVEL("classLevel");
+        YOTP("yotp"), YOTW("yotw"), YOTS("yots"), CLASS_LEVEL("classLevel"), BESTIARY("bestiary");
 
         private final String prefix;
 
@@ -661,14 +669,14 @@ public final class MiscConfig extends ConfigCategory {
     public void setExperimentAutoClickEnabled(boolean value) { experimentAutoClickEnabled = value; save(); }
     public boolean superpairsAutoRevealEnabled() { return superpairsAutoRevealEnabled; }
     public void setSuperpairsAutoRevealEnabled(boolean value) { superpairsAutoRevealEnabled = value; save(); }
-    public int experimentAutoClickDelayMillis() { return Math.clamp(experimentAutoClickDelayMillis, 100, 1000); }
-    public void setExperimentAutoClickDelayMillis(int value) { experimentAutoClickDelayMillis = Math.clamp(value, 100, 1000); save(); }
-    public int experimentMaxBuffsRound() { return Math.clamp(experimentMaxBuffsRound, 0, 30); }
-    public void setExperimentMaxBuffsRound(int value) { experimentMaxBuffsRound = Math.clamp(value, 0, 30); save(); }
+    public int experimentAutoClickDelayMillis() { return typed(experimentAutoClickDelayMillis, 1); }
+    public void setExperimentAutoClickDelayMillis(int value) { experimentAutoClickDelayMillis = typed(value, 1); save(); }
+    public int experimentMaxBuffsRound() { return typed(experimentMaxBuffsRound, 0); }
+    public void setExperimentMaxBuffsRound(int value) { experimentMaxBuffsRound = typed(value, 0); save(); }
     public boolean autoHarpEnabled() { return autoHarpEnabled; }
     public void setAutoHarpEnabled(boolean value) { autoHarpEnabled = value; save(); }
-    public int autoHarpDelayMillis() { return Math.clamp(autoHarpDelayMillis, 30, 300); }
-    public void setAutoHarpDelayMillis(int value) { autoHarpDelayMillis = Math.clamp(value, 30, 300); save(); }
+    public int autoHarpDelayMillis() { return typed(autoHarpDelayMillis, 1); }
+    public void setAutoHarpDelayMillis(int value) { autoHarpDelayMillis = typed(value, 1); save(); }
     public boolean skipNpcDialogueEnabled() { return skipNpcDialogueEnabled; }
     public void setSkipNpcDialogueEnabled(boolean value) { skipNpcDialogueEnabled = value; save(); }
     public int superpairsHelperX() { return superpairsHelperX; }
@@ -760,10 +768,10 @@ public final class MiscConfig extends ConfigCategory {
         bowDrawIndicatorScale = Math.clamp(bowDrawIndicatorScale, 25, 300);
         frozenBlazeHudScale = Math.clamp(frozenBlazeHudScale, 25, 300);
         ragTimerScale = Math.clamp(ragTimerScale, 25, 300);
-        storageHudScale = Math.clamp(storageHudScale, 25, 300);
+        storageHudScale = typed(storageHudScale, 1);
         performanceHudScale = Math.clamp(performanceHudScale, 25, 300);
         currentChatDisplayScale = Math.clamp(currentChatDisplayScale, 25, 300);
-        performanceRefreshTenths = Math.clamp(performanceRefreshTenths, 1, 10);
+        performanceRefreshTenths = typed(performanceRefreshTenths, 1);
         sackTrackerScale = Math.clamp(sackTrackerScale, 25, 300);
         sackTrackerItems = sackTrackerItems == null ? new ArrayList<>()
             : new ArrayList<>(sackTrackerItems.stream().filter(item -> item != null && !item.name().isBlank()).toList());
@@ -773,7 +781,7 @@ public final class MiscConfig extends ConfigCategory {
         customChatEmotes = customChatEmotes == null ? new ArrayList<>()
             : new ArrayList<>(customChatEmotes.stream().filter(java.util.Objects::nonNull).toList());
         bowDrawThresholds = new ArrayList<>(bowDrawThresholds.stream().filter(java.util.Objects::nonNull).limit(20).toList());
-        for (var threshold : bowDrawThresholds) threshold.ticks = Math.clamp(threshold.ticks, 0, 20);
+        for (var threshold : bowDrawThresholds) threshold.ticks = typed(threshold.ticks, 0);
         if (loadoutKeybinds == null) {
             loadoutKeybinds = defaultLoadoutKeybinds();
         } else {

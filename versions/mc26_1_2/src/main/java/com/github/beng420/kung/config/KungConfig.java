@@ -13,6 +13,7 @@ import com.github.beng420.kung.config.category.ForagingConfig;
 import com.github.beng420.kung.config.category.GreenhouseConfig;
 import com.github.beng420.kung.config.category.HitboxesConfig;
 import com.github.beng420.kung.config.category.InvisibugConfig;
+import com.github.beng420.kung.config.category.MiniBossConfig;
 import com.github.beng420.kung.config.category.MiningConfig;
 import com.github.beng420.kung.config.category.MiscConfig;
 import com.github.beng420.kung.config.category.PlotCleaningConfig;
@@ -60,6 +61,7 @@ public final class KungConfig {
     public MiningConfig mining = new MiningConfig();
     public ForagingConfig foraging = new ForagingConfig();
     public WaypointsConfig waypoints = new WaypointsConfig();
+    public MiniBossConfig miniBoss = new MiniBossConfig();
 
     private transient Path explicitConfigFile;
     private transient boolean loading;
@@ -114,6 +116,7 @@ public final class KungConfig {
                     mining = loaded.mining;
                     foraging = loaded.foraging;
                     waypoints = loaded.waypoints;
+                    miniBoss = loaded.miniBoss;
                     loadedSuccessfully = true;
                 }
             }
@@ -175,7 +178,7 @@ public final class KungConfig {
 
     private List<ConfigCategory> categories() {
         return List.of(dungeon, bloodRush, chatFilter, splits, debug, misc, slayer, safari, feast, gardenAlarms,
-            hitboxes, greenhouse, invisibug, attributeMenu, plotCleaning, mining, foraging, waypoints);
+            hitboxes, greenhouse, invisibug, attributeMenu, plotCleaning, mining, foraging, waypoints, miniBoss);
     }
 
     private void bindCategories() {

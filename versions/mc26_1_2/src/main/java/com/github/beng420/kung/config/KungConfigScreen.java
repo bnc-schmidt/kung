@@ -99,6 +99,9 @@ public final class KungConfigScreen extends Screen {
     private int draggingSliderControlX;
     private int draggingSliderControlWidth;
     private final UiScrollList horizontalScroll = new UiScrollList();
+    /** The value box beside every slider: it shows the number and takes a typed one, also beyond the slider's range. */
+    private final SliderValueBox valueBox;
+    private float valuePartialTick;
     private String search = "";
     /** Vanilla edit box: blinking cursor, selection, Ctrl+A, arrows, Ctrl+Backspace; right click clears. */
     private final UiTextField searchField;
@@ -120,6 +123,7 @@ public final class KungConfigScreen extends Screen {
         super(Component.literal("Kung - v" + KungUpdater.currentVersion()));
         this.parent = parent;
         menuFont = UiMenuFont.wrap(super.font);
+        valueBox = new SliderValueBox(menuFont);
         searchField = new UiTextField(menuFont, Component.literal("Search")).maxLength(60).bordered(false)
             .textShadow(false).hint("Search here...").responder(value -> search = value);
         categories = KungSettings.categories(this::openChangelog);
@@ -227,7 +231,10 @@ public final class KungConfigScreen extends Screen {
             graphics.pose().scale(scale, scale);
             graphics.fill(0, 0, menuWidth(), menuHeight(), THEME.backdrop());
             drawTitle(graphics);
+            valueBox.beginFrame();
+            valuePartialTick = partialTick;
             drawColumns(graphics, releaseNotesPopup == null ? mouseX : -1, releaseNotesPopup == null ? mouseY : -1);
+            valueBox.endFrame();
             drawSearchBox(graphics, mouseX, mouseY, partialTick);
             if (dropdown != null) drawChoiceDropdown(graphics, mouseX, mouseY);
             boolean showTooltip = tooltip != null && textEditor == null && releaseNotesPopup == null
@@ -269,6 +276,12 @@ public final class KungConfigScreen extends Screen {
             return textEditor.mouseClicked(event, mouseX, mouseY, doubleClick);
         }
 
+        // A click in the number field edits it; one anywhere else applies the number and then does what it would.
+        if (valueBox.mouseClicked(menuEvent(event), doubleClick)) {
+            searchField.setFocused(false);
+            return true;
+        }
+
         if (capturingSetting != null) {
             capturingSetting.setText(LoadoutsAutoCloseFeature.keybindFromMouseButton(button));
             capturingSetting = null;
@@ -297,6 +310,9 @@ public final class KungConfigScreen extends Screen {
         if (textEditor != null) {
             return textEditor.mouseDragged(event, dragX, dragY);
         }
+        if (valueBox.editing()) {
+            return valueBox.mouseDragged(menuEvent(event), dragX / menuScale(), dragY / menuScale());
+        }
         if (searchField.isFocused()) {
             return searchField.mouseDragged(menuEvent(event), dragX / menuScale(), dragY / menuScale());
         }
@@ -314,6 +330,7 @@ public final class KungConfigScreen extends Screen {
             return textEditor.mouseReleased(event);
         }
         draggingSlider = null;
+        valueBox.mouseReleased(menuEvent(event));
         if (searchField.isFocused()) searchField.mouseReleased(menuEvent(event));
         return super.mouseReleased(event);
     }
@@ -363,6 +380,9 @@ public final class KungConfigScreen extends Screen {
         if (textEditor != null) {
             return textEditor.keyPressed(event);
         }
+        if (valueBox.editing()) {
+            return valueBox.keyPressed(event);
+        }
         if (capturingSetting != null) {
             int key = McInput.key(event);
             if (key == KeyCodes.ESCAPE || key == KeyCodes.BACKSPACE || key == KeyCodes.DELETE) {
@@ -389,6 +409,9 @@ public final class KungConfigScreen extends Screen {
         if (releaseNotesPopup != null) return true;
         if (textEditor != null) {
             return textEditor.charTyped(event);
+        }
+        if (valueBox.editing()) {
+            return valueBox.charTyped(event);
         }
         if (!searchField.isFocused()) {
             return super.charTyped(event);
@@ -589,20 +612,20 @@ public final class KungConfigScreen extends Screen {
         // Odin-style two-line rows: sliders and text fields put the label (and a slider's value) on the
         // first line and the control across the whole row below, so neither cuts the label short.
         boolean twoLine = height > SETTING_HEIGHT;
-        String value = setting.kind() == SettingKind.SLIDER ? setting.sliderValue() : "";
+        boolean slider = setting.kind() == SettingKind.SLIDER;
+        int valueWidth = slider ? valueBox.width(setting) : 0;
         int controlWidth = twoLine ? COLUMN_WIDTH - 10 - indent : controlWidthFor(setting);
         boolean resettable = !twoLine && setting.resettable();
         int resetSpace = resettable ? RESET_WIDTH + 3 : 0;
         SettingEntry rowToggle = twoLine ? null : setting.rowToggle();
         int toggleSpace = rowToggle == null ? 0 : ROW_TOGGLE_WIDTH + 3;
-        int labelWidth = twoLine ? COLUMN_WIDTH - indent - 16 - menuFont.width(value)
+        int labelWidth = twoLine ? COLUMN_WIDTH - indent - 16 - valueWidth
             : COLUMN_WIDTH - controlWidth - indent - 20 - resetSpace - toggleSpace;
         if (hovered && menuFont.width(setting.label()) > labelWidth) {
             slidingText(graphics, setting.label(), labelX, rowY + 4, labelWidth, x, THEME.muted(), true);
         } else {
             graphics.text(menuFont, trimToWidth(setting.label(), labelWidth), labelX, rowY + 4, THEME.muted(), true);
         }
-        if (!value.isEmpty()) graphics.text(menuFont, value, x + COLUMN_WIDTH - 5 - menuFont.width(value), rowY + 4, THEME.text(), true);
         if (hovered && !setting.tooltip().isEmpty()) {
             requestTooltip(setting, setting.label(), setting.tooltip(), x, rowY);
         }
@@ -615,6 +638,17 @@ public final class KungConfigScreen extends Screen {
         addClickRegion(x, rowY, COLUMN_WIDTH, height, (clickX, clickY, button) ->
             clickSetting(setting, clickX, button, controlX, controlY, controlWidth, depth)
         );
+        if (slider) {
+            // After the row's region, so a click on the box edits the number instead of moving the slider.
+            int boxRight = x + COLUMN_WIDTH - 5;
+            int boxY = rowY + 1;
+            valueBox.draw(graphics, THEME, setting, boxRight, boxY, mouseX, mouseY, valuePartialTick);
+            UiBounds box = valueBox.bounds(setting, boxRight, boxY);
+            addClickRegion(box.x(), box.y(), box.width(), box.height(), (clickX, clickY, button) -> {
+                if (button == 0 && !valueBox.editing(setting)) valueBox.begin(setting);
+                return true;
+            });
+        }
         if (rowToggle != null) {
             int toggleX = controlX - toggleSpace;
             rowToggle.draw(graphics, menuFont, THEME, toggleX, controlY, ROW_TOGGLE_WIDTH, SETTING_HEIGHT, false);

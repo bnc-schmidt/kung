@@ -295,6 +295,44 @@ public record SettingEntry(
         graphics.fill(knobX - 2, y + 3, knobX + 2, y + height - 3, theme.text());
     }
 
+    private static final java.util.regex.Pattern NUMBER_INPUT = java.util.regex.Pattern.compile("[0-9]{0,9}(\\.[0-9]{0,2})?");
+
+    /** What the value box takes while typing: up to nine digits and two decimals. */
+    static boolean acceptsNumberInput(String text) { return NUMBER_INPUT.matcher(text).matches(); }
+
+    /** How many stored units make one shown unit: 100 for a pitch (hundredths), 10 for tenths of a second or a volume. */
+    private int numberScale() {
+        String lower = label().toLowerCase(Locale.ROOT);
+        if (lower.contains("%") || lower.contains("scale") || lower.contains("alpha")) return 1;
+        if (lower.contains("pitch")) return 100;
+        return lower.contains("volume") || lower.contains("time") ? 10 : 1;
+    }
+
+    /** The slider's value as the bare number the value box edits, in the units {@link #sliderValue} shows: "3.5" for 35 tenths. */
+    public String sliderNumber() {
+        int scale = numberScale();
+        int value = intSupplier.getAsInt();
+        return scale == 1 ? Integer.toString(value)
+            : String.format(Locale.ROOT, scale == 100 ? "%.2f" : "%.1f", value / (double) scale);
+    }
+
+    /**
+     * Sets the value from a number typed into the value box, in the units of {@link #sliderNumber}. The number may lie
+     * outside the slider's range; the setting keeps its own limits. False when the text is no number.
+     */
+    public boolean setSliderNumber(String text) {
+        if (kind != SettingKind.SLIDER || intConsumer == null || text == null || !acceptsNumberInput(text.strip())) return false;
+        double typed;
+        try {
+            typed = Double.parseDouble(text.strip());
+        } catch (NumberFormatException notANumber) {
+            return false;
+        }
+        if (!(typed >= 0.0)) return false;
+        intConsumer.accept((int) Math.min(Integer.MAX_VALUE, Math.round(typed * numberScale())));
+        return true;
+    }
+
     /** A slider's shown value: the unit comes from the label, a bare number when it names none. */
     public String sliderValue() {
         int value = intSupplier.getAsInt();

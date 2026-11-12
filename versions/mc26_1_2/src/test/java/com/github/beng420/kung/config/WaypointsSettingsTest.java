@@ -29,15 +29,15 @@ public final class WaypointsSettingsTest {
     }
 
     @Test
-    public void numbersStayInRangeAndEverythingSurvivesASaveAndLoad() {
+    public void numbersKeepTheirFloorAndEverythingSurvivesASaveAndLoad() {
         var file = temporary.getRoot().toPath().resolve("kung.json");
         var config = new KungConfig(file);
         config.waypoints.setActivationRadius(99);
-        assertEquals(10, config.waypoints.activationRadius());
+        assertEquals(99, config.waypoints.activationRadius());
         config.waypoints.setActivationRadius(0);
         assertEquals(1, config.waypoints.activationRadius());
         config.waypoints.setLineThickness(50);
-        assertEquals(6, config.waypoints.lineThickness());
+        assertEquals(50, config.waypoints.lineThickness());
         config.waypoints.setActivationRadius(4);
         config.waypoints.setDefaultType(WaypointType.OUTLINE);
         config.waypoints.setAllowGoingBackwards(false);

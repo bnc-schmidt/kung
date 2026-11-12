@@ -34,7 +34,7 @@ public final class SlayerConfig extends ConfigCategory {
     public boolean blazeAttunementEnabled() { return blazeAttunementEnabled; }
     public void setBlazeAttunementEnabled(boolean value) { blazeAttunementEnabled = value; save(); }
     public int blazeAttunementScale() { return blazeAttunementScale; }
-    public void setBlazeAttunementScale(int value) { blazeAttunementScale = Math.clamp(value, 50, 300); save(); }
+    public void setBlazeAttunementScale(int value) { blazeAttunementScale = typed(value, 1); save(); }
     public boolean tarantulaDebugSlayerSpawned() { return tarantulaDebugSlayerSpawned; }
     public void setTarantulaDebugSlayerSpawned(boolean value) { tarantulaDebugSlayerSpawned = value; save(); }
     public boolean tarantulaDebugSlayerPosition() { return tarantulaDebugSlayerPosition; }

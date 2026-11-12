@@ -8,5 +8,5 @@ public final class BRHelperConfig extends ConfigCategory {
     public void setEnabled(boolean value) { enabled = value; save(); }
     public int titleDurationTenths() { return titleDurationTenths; }
     @Override public void normalize() { setTitleDurationTenths(titleDurationTenths()); }
-    public void setTitleDurationTenths(int value) { titleDurationTenths = Math.clamp(value, 1, 50); save(); }
+    public void setTitleDurationTenths(int value) { titleDurationTenths = typed(value, 1); save(); }
 }

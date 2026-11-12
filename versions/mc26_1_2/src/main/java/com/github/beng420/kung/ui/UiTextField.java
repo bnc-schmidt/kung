@@ -107,6 +107,12 @@ public final class UiTextField {
         control.moveCursorToEnd(false);
     }
 
+    /** Selects the whole text, so the next key replaces it. */
+    public void selectAll() {
+        control.moveCursorToEnd(false);
+        control.setHighlightPos(0);
+    }
+
     public void extractRenderState(
         GuiGraphicsExtractor graphics,
         int mouseX,

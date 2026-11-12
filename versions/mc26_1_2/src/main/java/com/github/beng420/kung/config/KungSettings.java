@@ -17,6 +17,7 @@ import com.github.beng420.kung.config.category.MiscConfig.ChatCommandSetting;
 import com.github.beng420.kung.config.category.MiscConfig.CommandChannel;
 import com.github.beng420.kung.config.category.WaypointsConfig;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionMode;
+import com.github.beng420.kung.config.category.SplitsConfig.PbScope;
 import com.github.beng420.kung.config.category.SplitsConfig.PredictionSource;
 import com.github.beng420.kung.config.category.SplitsConfig.TimeFormat;
 import com.github.beng420.kung.feature.dungeon.DungeonKnownRoomCatalog;
@@ -252,7 +253,14 @@ public final class KungSettings {
                             config.splits::setIncludePbRun)
                             .withTooltip("Shows the splits of your fastest recorded run behind a thin line,",
                                 "and after \" | \" on every line of the chat paste.",
-                                "The run is kept per floor, whether or not this is on. See /kung pbs."),
+                                "The run is kept per floor, whether or not this is on. See /kung pbs.")
+                            .withChildren(List.of(
+                                SettingEntry.choice("Scope", PbScope.values(), config.splits::pbScope,
+                                    config.splits::setPbScope, PbScope::label)
+                                    .withTooltip("All Time compares with your fastest recorded run.",
+                                        "Session compares with your fastest run since you started the game,",
+                                        "so it shows nothing on a floor until you finish a run there.")
+                            )),
                         SettingEntry.toggle("Paste In Chat", config.splits::runEndChat,
                             config.splits::setRunEndChat)
                             .withTooltip("Print all splits in your local chat when the run ends."),
@@ -389,6 +397,13 @@ public final class KungSettings {
                     "Then a red countdown with a sound every second; its first second sends the link again.",
                     "Don's time comes from Hypixel's chat lines and the 10 minutes since the event started.")
             )),
+            new CategoryEntry("Crimson Isle", List.of(
+                new FeatureEntry("Miniboss Timer", config.miniBoss::enabled, config.miniBoss::setEnabled, List.of())
+                    .withTooltip("Shows when each Crimson Isle miniboss respawns, from its beacon and its death message.",
+                        "A seen death or a seen beacon end gives the time to the second; otherwise a range.",
+                        "Needs you within about 80 blocks (beacon) or at the spawn spot (no boss) to learn more.",
+                        "Move and resize in /kung hud.")
+            )),
             new CategoryEntry("Slayer", List.of(
                 new FeatureEntry("Tarantula Helper", config.slayer::tarantulaHelperEnabled,
                     config.slayer::setTarantulaHelperEnabled,
@@ -476,7 +491,12 @@ public final class KungSettings {
                         SettingEntry.toggle("Title", config.misc::lobbyHopTitleEnabled,
                             config.misc::setLobbyHopTitleEnabled),
                         SettingEntry.toggle("Chat Message", config.misc::lobbyHopChatEnabled,
-                            config.misc::setLobbyHopChatEnabled)
+                            config.misc::setLobbyHopChatEnabled),
+                        SettingEntry.slider("Warn Within (s)", config.misc::lobbyHopWarnSeconds,
+                            config.misc::setLobbyHopWarnSeconds, 0, 300, 5)
+                            .withTooltip("The title and the sound only come when you left that lobby less than this many seconds ago.",
+                                "The chat message always comes. 0 never shows the title or plays the sound.",
+                                "Type a number in the box to go past the slider's 300.")
                     )
                 ).withTooltip("Warns when you join a lobby you were in before, and how long ago you left it."),
                 new FeatureEntry("Performance", config.misc::performanceHudEnabled,
@@ -536,6 +556,10 @@ public final class KungSettings {
                     config.misc.setChatChannelsEnabled(!config.misc.chatChannelsEnabled());
                     ChatChannelsFeature.refresh();
                 }, List.of(
+                    SettingEntry.toggle("Chat Follows Tab", config.misc::chatChannelsChatFollowsTab,
+                        config.misc::setChatChannelsChatFollowsTab)
+                        .withTooltip("On: a click on a tab also sends /chat to its channel, so your messages go there.",
+                            "Off: a click only changes what the chat shows; your messages keep going where they went."),
                     SettingEntry.toggle("Tab Follows /chat", config.misc::chatChannelsFollowChat,
                         config.misc::setChatChannelsFollowChat)
                         .withTooltip("On: /chat party, or Hypixel's \"You are now in the PARTY channel\", also switches the tab.",
@@ -548,7 +572,7 @@ public final class KungSettings {
                             }).withTooltip(channel.description())).toList())
                         .withTooltip("An off channel vanishes from the chat, old lines too; on brings them back.")
                 )).withTooltip("Tabs under the open chat: All, Party, Guild, Co-op and DMs.",
-                    "A tab shows only its own lines and sends /chat to its channel.",
+                    "A tab shows only its own lines and, with Chat Follows Tab on, sends /chat to its channel.",
                     "All shows everything except the channels you switch off:",
                     "hover All to open the list, or set them under Shown Channels.",
                     "Hidden lines are kept, so switching a channel on brings them all back."),
@@ -590,7 +614,9 @@ public final class KungSettings {
                 ),
                 new FeatureEntry("Chat Commands", config.misc::chatCommandsEnabled,
                     config.misc::setChatCommandsEnabled, chatCommandRows(config.misc)
-                ),
+                ).withTooltip("Answers messages such as !c50 or !tps typed in chat.",
+                    "!kung help (or !kunghelp, !helpkung) lists the commands that answer in that chat.",
+                    "!kung always answers with the installed and the newest Kung versions."),
                 new FeatureEntry("Chat Emotes", config.misc::chatEmotesEnabled,
                     config.misc::setChatEmotesEnabled,
                     new ChatEmoteSettings(config.misc)
@@ -885,17 +911,27 @@ public final class KungSettings {
                     "The default channels and the command switches stay as they are."),
             chatCommand(misc, ChatCommandSetting.C50, "!c50",
                 "Runs left for Catacombs 50. Add a player name to look up someone else.",
-                "Any level from 1 to 200 works: !c67 for Catacombs 67."),
+                "Any level from 1 to 200 works: !c67 for Catacombs 67.",
+                "Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),",
+                "for example \"!c50 -f7\"."),
             chatCommand(misc, ChatCommandSetting.CA50, "!ca50",
                 "Runs left for class average 50. Add a player name to look up someone else.",
                 "Any level from 1 to 200 works: !ca60 for class average 60.",
                 "Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,",
-                "for example \"!ca50 Name -arch\". The other classes still earn their 25% team share."),
+                "for example \"!ca50 Name -arch\". The other classes still earn their 25% team share.",
+                "Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),",
+                "for example \"!ca50 -m3\". Both flags work together in either order: \"!ca50 -f7 -arch\"."),
             chatCommand(misc, ChatCommandSetting.CLASS_LEVEL, "Class Level",
                 "!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50.",
                 "Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else.",
                 "Any level from 1 to 200 works: !a60 for Archer 60.",
                 "Hypixel and other mods use !m1-!m7 and !t1-!t5 alone: type !mage1 or !tank1 for those."),
+            chatCommand(misc, ChatCommandSetting.BESTIARY, "!bestiary",
+                "!be barb: your Bestiary kills of the mob whose name starts that way (Barbarian Duke X).",
+                "Add a dash and a player name to look up someone else: \"!be barb -Notch\". Several words work: \"!be duke x\".",
+                "A start that fits several mobs lists the best three instead of guessing; type more letters.",
+                "Not at max level it also shows the level and the kills to the next level and to max.",
+                "The Kung server looks it up, so it needs the Kung server."),
             chatCommand(misc, ChatCommandSetting.TPS, "!tps"),
             SettingEntry.toggle("Special Mayors", misc::specialMayorsChatCommandsEnabled,
                     misc::setSpecialMayorsChatCommandsEnabled)

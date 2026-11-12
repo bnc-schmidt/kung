@@ -13,6 +13,7 @@ import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphicsExtractor;
 import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.input.CharacterEvent;
 import net.minecraft.client.input.KeyEvent;
 import net.minecraft.client.input.MouseButtonEvent;
 import net.minecraft.network.chat.Component;
@@ -26,7 +27,7 @@ public final class KungHudEditorScreen extends Screen {
     private static final int TEXT = 0xFFFFFFFF;
     private static final int MUTED = 0xFFD4DAE3;
     private static final int TOOLTIP_BG = 0xEE111318;
-    private static final int MAP_CONTROLS_WIDTH = 214;
+    private static final int MAP_CONTROLS_WIDTH = 250;
     private static final int MAP_CONTROLS_HEIGHT = 70;
     private static final int SLIDER_WIDTH = 100;
     private static final int SLIDER_HEIGHT = 18;
@@ -39,6 +40,9 @@ public final class KungHudEditorScreen extends Screen {
     private int dragOffsetX;
     private int dragOffsetY;
     private SettingEntry draggingSlider;
+    /** Created with the first use, when the screen has its font. */
+    private SliderValueBox valueBox;
+    private List<SettingEntry> mapSliders;
 
     public KungHudEditorScreen(DungeonStateTracker dungeonStateTracker) {
         super(Component.literal("Kung HUD Editor"));
@@ -81,7 +85,9 @@ public final class KungHudEditorScreen extends Screen {
         } else if (hovered != null) {
             drawTooltip(graphics, hovered, mouseX, mouseY);
         }
-        drawMapControls(graphics);
+        valueBox().beginFrame();
+        drawMapControls(graphics, mouseX, mouseY, partialTick);
+        valueBox().endFrame();
     }
 
     @Override
@@ -90,11 +96,18 @@ public final class KungHudEditorScreen extends Screen {
         int mouseY = (int) event.y();
         int button = McInput.button(event);
 
+        // A click in the number field edits it; one anywhere else applies the number and then does what it would.
+        if (valueBox().mouseClicked(event, doubleClick)) return true;
+
         if (inMapControls(mouseX, mouseY)) {
             if (button == 0) {
                 List<SettingEntry> sliders = mapSliders();
                 for (int index = 0; index < sliders.size(); index++) {
                     int y = mapControlsY() + 21 + index * 22;
+                    if (valueBox().bounds(sliders.get(index), valueRightX(), valueY(y)).contains(mouseX, mouseY)) {
+                        valueBox().begin(sliders.get(index));
+                        return true;
+                    }
                     if (mouseX >= sliderX() && mouseY >= y && mouseY < y + SLIDER_HEIGHT) {
                         draggingSlider = sliders.get(index);
                         draggingSlider.click(mouseX, sliderX(), SLIDER_WIDTH);
@@ -125,6 +138,7 @@ public final class KungHudEditorScreen extends Screen {
 
     @Override
     public boolean mouseDragged(MouseButtonEvent event, double dragX, double dragY) {
+        if (valueBox().editing()) return valueBox().mouseDragged(event, dragX, dragY);
         if (draggingSlider != null) {
             draggingSlider.click((int) event.x(), sliderX(), SLIDER_WIDTH);
             return true;
@@ -155,6 +169,7 @@ public final class KungHudEditorScreen extends Screen {
 
     @Override
     public boolean mouseReleased(MouseButtonEvent event) {
+        valueBox().mouseReleased(event);
         if (draggingSlider != null) {
             draggingSlider = null;
             return true;
@@ -168,11 +183,23 @@ public final class KungHudEditorScreen extends Screen {
 
     @Override
     public boolean keyPressed(KeyEvent event) {
+        if (valueBox().editing()) return valueBox().keyPressed(event);
         if (McInput.key(event) == KeyCodes.ESCAPE) {
             onClose();
             return true;
         }
         return super.keyPressed(event);
+    }
+
+    @Override
+    public boolean charTyped(CharacterEvent event) {
+        if (valueBox().editing()) return valueBox().charTyped(event);
+        return super.charTyped(event);
+    }
+
+    private SliderValueBox valueBox() {
+        if (valueBox == null) valueBox = new SliderValueBox(font);
+        return valueBox;
     }
 
     /** Only the HUDs that are switched on; the rest have nothing to place. */
@@ -206,15 +233,19 @@ public final class KungHudEditorScreen extends Screen {
         graphics.text(font, lineTwo, x + 5, y + 16, MUTED, true);
     }
 
+    /** One list for the screen's life: the value box tells the slider it edits by identity. */
     private List<SettingEntry> mapSliders() {
-        var config = KungConfig.get().dungeon;
-        return List.of(
-            SettingEntry.slider("Map Scale", config::scale, config::setScale, 25, 300, 5),
-            SettingEntry.slider("Text Scale", config::textScale, config::setTextScale, 50, 200, 5)
-        );
+        if (mapSliders == null) {
+            var config = KungConfig.get().dungeon;
+            mapSliders = List.of(
+                SettingEntry.slider("Map Scale", config::scale, config::setScale, 25, 300, 5),
+                SettingEntry.slider("Text Scale", config::textScale, config::setTextScale, 50, 200, 5)
+            );
+        }
+        return mapSliders;
     }
 
-    private void drawMapControls(GuiGraphicsExtractor graphics) {
+    private void drawMapControls(GuiGraphicsExtractor graphics, int mouseX, int mouseY, float partialTick) {
         int x = mapControlsX();
         int y = mapControlsY();
         graphics.fill(x, y, x + MAP_CONTROLS_WIDTH, y + MAP_CONTROLS_HEIGHT, TOOLTIP_BG);
@@ -224,6 +255,7 @@ public final class KungHudEditorScreen extends Screen {
             SettingEntry slider = sliders.get(index);
             int rowY = y + 21 + index * 22;
             graphics.text(font, slider.label(), x + 8, rowY + 4, MUTED, true);
+            valueBox().draw(graphics, UiTheme.settings(), slider, valueRightX(), valueY(rowY), mouseX, mouseY, partialTick);
             slider.draw(graphics, font, UiTheme.settings(), sliderX(), rowY, SLIDER_WIDTH, SLIDER_HEIGHT, false);
         }
     }
@@ -234,6 +266,15 @@ public final class KungHudEditorScreen extends Screen {
 
     private int mapControlsY() {
         return Math.max(36, height - MAP_CONTROLS_HEIGHT - 8);
+    }
+
+    /** The value boxes end just before the sliders. */
+    private int valueRightX() {
+        return sliderX() - 6;
+    }
+
+    private static int valueY(int rowY) {
+        return rowY + (SLIDER_HEIGHT - SliderValueBox.HEIGHT) / 2;
     }
 
     private int sliderX() {

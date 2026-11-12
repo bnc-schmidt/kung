@@ -43,6 +43,8 @@ import com.github.beng420.kung.feature.misc.SuperpairsHelperFeature;
 import com.github.beng420.kung.feature.slayer.BlazeSlayerFeature;
 import com.github.beng420.kung.feature.slayer.TarantulaHelperFeature;
 import com.github.beng420.kung.feature.safari.SafariOverlayFeature;
+import com.github.beng420.kung.feature.crimson.MiniBossTimerFeature;
+import com.github.beng420.kung.feature.crimson.MiniBossTracker;
 import com.github.beng420.kung.feature.waypoints.WaypointsFeature;
 import com.github.beng420.kung.runtime.AppServices;
 import java.util.ArrayList;
@@ -97,6 +99,8 @@ public final class FeatureRegistry {
         register(GourmandAlertFeature.INSTANCE);
         register(BeaconSolverFeature.INSTANCE);
         register(WaypointsFeature.INSTANCE);
+        register(MiniBossTracker.INSTANCE);
+        register(MiniBossTimerFeature.INSTANCE);
         GreenhouseHologram.initialize();
 
         FEATURES.forEach(feature -> feature.initialize(services));

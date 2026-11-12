@@ -86,7 +86,7 @@ public class QuizReminderStateTest {
     }
 
     @Test
-    public void theSettingsStayInRangeAndTheMessageNeverEmpty() {
+    public void theSettingsKeepTheirFloorAndTheMessageNeverEmpty() {
         var config = new DungeonConfig();
         assertFalse(config.quizReminderEnabled());
         assertFalse(config.quizReminderRepeatEnabled());
@@ -100,11 +100,11 @@ public class QuizReminderStateTest {
         config.setQuizReminderRepeatSeconds(3);
         assertEquals(5, config.quizReminderRepeatSeconds());
         config.setQuizReminderRepeatSeconds(500);
-        assertEquals(60, config.quizReminderRepeatSeconds());
+        assertEquals(500, config.quizReminderRepeatSeconds());
         config.setQuizReminderDelaySeconds(1);
         assertEquals(5, config.quizReminderDelaySeconds());
         config.setQuizReminderDelaySeconds(999);
-        assertEquals(60, config.quizReminderDelaySeconds());
+        assertEquals(999, config.quizReminderDelaySeconds());
 
         assertEquals(DungeonConfig.DEFAULT_QUIZ_REMINDER_MESSAGE, config.quizReminderMessage());
         config.setQuizReminderMessage("   ");

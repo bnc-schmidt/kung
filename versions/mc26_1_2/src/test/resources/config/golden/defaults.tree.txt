@@ -97,6 +97,7 @@
       CHOICE Source visible=true dev=false value=PB of [PB, AVG] tip=[PB uses personal best splits. AVG uses the last 20 finished runs on this floor. Reset AVG in /kung splits.] resettable=false
     TOGGLE Time Lost visible=true dev=false value=true tip=[] resettable=false
     TOGGLE Include PB Run visible=true dev=false value=false tip=[Shows the splits of your fastest recorded run behind a thin line,, and after " | " on every line of the chat paste., The run is kept per floor, whether or not this is on. See /kung pbs.] resettable=false
+      CHOICE Scope visible=true dev=false value=All Time of [All Time, Session] tip=[All Time compares with your fastest recorded run., Session compares with your fastest run since you started the game,, so it shows nothing on a floor until you finish a run there.] resettable=false
     TOGGLE Paste In Chat visible=true dev=false value=false tip=[Print all splits in your local chat when the run ends.] resettable=false
     TOGGLE PB Title visible=true dev=false value=true tip=[Shows a PERSONAL BEST! title when a split beats its best, and when Hypixel reports a new record for the whole floor., Run records are read once from the Hypixel API (your key, else the, Kung server), then kept up to date from Hypixel's chat lines.] resettable=false
 # Foraging
@@ -138,6 +139,8 @@
   * Gourmand Alert enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Mithril Gourmand: warns you while you hold Tasty Mithril and Don Expresso is about to leave., A minute before: a yellow title and a chat link that runs /tptodonexpresso., Then a red countdown with a sound every second; its first second sends the link again., Don's time comes from Hypixel's chat lines and the 10 minutes since the event started.]
     SLIDER Countdown (s) visible=true dev=false value=10 [3..30 step 1] 10 tip=[Seconds before Don Expresso leaves in which a red title counts down., Every second also plays a sound. Default: 10 seconds.] resettable=false
     SLIDER Volume (%) visible=true dev=false value=70 [1..100 step 1] 70% tip=[] resettable=false
+# Crimson Isle
+  * Miniboss Timer enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows when each Crimson Isle miniboss respawns, from its beacon and its death message., A seen death or a seen beacon end gives the time to the second; otherwise a range., Needs you within about 80 blocks (beacon) or at the spawn spot (no boss) to learn more., Move and resize in /kung hud.]
 # Slayer
   * Tarantula Helper enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[]
     TOGGLE Egg Sac Prediction visible=true dev=false value=false tip=[] resettable=false
@@ -174,6 +177,7 @@
   * Lobby Hop Helper enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Warns when you join a lobby you were in before, and how long ago you left it.]
     TOGGLE Title visible=true dev=false value=true tip=[] resettable=false
     TOGGLE Chat Message visible=true dev=false value=true tip=[] resettable=false
+    SLIDER Warn Within (s) visible=true dev=false value=30 [0..300 step 5] 30 tip=[The title and the sound only come when you left that lobby less than this many seconds ago., The chat message always comes. 0 never shows the title or plays the sound., Type a number in the box to go past the slider's 300.] resettable=false
   * Performance enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Shows TPS, FPS and ping. TPS is measured from the server's own tick packets,, so a bad ping does not look like server lag., Each graph draws the last 30 seconds of that stat; pick any combination., Move and resize in /kung hud.]
     SLIDER Refresh Time visible=true dev=false value=5 [1..10 step 1] 0.5s tip=[] resettable=false
     TOGGLE Graph TPS visible=true dev=false value=false tip=[] resettable=false
@@ -190,7 +194,8 @@
     TOGGLE Peek In Menus visible=true dev=false value=false tip=[The key also shows the chat while an inventory or other menu is open., Drawn above the menu, so it stays sharp. The wheel scrolls it there too., Not in the chat screen, and not while a text box has focus.] resettable=false
     TOGGLE Scroll Chat visible=true dev=false value=true tip=[Scroll the wheel while holding the key to scroll the chat, not the hotbar.] resettable=false
       SLIDER Scroll Speed (Lines) visible=true dev=false value=7 [1..30 step 1] 7 tip=[Lines per wheel notch. Minecraft's own chat scrolls 7.] resettable=false
-  * Chat Channels enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Tabs under the open chat: All, Party, Guild, Co-op and DMs., A tab shows only its own lines and sends /chat to its channel., All shows everything except the channels you switch off:, hover All to open the list, or set them under Shown Channels., Hidden lines are kept, so switching a channel on brings them all back.]
+  * Chat Channels enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Tabs under the open chat: All, Party, Guild, Co-op and DMs., A tab shows only its own lines and, with Chat Follows Tab on, sends /chat to its channel., All shows everything except the channels you switch off:, hover All to open the list, or set them under Shown Channels., Hidden lines are kept, so switching a channel on brings them all back.]
+    TOGGLE Chat Follows Tab visible=true dev=false value=true tip=[On: a click on a tab also sends /chat to its channel, so your messages go there., Off: a click only changes what the chat shows; your messages keep going where they went.] resettable=false
     TOGGLE Tab Follows /chat visible=true dev=false value=false tip=[On: /chat party, or Hypixel's "You are now in the PARTY channel", also switches the tab., Off: only a click on a tab changes what the chat shows.] resettable=false
     GROUP Shown Channels visible=true dev=false value= tip=[An off channel vanishes from the chat, old lines too; on brings them back.] resettable=false
       TOGGLE Guild visible=true dev=false value=true tip=[Guild and Officer chat, and the joined and left lines of members.] resettable=false
@@ -206,7 +211,7 @@
     TEXT API Key visible=true dev=false value= tip=[Create one at developer.hypixel.net; it looks like a UUID.] resettable=false
     BUTTON Get API Key visible=true dev=false value=Open tip=[Opens the Hypixel developer dashboard in your browser.] resettable=false
     BUTTON Test Key visible=true dev=false value=Run tip=[Asks Hypixel once with your key and shows the answer above.] resettable=false
-  * Chat Commands enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[]
+  * Chat Commands enabled=false clickable=true actionOnly=false pinned=false dev=false tip=[Answers messages such as !c50 or !tps typed in chat., !kung help (or !kunghelp, !helpkung) lists the commands that answer in that chat., !kung always answers with the installed and the newest Kung versions.]
     GROUP Default Channels visible=true dev=false value= tip=[Where every command answers, unless it has channels of its own., Each command follows these until you turn its "Use Default" off.] resettable=false
       TOGGLE Party visible=true dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=true dev=false value=true tip=[] resettable=false
@@ -214,14 +219,14 @@
       TOGGLE All Chat visible=true dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=true dev=false value=false tip=[] resettable=false
     BUTTON Reset All visible=true dev=false value=Reset tip=[Turns "Use Default" back on for every command., The default channels and the command switches stay as they are.] resettable=false
-    TOGGLE !c50 visible=true dev=false value=true tip=[Runs left for Catacombs 50. Add a player name to look up someone else., Any level from 1 to 200 works: !c67 for Catacombs 67.] resettable=false
+    TOGGLE !c50 visible=true dev=false value=true tip=[Runs left for Catacombs 50. Add a player name to look up someone else., Any level from 1 to 200 works: !c67 for Catacombs 67., Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),, for example "!c50 -f7".] resettable=false
       TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Co-op visible=false dev=false value=true tip=[] resettable=false
       TOGGLE All Chat visible=false dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=false dev=false value=false tip=[] resettable=false
-    TOGGLE !ca50 visible=true dev=false value=true tip=[Runs left for class average 50. Add a player name to look up someone else., Any level from 1 to 200 works: !ca60 for class average 60., Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,, for example "!ca50 Name -arch". The other classes still earn their 25% team share.] resettable=false
+    TOGGLE !ca50 visible=true dev=false value=true tip=[Runs left for class average 50. Add a player name to look up someone else., Any level from 1 to 200 works: !ca60 for class average 60., Add -arch, -bers, -heal, -mage or -tank (also -a -b -h -m -t) to play only that class,, for example "!ca50 Name -arch". The other classes still earn their 25% team share., Add -f1 to -f7, -m1 to -m7 or -e (-entrance) to count the runs on that floor (M7 without it),, for example "!ca50 -m3". Both flags work together in either order: "!ca50 -f7 -arch".] resettable=false
       TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
@@ -229,6 +234,13 @@
       TOGGLE All Chat visible=false dev=false value=false tip=[] resettable=false
       TOGGLE DMs visible=false dev=false value=false tip=[] resettable=false
     TOGGLE Class Level visible=true dev=false value=true tip=[!a50 !b50 !h50 !m50 !t50: runs a class still needs for level 50., Archer, Berserk, Healer, Mage, Tank. Add a player name to look up someone else., Any level from 1 to 200 works: !a60 for Archer 60., Hypixel and other mods use !m1-!m7 and !t1-!t5 alone: type !mage1 or !tank1 for those.] resettable=false
+      TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
+      TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE Co-op visible=false dev=false value=true tip=[] resettable=false
+      TOGGLE All Chat visible=false dev=false value=false tip=[] resettable=false
+      TOGGLE DMs visible=false dev=false value=false tip=[] resettable=false
+    TOGGLE !bestiary visible=true dev=false value=true tip=[!be barb: your Bestiary kills of the mob whose name starts that way (Barbarian Duke X)., Add a dash and a player name to look up someone else: "!be barb -Notch". Several words work: "!be duke x"., A start that fits several mobs lists the best three instead of guessing; type more letters., Not at max level it also shows the level and the kills to the next level and to max., The Kung server looks it up, so it needs the Kung server.] resettable=false
       TOGGLE Use Default visible=true dev=false value=true tip=[Answers in the channels of Default Channels., Turn it off to pick this command's channels yourself.] resettable=false
       TOGGLE Party visible=false dev=false value=true tip=[] resettable=false
       TOGGLE Guild visible=false dev=false value=true tip=[] resettable=false

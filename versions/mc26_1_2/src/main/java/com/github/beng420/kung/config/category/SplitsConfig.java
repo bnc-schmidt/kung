@@ -30,6 +30,10 @@ public final class SplitsConfig extends ConfigCategory {
     private boolean floorRecordsSeeded = false;
     /** Show the best recorded run beside the splits (overlay) and after each line (chat paste). */
     private boolean includePbRun = false;
+    /** Which best run the overlay and the chat paste compare with. */
+    private PbScope pbScope = PbScope.ALL_TIME;
+    /** The fastest run of each floor key since the game started, in the shape of {@link #bestRuns}; never saved. */
+    private transient Map<String, Map<String, Long>> sessionBestRuns = new TreeMap<>();
     /**
      * The fastest confirmed run Kung recorded per floor key: real milliseconds by phase, plus {@link #BEST_RUN_BOSS_ENTRY}
      * and {@link #BEST_RUN_TOTAL}. It is always recorded; {@link #includePbRun} only decides whether it is shown.
@@ -74,19 +78,40 @@ public final class SplitsConfig extends ConfigCategory {
         return total != null && total > 0L ? total : -1L;
     }
 
+    public PbScope pbScope() { return pbScope == null ? PbScope.ALL_TIME : pbScope; }
+    public void setPbScope(PbScope value) { pbScope = value == null ? PbScope.ALL_TIME : value; save(); }
+
+    /** The best run the overlay and the chat paste compare with: the saved one, or the fastest since the game started. */
+    public Map<String, Long> comparedRun(int floor, boolean masterMode) {
+        if (pbScope() == PbScope.ALL_TIME) return bestRun(floor, masterMode);
+        String key = floorKey(floor, masterMode);
+        Map<String, Long> run = key == null || sessionBestRuns == null ? null : sessionBestRuns.get(key);
+        return run == null ? Map.of() : Map.copyOf(run);
+    }
+
     /** Keeps the run when it is faster than the floor's recorded one; the caller saves. True when it became the best. */
     private boolean keepBestRun(int floor, boolean masterMode, Map<String, Long> run) {
-        String key = floorKey(floor, masterMode);
+        if (bestRuns == null) bestRuns = new TreeMap<>();
+        return keepFaster(bestRuns, floorKey(floor, masterMode), run);
+    }
+
+    /** The same for this session's best; it is never saved. */
+    private void keepSessionRun(int floor, boolean masterMode, Map<String, Long> run) {
+        if (sessionBestRuns == null) sessionBestRuns = new TreeMap<>();
+        keepFaster(sessionBestRuns, floorKey(floor, masterMode), run);
+    }
+
+    private static boolean keepFaster(Map<String, Map<String, Long>> runs, String key, Map<String, Long> run) {
         Long total = run == null ? null : run.get(BEST_RUN_TOTAL);
         if (key == null || total == null || total <= 0L) return false;
-        long known = bestRunMillis(floor, masterMode);
-        if (known > 0L && known <= total) return false;
+        Map<String, Long> known = runs.get(key);
+        Long knownTotal = known == null ? null : known.get(BEST_RUN_TOTAL);
+        if (knownTotal != null && knownTotal > 0L && knownTotal <= total) return false;
         Map<String, Long> kept = new TreeMap<>();
         run.forEach((phase, duration) -> {
             if (phase != null && !phase.isBlank() && duration != null && duration > 0L) kept.put(phase, duration);
         });
-        if (bestRuns == null) bestRuns = new TreeMap<>();
-        bestRuns.put(key, kept);
+        runs.put(key, kept);
         return true;
     }
 
@@ -235,6 +260,7 @@ public final class SplitsConfig extends ConfigCategory {
             changed = true;
         }
         boolean newBest = keepBestRun(floor, masterMode, bestRun);
+        keepSessionRun(floor, masterMode, bestRun);
         if (changed || newBest) {
             predictionRevision++;
             save();
@@ -245,6 +271,15 @@ public final class SplitsConfig extends ConfigCategory {
     private static String floorKey(int floor, boolean masterMode) {
         if (floor < 0 || floor > 7) return null;
         return floor == 0 ? "Entrance" : (masterMode ? "M" : "F") + floor;
+    }
+
+    public enum PbScope {
+        ALL_TIME("All Time"), SESSION("Session");
+
+        private final String label;
+
+        PbScope(String label) { this.label = label; }
+        public String label() { return label; }
     }
 
     public enum PredictionSource {

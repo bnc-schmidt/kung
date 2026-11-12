@@ -15,5 +15,5 @@ public final class InvisibugConfig extends ConfigCategory {
     public void setColor(int value) { color = value & RGB; save(); }
     public int thickness() { return thickness; }
     @Override public void normalize() { setThickness(thickness()); }
-    public void setThickness(int value) { thickness = Math.clamp(value, 1, 6); save(); }
+    public void setThickness(int value) { thickness = typed(value, 1); save(); }
 }

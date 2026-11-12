@@ -11,17 +11,17 @@ public final class MiningConfig extends ConfigCategory {
     public boolean gourmandAlertEnabled() { return gourmandAlertEnabled; }
     public void setGourmandAlertEnabled(boolean value) { gourmandAlertEnabled = value; save(); }
     public int gourmandCountdownSeconds() {
-        return Math.clamp(gourmandCountdownSeconds, MIN_GOURMAND_COUNTDOWN_SECONDS, MAX_GOURMAND_COUNTDOWN_SECONDS);
+        return typed(gourmandCountdownSeconds, MIN_GOURMAND_COUNTDOWN_SECONDS);
     }
     public void setGourmandCountdownSeconds(int value) {
-        gourmandCountdownSeconds = Math.clamp(value, MIN_GOURMAND_COUNTDOWN_SECONDS, MAX_GOURMAND_COUNTDOWN_SECONDS);
+        gourmandCountdownSeconds = typed(value, MIN_GOURMAND_COUNTDOWN_SECONDS);
         save();
     }
-    public int gourmandVolume() { return Math.clamp(gourmandVolume, 1, 100); }
+    public int gourmandVolume() { return typed(gourmandVolume, 1); }
     @Override
     public void normalize() {
         setGourmandCountdownSeconds(gourmandCountdownSeconds());
         setGourmandVolume(gourmandVolume());
     }
-    public void setGourmandVolume(int value) { gourmandVolume = Math.clamp(value, 1, 100); save(); }
+    public void setGourmandVolume(int value) { gourmandVolume = typed(value, 1); save(); }
 }

@@ -22,7 +22,7 @@ public final class ChatCommandSettingsTest {
     public void defaultsAndResetComeFirstAndEachGroupHasItsOwnSwitch() {
         FeatureEntry chat = chat(new KungConfig(file()));
         assertEquals(List.of("Default Channels", "Reset All", "!c50", "!ca50", "Class Level",
-            "!tps", "Special Mayors", "Yearly Events"), labels(chat.settings()));
+            "!bestiary", "!tps", "Special Mayors", "Yearly Events"), labels(chat.settings()));
         assertEquals(List.of("Party", "Guild", "Co-op", "All Chat", "DMs"), labels(setting(chat, "Default Channels").children()));
         assertEquals(SettingKind.BUTTON, setting(chat, "Reset All").kind());
         for (String group : List.of("Special Mayors", "Yearly Events")) {
@@ -75,7 +75,7 @@ public final class ChatCommandSettingsTest {
             if (entry.reset() != null) commands.add(entry);
             if (entry.kind() == SettingKind.TOGGLE) entry.children().stream().filter(child -> child.reset() != null).forEach(commands::add);
         }
-        assertEquals(10, commands.size());
+        assertEquals(11, commands.size());
         for (SettingEntry command : commands) {
             assertFalse(command.label(), command.resettable());
             command.children().getFirst().toggle().run();

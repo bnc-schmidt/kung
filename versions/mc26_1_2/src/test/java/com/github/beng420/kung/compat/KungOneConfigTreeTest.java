@@ -30,7 +30,7 @@ public final class KungOneConfigTreeTest {
         int expected = categories.stream().mapToInt(category -> category.features().stream()
             .mapToInt(feature -> 1 + countControls(feature.settings())).sum()).sum();
         assertEquals(expected, tree.map.size());
-        assertEquals(8, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
+        assertEquals(9, tree.map.values().stream().map(node -> node.getMetadata("category")).distinct().count());
         long keybinds = tree.map.values().stream().filter(node -> node.getMetadata("visualizer") == Visualizer.KeybindVisualizer.class).count();
         assertEquals(18, keybinds);
         assertEquals(Property.Display.DISABLED, property(tree, "Crypt Messages", "Enabled").getDisplay());

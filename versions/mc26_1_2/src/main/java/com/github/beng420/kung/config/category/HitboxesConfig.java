@@ -57,9 +57,9 @@ public final class HitboxesConfig extends ConfigCategory {
     }
 
     public int lineThickness(String id) { return lineThickness.getOrDefault(id, 100); }
-    public void setLineThickness(String id, int percent) { put(lineThickness, id, Math.clamp(percent, 25, 400)); }
+    public void setLineThickness(String id, int percent) { put(lineThickness, id, typed(percent, 1)); }
     public int boxSize(String id) { return boxSize.getOrDefault(id, 100); }
-    public void setBoxSize(String id, int percent) { put(boxSize, id, Math.clamp(percent, 50, 200)); }
+    public void setBoxSize(String id, int percent) { put(boxSize, id, typed(percent, 1)); }
 
     private void put(Map<String, Integer> percents, String id, int percent) {
         if (entities.containsKey(id)) {
@@ -84,8 +84,8 @@ public final class HitboxesConfig extends ConfigCategory {
             if (key != null && color != null) valid.putIfAbsent(withoutModifiers(key.toString()), color | 0xFF000000);
         });
         entities = valid;
-        lineThickness = percents(lineThickness, 25, 400);
-        boxSize = percents(boxSize, 50, 200);
+        lineThickness = percents(lineThickness, 1, TYPED_MAX);
+        boxSize = percents(boxSize, 1, TYPED_MAX);
         Set<String> off = new LinkedHashSet<>();
         if (disabled != null) disabled.stream().filter(entities::containsKey).forEach(off::add);
         disabled = off;

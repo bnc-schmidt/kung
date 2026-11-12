@@ -18,14 +18,14 @@ public final class GardenAlarmsConfig extends ConfigCategory {
     public void setNoSpray(boolean value) { noSpray = value; save(); }
     public String muteKeybind() { return muteKeybind == null ? "" : muteKeybind; }
     public void setMuteKeybind(String value) { muteKeybind = value == null ? "" : value; save(); }
-    public int volume() { return Math.clamp(volume, 1, 100); }
+    public int volume() { return typed(volume, 1); }
     @Override public void normalize() { setVolume(volume()); }
-    public void setVolume(int value) { volume = Math.clamp(value, 1, 100); save(); }
+    public void setVolume(int value) { volume = typed(value, 1); save(); }
 
     /** The old "6th Visitor Alarm" feature became the Max Visitor Alarm child setting of this feature. */
     public void migrateVisitorAlarm(boolean wasEnabled, Integer oldVolume) {
         enabled = wasEnabled;
         maxVisitor = wasEnabled;
-        if (oldVolume != null) volume = Math.clamp(oldVolume, 1, 100);
+        if (oldVolume != null) volume = typed(oldVolume, 1);
     }
 }

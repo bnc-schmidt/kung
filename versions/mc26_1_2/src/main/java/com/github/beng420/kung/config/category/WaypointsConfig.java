@@ -37,13 +37,13 @@ public final class WaypointsConfig extends ConfigCategory {
     /** Opaque ARGB; the setter keeps only the RGB part. */
     public int lineColor() { return 0xFF000000 | (lineColor & RGB); }
     public void setLineColor(int value) { lineColor = value & RGB; save(); }
-    public int lineThickness() { return Math.clamp(lineThickness, 1, MAX_LINE_THICKNESS); }
-    public void setLineThickness(int value) { lineThickness = Math.clamp(value, 1, MAX_LINE_THICKNESS); save(); }
+    public int lineThickness() { return typed(lineThickness, 1); }
+    public void setLineThickness(int value) { lineThickness = typed(value, 1); save(); }
     public boolean allowSkipping() { return allowSkipping; }
     public void setAllowSkipping(boolean value) { allowSkipping = value; save(); }
     public boolean allowGoingBackwards() { return allowGoingBackwards; }
     public void setAllowGoingBackwards(boolean value) { allowGoingBackwards = value; save(); }
-    /** Blocks from a route waypoint's centre within which it counts as reached. */
-    public int activationRadius() { return Math.clamp(activationRadius, MIN_RADIUS, MAX_RADIUS); }
-    public void setActivationRadius(int value) { activationRadius = Math.clamp(value, MIN_RADIUS, MAX_RADIUS); save(); }
+    /** Blocks from a route waypoint's centre within which the player's feet or eyes count as reached. */
+    public int activationRadius() { return typed(activationRadius, MIN_RADIUS); }
+    public void setActivationRadius(int value) { activationRadius = typed(value, MIN_RADIUS); save(); }
 }

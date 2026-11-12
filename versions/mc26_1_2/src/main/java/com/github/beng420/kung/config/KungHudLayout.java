@@ -1,5 +1,6 @@
 package com.github.beng420.kung.config;
 
+import com.github.beng420.kung.feature.crimson.MiniBossTimerFeature;
 import com.github.beng420.kung.feature.dungeon.DungeonMapFeature;
 import com.github.beng420.kung.feature.dungeon.DragonDebuffHud;
 import com.github.beng420.kung.feature.dungeon.DungeonSecretsOverlayFeature;
@@ -118,7 +119,11 @@ public final class KungHudLayout {
                 config.misc::setSackTrackerX, config.misc::setSackTrackerY,
                 config.misc::sackTrackerScale, config.misc::setSackTrackerScale,
                 config.misc::sackTrackerEnabled, config.misc::setSackTrackerEnabled,
-                graphics -> SackTrackerFeature.drawPreview(graphics, config.misc))
+                graphics -> SackTrackerFeature.drawPreview(graphics, config.misc)),
+            new Entry("miniboss_timer", "Miniboss Timer", () -> MiniBossTimerFeature.overlayBounds(config.miniBoss),
+                config.miniBoss::x, config.miniBoss::y, config.miniBoss::setX, config.miniBoss::setY,
+                config.miniBoss::scale, config.miniBoss::setScale, config.miniBoss::enabled, config.miniBoss::setEnabled,
+                graphics -> MiniBossTimerFeature.drawPreview(graphics, config.miniBoss))
         );
     }
 

@@ -29,11 +29,11 @@ public final class MiningSettingsTest {
     }
 
     @Test
-    public void countdownAndVolumeStayInRangeAndSurviveASaveAndLoad() {
+    public void countdownAndVolumeKeepTheirFloorAndSurviveASaveAndLoad() {
         var file = temporary.getRoot().toPath().resolve("kung.json");
         var config = new KungConfig(file);
         config.mining.setGourmandCountdownSeconds(500);
-        assertEquals(30, config.mining.gourmandCountdownSeconds());
+        assertEquals(500, config.mining.gourmandCountdownSeconds());
         config.mining.setGourmandCountdownSeconds(-4);
         assertEquals(3, config.mining.gourmandCountdownSeconds());
         config.mining.setGourmandCountdownSeconds(15);

@@ -33,7 +33,7 @@ public final class HitboxesTest extends MinecraftBootstrapTest {
     }
 
     @Test
-    public void entriesSavedWithoutLineAndSizeKeepTodaysLookAndOutOfRangeValuesClamp() {
+    public void entriesSavedWithoutLineAndSizeKeepTodaysLookAndNumbersPastTheSliderStay() {
         var old = read("{\"hitboxes\":{\"entities\":{\"minecraft:zombie\":1},\"lineThickness\":null}}").hitboxes;
         assertEquals(100, old.lineThickness("minecraft:zombie"));
         assertEquals(100, old.boxSize("minecraft:zombie"));
@@ -42,15 +42,15 @@ public final class HitboxesTest extends MinecraftBootstrapTest {
              "lineThickness":{"minecraft:arrow":9000},"boxSize":{"minecraft:arrow":0,"minecraft:pig":150}}}
             """).hitboxes;
         assertEquals(100, config.lineThickness("minecraft:zombie"));
-        assertEquals(400, config.lineThickness("minecraft:arrow"));
-        assertEquals(50, config.boxSize("minecraft:arrow"));
+        assertEquals(9000, config.lineThickness("minecraft:arrow"));
+        assertEquals(1, config.boxSize("minecraft:arrow"));
         assertEquals(100, config.boxSize("minecraft:pig"));
         var row = new HitboxSettings(old).get().get(1);
         assertEquals(List.of("Line Thickness (%)", "Box Size (%)"), row.children().stream().map(SettingEntry::label).toList());
         row.children().get(0).intConsumer().accept(1);
         row.children().get(1).intConsumer().accept(999);
-        assertEquals(25, old.lineThickness("minecraft:zombie"));
-        assertEquals(200, old.boxSize("minecraft:zombie"));
+        assertEquals(1, old.lineThickness("minecraft:zombie"));
+        assertEquals(999, old.boxSize("minecraft:zombie"));
     }
 
     @Test
