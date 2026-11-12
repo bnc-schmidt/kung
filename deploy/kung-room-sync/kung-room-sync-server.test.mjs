@@ -29,6 +29,10 @@ const owner = { id: "69617dbf568e46329ee980bf67d534d9", name: "Beng114" };
 const friend = { id: "0123456789abcdef0123456789abcdef", name: "Friend_1" };
 // A player whose profiles hold Sack counts; the fake Hypixel answers for this uuid with two profiles.
 const sacker = { id: "5".repeat(32), name: "Sack_Player" };
+// The players a !bestiary command may name; the fake Mojang name lookup knows them.
+const broken = { id: "e".repeat(32), name: "Broken_One" };
+const lonely = { id: "0".repeat(32), name: "Lonely_One" };
+const namedPlayers = [sacker, friend, broken, lonely, { id: fixtureUuid, name: "Fixture_Player" }];
 // serverId -> profile; stands in for the client's joinServer call at Mojang.
 const joined = new Map();
 // Every token and challenge handed out, to prove none of them reaches the server log.
@@ -41,6 +45,12 @@ let main;
 before(async () => {
   mojang = await listen((request, response) => {
     const url = new URL(request.url, "http://fake");
+    const lookedUp = url.pathname.match(/^\/minecraft\/profile\/lookup\/name\/(.+)$/);
+    if (lookedUp) {
+      const known = namedPlayers.find((player) => player.name.toLowerCase() === decodeURIComponent(lookedUp[1]).toLowerCase());
+      return known ? response.writeHead(200, { "content-type": "application/json" }).end(JSON.stringify(known))
+        : response.writeHead(404).end('{"errorMessage":"Couldn\'t find any profile with that name"}');
+    }
     const profile = joined.get(url.searchParams.get("serverId"));
     if (url.pathname !== "/session/minecraft/hasJoined" || !profile
       || profile.name.toLowerCase() !== String(url.searchParams.get("username")).toLowerCase()) {
@@ -247,6 +257,7 @@ test("every other endpoint needs a valid session", async () => {
     ["GET", "/runs/live?runKey=run"],
     ["POST", "/runs/live/report"],
     ["GET", `/hypixel/profiles?uuid=${fixtureUuid}`],
+    ["GET", "/bestiary?name=Sack_Player&mob=barb"],
   ];
   for (const [method, route] of routes) {
     for (const token of [undefined, "f".repeat(64), "junk"]) {
@@ -323,6 +334,111 @@ test("sacks are your own counts of the selected profile alone", async () => {
   assert.deepEqual(other.body, { error: "sacks of your own account only" });
   assert.equal((await call(main, "GET", "/hypixel/sacks?uuid=nope", { token })).status, 403);
   assert.equal((await call(main, "GET", `/hypixel/sacks?uuid=${sacker.id}`, {})).status, 401);
+});
+
+const bestiary = (server, token, name, mob, profile = "") =>
+  call(server, "GET", `/bestiary?name=${encodeURIComponent(name)}&mob=${encodeURIComponent(mob)}${profile ? `&profile=${profile}` : ""}`, { token });
+
+test("bestiary answers with the kills and levels of the selected profile", async () => {
+  const token = (await signIn(main, friend)).body.token;
+  // The name is fixed to Mojang's spelling; a short word finds the mob; the unselected profile's 5 zombie kills do not count.
+  const duke = await bestiary(main, token, "sack_player", "barb");
+  assert.equal(duke.status, 200);
+  assert.deepEqual(duke.body, { success: true, message: "Sack_Player | Barbarian Duke X: 7 kills | Lvl 5 | 2 to next | 93 to max" });
+  assert.equal((await bestiary(main, token, "Sack_Player", "Barbarian Duke X")).body.message, duke.body.message);
+  assert.equal((await bestiary(main, token, "Sack_Player", "zombie")).body.message,
+    "Sack_Player | Zombie: 12 kills | Lvl 2 | 3 to next | 38 to max");
+  // At the cap only the kills: a Bat in the Catacombs maxes out at 1000.
+  assert.equal((await bestiary(main, token, "Sack_Player", "bat cata")).body.message, "Sack_Player | Bat (Catacombs): 1,500 kills");
+});
+
+test("bestiary tells a variant apart from the mob that holds it", async () => {
+  const token = (await signIn(main, friend)).body.token;
+  // Stoneworm is the game's one entry (Worm and Scatha: 43 kills); Scatha alone shows its 3, the level is Stoneworm's.
+  const stone = (await bestiary(main, token, "Sack_Player", "stoneworm")).body.message;
+  assert.match(stone, /^Sack_Player \| Stoneworm: 43 kills \| Lvl \d+ \| [\d,]+ to next \| [\d,]+ to max$/);
+  const scatha = (await bestiary(main, token, "Sack_Player", "scatha")).body.message;
+  assert.equal(scatha, stone.replace("| Stoneworm: 43 kills", "| Scatha: 3 kills | Stoneworm: 43 kills"));
+  assert.equal((await bestiary(main, token, "Sack_Player", "scat")).body.message, scatha);
+});
+
+test("bestiary reads a named profile and says which one", async () => {
+  const token = (await signIn(main, friend)).body.token;
+  // The unselected Apple profile has 5 zombie kills, the selected Banana 12; the name matches in any case.
+  assert.equal((await bestiary(main, token, "Sack_Player", "zombie", "Apple")).body.message,
+    "Sack_Player (Apple) | Zombie: 5 kills | Lvl 1 | 5 to next | 45 to max");
+  assert.equal((await bestiary(main, token, "Sack_Player", "zombie", "banana")).body.message,
+    "Sack_Player (Banana) | Zombie: 12 kills | Lvl 2 | 3 to next | 38 to max");
+  assert.equal((await bestiary(main, token, "Sack_Player", "zombie", "Mango")).body.message,
+    "Sack_Player has no Mango profile (has Apple, Banana).");
+  // Without the profile the selected one answers, with no name in the line.
+  assert.equal((await bestiary(main, token, "Sack_Player", "zombie")).body.message,
+    "Sack_Player | Zombie: 12 kills | Lvl 2 | 3 to next | 38 to max");
+  // Only letters, at most 20: nothing else reaches the line.
+  for (const bad of ["Coco1", "Co%20co", "x".repeat(21), "%3Cb%3E"]) {
+    assert.equal((await bestiary(main, token, "Sack_Player", "zombie", bad)).status, 400, bad);
+  }
+});
+
+test("bestiary lists the best three when the name fits several mobs and spends no lookup", async () => {
+  const token = (await signIn(main, friend)).body.token;
+  // An unknown player gets the list too: nothing reached Mojang or Hypixel.
+  const bats = await bestiary(main, token, "Nobody_Here", "bat");
+  assert.equal(bats.body.message, "Which one? Bat (Catacombs), Bat (Private Island). Type more of the name.");
+  const b = (await bestiary(main, token, "Nobody_Here", "b")).body.message;
+  assert.match(b, /^Which one\? [^,]+, [^,]+, [^,]+ \(\+\d+ more\)\. Type more of the name\.$/);
+  assert.equal((await bestiary(main, token, "Nobody_Here", "xyzzy")).body.message, "No Bestiary mob fits that name.");
+  assert.equal((await bestiary(main, token, "Nobody_Here", "")).body.message, "No Bestiary mob fits that name.");
+  // The typed words never come back.
+  assert.ok(!(await bestiary(main, token, "Nobody_Here", "xyzzy")).body.message.includes("xyzzy"));
+});
+
+test("bestiary tells why there is no number", async () => {
+  const token = (await signIn(main, friend)).body.token;
+  assert.equal((await bestiary(main, token, "Nobody_Here", "barb")).body.message, "No player named Nobody_Here.");
+  assert.equal((await bestiary(main, token, "Lonely_One", "barb")).body.message, "No SkyBlock profile for Lonely_One.");
+  assert.equal((await bestiary(main, token, "Fixture_Player", "barb")).body.message, "No Bestiary data for Fixture_Player.");
+  assert.equal((await bestiary(main, token, "Broken_One", "barb")).body.message,
+    "Could not look up the Bestiary of Broken_One: Hypixel is unavailable.");
+  assert.equal((await bestiary(main, token, "bad name!", "barb")).status, 400);
+  assert.equal((await bestiary(main, token, "Sack_Player", "x".repeat(41))).status, 400);
+  assert.equal((await call(main, "GET", "/bestiary?name=Sack_Player&mob=barb", {})).status, 401);
+});
+
+test("bestiary has its own limits and only lookups at Hypixel use the shared share", async () => {
+  const server = await startServer({ KUNG_BESTIARY_USER_LIMIT_PER_5_MIN: "3", KUNG_BESTIARY_ALL_LIMIT_PER_5_MIN: "1" });
+  const token = (await signIn(server, friend)).body.token;
+  assert.equal((await bestiary(server, token, "Sack_Player", "barb")).status, 200);
+  assert.equal((await bestiary(server, token, "Sack_Player", "zombie")).status, 429);
+  // An unclear name needs no share; the fourth request is over the per-player limit of 3.
+  assert.equal((await bestiary(server, token, "Sack_Player", "bat")).status, 200);
+  assert.equal((await bestiary(server, token, "Sack_Player", "bat")).status, 429);
+  // Profiles keep their own budget.
+  assert.equal((await call(server, "GET", `/hypixel/profiles?uuid=${fixtureUuid}`, { token })).status, 200);
+});
+
+test("the bundled Bestiary list is consistent", () => {
+  const list = JSON.parse(fs.readFileSync(path.join(here, "kung-bestiary.json"), "utf8"));
+  const ids = new Set();
+  assert.ok(list.mobs.length > 300);
+  for (const mob of list.mobs) {
+    // A variant is a named part of the mob: its ids are some of the mob's own.
+    for (const [variant, variantIds] of Object.entries(mob.variants ?? {})) {
+      assert.ok(variantIds.length > 0 && variantIds.every((id) => mob.ids.includes(id)), `${variant} is part of ${mob.name}`);
+    }
+    const brackets = (mob.critter ? list.critterBrackets : list.brackets)[mob.bracket];
+    assert.ok(brackets?.includes(mob.cap), `${mob.name}: the cap ${mob.cap} is a level of bracket ${mob.bracket}`);
+    assert.ok(mob.ids.length > 0, `${mob.name} has ids`);
+    for (const id of mob.ids) {
+      assert.ok(!ids.has(id), `${id} belongs to one mob`);
+      ids.add(id);
+    }
+  }
+  // Two entries share a name only where they carry an area, so a typed name can still tell them apart.
+  const byName = Object.groupBy(list.mobs, (mob) => mob.name);
+  for (const [name, mobs] of Object.entries(byName)) {
+    assert.ok(mobs.length === 1 || mobs.every((mob) => mob.area), `${name} needs areas`);
+  }
 });
 
 test("sacks of a player without profiles stay empty and sacks have their own limit", async () => {
@@ -441,14 +557,20 @@ test("the log never shows a token or challenge", () => {
 
 // Two profiles of one player with Sack counts (the selected one second) plus coop data and fields nobody should get.
 function sackProfiles() {
-  const member = (sacks) => ({ inventory: { inv_contents: { data: "junk" }, sacks_counts: sacks }, player_data: { junk: 1 } });
+  const member = (sacks, kills = {}) => ({
+    inventory: { inv_contents: { data: "junk" }, sacks_counts: sacks },
+    bestiary: { kills, deaths: { zombie_1: 99 }, migrated_stats: true },
+    player_data: { junk: 1 },
+  });
   return {
     success: true,
     cause: "junk",
     profiles: [
-      { profile_id: "a", cute_name: "Apple", selected: false, banking: { balance: 1 }, members: { [sacker.id]: member({ WHEAT: 1 }) } },
+      { profile_id: "a", cute_name: "Apple", selected: false, banking: { balance: 1 },
+        members: { [sacker.id]: member({ WHEAT: 1 }, { zombie_1: 5 }) } },
       { profile_id: "b", cute_name: "Banana", selected: true, banking: { balance: 2 },
-        members: { [sacker.id]: member({ WHEAT: 1500, CARROT_ITEM: 20 }), [friend.id]: member({ WHEAT: 999 }) } },
+        members: { [sacker.id]: member({ WHEAT: 1500, CARROT_ITEM: 20 }, { zombie_1: 12, zombie_2: 0, barbarian_duke_x_200: 7, dungeon_secret_bat_1: 1500, worm_5: 40, scatha_10: 3 }),
+          [friend.id]: member({ WHEAT: 999 }, { zombie_1: 1 }) } },
     ],
   };
 }
@@ -479,6 +601,11 @@ async function startServer(env) {
       KUNG_ROOM_SYNC_HOST: "127.0.0.1",
       KUNG_ROOM_DATA_PATH: dataFile,
       KUNG_MOJANG_SESSION_URL: `http://127.0.0.1:${mojang.address().port}`,
+      KUNG_MOJANG_API_URL: `http://127.0.0.1:${mojang.address().port}`,
+      KUNG_BESTIARY_CACHE_MS: "",
+      KUNG_BESTIARY_LIMIT_PER_5_MIN: "",
+      KUNG_BESTIARY_USER_LIMIT_PER_5_MIN: "",
+      KUNG_BESTIARY_ALL_LIMIT_PER_5_MIN: "",
       KUNG_HYPIXEL_API_URL: `http://127.0.0.1:${hypixel.address().port}`,
       HYPIXEL_API_KEY: "test-key",
       KUNG_ALLOWED_UUIDS: "",

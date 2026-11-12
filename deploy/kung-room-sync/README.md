@@ -21,6 +21,7 @@ One small Node server (no dependencies, no Docker) for:
 | `POST /runs/live/report` | report this client's live run state |
 | `GET /hypixel/profiles?uuid=…` | the player's SkyBlock profiles, cut down to what Kung reads (503 without `HYPIXEL_API_KEY`) |
 | `GET /hypixel/sacks?uuid=…` | your own Sack counts: the selected profile cut down to `inventory.sacks_counts` (403 for any other uuid, 503 without `HYPIXEL_API_KEY`), cached `KUNG_SACKS_CACHE_MS` (5 s), for the `/kung dev sackapi` probe |
+| `GET /bestiary?name=…&mob=…[&profile=…]` | the finished chat line for `!bestiary <mob> [-name] [-profile]`: finds the mob in `kung-bestiary.json`, asks Mojang for the uuid and Hypixel for the `bestiary.kills` of the selected profile (or of the one whose cute name `profile` gives, shown in the line), answers `{"success":true,"message":"…"}` (503 without `HYPIXEL_API_KEY`); a mob name that fits none or several answers without any lookup |
 | `GET /hypixel/secrets?uuid=…` | the player's lifetime secrets, `{"success":true,"secrets":N}` (-1 when unknown), for the run's per-player secret counts |
 | `POST /jerry/report` | report the mayor Jerry copies, read from his hub menu; answers with the pooled cycle |
 | `GET /jerry?year=…` | Jerry's pooled 6-slot cycle for that election year (`positions` is null where unknown) |
@@ -63,6 +64,12 @@ Limits per 5 minutes, per client IP unless noted:
 | `KUNG_SACKS_LIMIT_PER_5_MIN` | 60 | `/hypixel/sacks` |
 | `KUNG_SACKS_USER_LIMIT_PER_5_MIN` | 30 | `/hypixel/sacks`, per player |
 | `KUNG_SACKS_ALL_LIMIT_PER_5_MIN` | 60 | `/hypixel/sacks`, all players together (the Hypixel key allows 300 for everything) |
+| `KUNG_BESTIARY_LIMIT_PER_5_MIN` | 60 | `/bestiary` |
+| `KUNG_BESTIARY_USER_LIMIT_PER_5_MIN` | 30 | `/bestiary`, per player |
+| `KUNG_BESTIARY_ALL_LIMIT_PER_5_MIN` | 60 | `/bestiary`, only the lookups that reach Hypixel, all players together (a teammate's `!bestiary` makes every Kung client in the party ask) |
+| `KUNG_BESTIARY_CACHE_MS` | 60000 | a player's Bestiary kills |
+| `KUNG_NAME_CACHE_MS` | 3600000 | a player name's uuid from Mojang |
+| `KUNG_MOJANG_API_URL` | `https://api.minecraftservices.com` | the Mojang name lookup (tests use a fake) |
 | `KUNG_LIVE_REPORT_LIMIT_PER_5_MIN` | 1800 | `POST /runs/live/report`, per player |
 | `KUNG_ROOM_REPORT_LIMIT_PER_5_MIN` | 30 | `POST /rooms/report`, per player |
 
@@ -78,6 +85,7 @@ that can be anywhere in the container, for example `/root/kung-server` (no space
 ```text
 <folder>/
   kung-room-sync-server.mjs   you upload
+  kung-bestiary.json          you upload (the !bestiary mob list; without it the command answers that the list is missing)
   install.sh                  you upload
   .env.example                you upload (optional, a dotfile)
   kung-server.env             config and secrets, created by install.sh (root, mode 600)
@@ -95,9 +103,9 @@ that can be anywhere in the container, for example `/root/kung-server` (no space
    apt-get update && apt-get install -y nodejs
    ```
 
-2. Upload three files from this repo folder into one folder in the container (WinSCP or any
+2. Upload four files from this repo folder into one folder in the container (WinSCP or any
    other file transfer), for example `/root/kung-server`: `kung-room-sync-server.mjs`,
-   `install.sh` and, optionally, `.env.example`. `.env.example` is a dotfile and easy to miss:
+   `kung-bestiary.json`, `install.sh` and, optionally, `.env.example`. `.env.example` is a dotfile and easy to miss:
    select it explicitly. The unit file is not uploaded, `install.sh` generates it.
 
 3. Open the container's console (for example in the Proxmox web UI: container, Console) and run
@@ -158,7 +166,7 @@ journalctl -u kung-server -n 20
 
 ## Updating
 
-Replace `kung-room-sync-server.mjs` in the install folder with the new file, then:
+Replace `kung-room-sync-server.mjs` (and `kung-bestiary.json` when it changed) in the install folder with the new files, then:
 
 ```bash
 systemctl restart kung-server

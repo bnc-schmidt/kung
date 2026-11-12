@@ -21,6 +21,15 @@ const secretsCache = new Map();
 // The sack probe measures how far Hypixel's data trails the game, so the server adds as little cache as it can.
 const sacksCacheMillis = Number(process.env.KUNG_SACKS_CACHE_MS || 5_000);
 const sacksCache = new Map();
+// Bestiary kills move slowly, and every Kung client in a party asks for a teammate's !bestiary line.
+const bestiaryCacheMillis = Number(process.env.KUNG_BESTIARY_CACHE_MS || 60_000);
+const bestiaryCache = new Map();
+// A !bestiary command names its player: Mojang turns the name into the uuid, which only changes when someone renames.
+const mojangApiUrl = process.env.KUNG_MOJANG_API_URL || "https://api.minecraftservices.com";
+const nameCacheMillis = Number(process.env.KUNG_NAME_CACHE_MS || 3_600_000);
+const nameCache = new Map();
+// The mob list (NEU's Bestiary data cut down, MIT) sits next to this file, so a new mob needs no new server code.
+const bestiaryFile = new URL("./kung-bestiary.json", import.meta.url);
 
 // Sign-in is the vanilla server-join handshake: we hand out a challenge, the client joins it at
 // Mojang with its own access token, and hasJoined tells us who did. No shared secret in the jar.
@@ -125,6 +134,9 @@ const server = http.createServer(async (request, response) => {
       return hypixelLookup(request, response, session, "sacks", cachedSacks,
         [[sacksRequests, sacksLimit], [sacksUserRequests, sacksUserLimit], [sacksAllRequests, sacksAllLimit]]);
     }
+    if (request.method === "GET" && request.url.startsWith("/bestiary?")) {
+      return bestiaryAnswer(request, response, session);
+    }
     return json(response, 404, { error: "not found" });
   } catch (error) {
     // Client errors carry a status and are not logged; nothing here may log a body, token or challenge.
@@ -165,6 +177,14 @@ const sacksUserRequests = new Map();
 // on sacks, so a wave of world changes cannot starve the profile and secrets lookups.
 const sacksAllLimit = Number(process.env.KUNG_SACKS_ALL_LIMIT_PER_5_MIN || 60);
 const sacksAllRequests = new Map();
+// A teammate's !bestiary makes every Kung client in the party ask, so all players together get a share like sacks
+// (only the lookups that reach Hypixel count for it).
+const bestiaryLimit = Number(process.env.KUNG_BESTIARY_LIMIT_PER_5_MIN || 60);
+const bestiaryRequests = new Map();
+const bestiaryUserLimit = Number(process.env.KUNG_BESTIARY_USER_LIMIT_PER_5_MIN || 30);
+const bestiaryUserRequests = new Map();
+const bestiaryAllLimit = Number(process.env.KUNG_BESTIARY_ALL_LIMIT_PER_5_MIN || 60);
+const bestiaryAllRequests = new Map();
 const liveReportLimit = Number(process.env.KUNG_LIVE_REPORT_LIMIT_PER_5_MIN || 1800);
 const liveReportRequests = new Map();
 const roomReportLimit = Number(process.env.KUNG_ROOM_REPORT_LIMIT_PER_5_MIN || 30);
@@ -305,6 +325,7 @@ async function hypixelLookup(request, response, session, label, cached, limits) 
 const cachedProfiles = (uuid) => cachedLookup(profileCache, profileCacheMillis, uuid, fetchProfiles);
 const cachedSecrets = (uuid) => cachedLookup(secretsCache, secretsCacheMillis, uuid, fetchSecrets);
 const cachedSacks = (uuid) => cachedLookup(sacksCache, sacksCacheMillis, uuid, fetchSacks);
+const cachedBestiary = (uuid) => cachedLookup(bestiaryCache, bestiaryCacheMillis, uuid, fetchBestiary);
 
 function cachedLookup(cache, cacheMillis, uuid, fetcher) {
   const now = Date.now();
@@ -327,6 +348,196 @@ function cachedLookup(cache, cacheMillis, uuid, fetcher) {
   return entry.result.then((result) => ({ ...result, hit }));
 }
 
+// "!bestiary <mob> [-name]": the client forwards the typed mob words and the player's name, the server finds the mob,
+// reads the kills and answers with the finished chat line. A name that fits no mob or several answers without a lookup.
+async function bestiaryAnswer(request, response, session) {
+  const query = new URL(request.url, "http://localhost").searchParams;
+  const name = String(query.get("name") || "");
+  const mob = String(query.get("mob") || "");
+  // The cute name of the profile to read ("Coconut"); empty reads the selected one.
+  const wantedProfile = String(query.get("profile") || "");
+  // One line per request for journalctl -f: a checked uuid and an outcome, never the typed words.
+  let uuid = "?";
+  let outcome = "error";
+  const answer = (message) => json(response, 200, { success: true, message });
+  try {
+    if (!withinLimit(bestiaryRequests, bestiaryLimit, request) || !withinLimit(bestiaryUserRequests, bestiaryUserLimit, request, session.uuid)) {
+      outcome = "rate limited 429";
+      return json(response, 429, { error: "too many requests" });
+    }
+    if (!/^[A-Za-z0-9_]{1,16}$/.test(name) || mob.length > 40 || !/^[A-Za-z]{0,20}$/.test(wantedProfile)) {
+      outcome = "bad query 400";
+      return json(response, 400, { error: "name must be a player name, mob at most 40 characters and profile letters only" });
+    }
+    const mobs = await bestiaryMobs();
+    if (!mobs) {
+      outcome = "no list";
+      return answer("The Kung server has no Bestiary list.");
+    }
+    const found = searchBestiary(mobs, mob);
+    if (found.total !== 1) {
+      outcome = "unclear";
+      return answer(unclearBestiary(found));
+    }
+    if (!hypixelKey) {
+      outcome = "no key 503";
+      return json(response, 503, { error: "HYPIXEL_API_KEY is not set on the server" });
+    }
+    if (!withinLimit(bestiaryAllRequests, bestiaryAllLimit, request, "all")) {
+      outcome = "rate limited 429";
+      return json(response, 429, { error: "too many requests" });
+    }
+    const player = await cachedLookup(nameCache, nameCacheMillis, name.toLowerCase(), fetchMojangName);
+    if (player.status !== 200) {
+      outcome = `mojang ${player.status}`;
+      return answer(player.status === 404 || player.status === 204 ? `No player named ${name}.`
+        : `Could not look up the Bestiary of ${name}: Mojang is unavailable.`);
+    }
+    const profile = JSON.parse(player.body);
+    const display = /^[A-Za-z0-9_]{1,16}$/.test(profile?.name) ? profile.name : name;
+    if (!/^[0-9a-f]{32}$/.test(profile?.id)) {
+      outcome = "mojang bad uuid";
+      return answer(`Could not look up the Bestiary of ${name}: Mojang is unavailable.`);
+    }
+    uuid = profile.id;
+    const upstream = await cachedBestiary(uuid);
+    outcome = `${upstream.hit ? "cache hit" : "hypixel"} ${upstream.status}`;
+    if (upstream.status !== 200) {
+      return answer(`Could not look up the Bestiary of ${display}: Hypixel is ${upstream.status === 429
+        ? "rate limited, try again in a few minutes" : "unavailable"}.`);
+    }
+    const all = JSON.parse(upstream.body).profiles;
+    const profiles = Array.isArray(all) ? all.filter(isObject) : [];
+    // A named profile, else the selected one (the first when none says so).
+    const selected = wantedProfile
+      ? profiles.find((profile) => String(profile.cute_name).toLowerCase() === wantedProfile.toLowerCase())
+      : profiles.find((profile) => profile.selected === true) ?? profiles[0];
+    if (!selected) {
+      return answer(wantedProfile && profiles.length > 0
+        ? `${display} has no ${wantedProfile} profile (has ${profiles.map((profile) => profile.cute_name).join(", ")}).`
+        : `No SkyBlock profile for ${display}.`);
+    }
+    const kills = selected.members?.[uuid]?.bestiary?.kills;
+    if (!isObject(kills)) {
+      return answer(`No Bestiary data for ${display}.`);
+    }
+    // A named profile shows in the line, so the answer says which one it read.
+    return answer(answerBestiary(wantedProfile ? `${display} (${selected.cute_name})` : display, found.mobs[0], kills));
+  } finally {
+    console.log(`bestiary ${uuid} for ${session.name}: ${outcome}`);
+  }
+}
+
+async function fetchMojangName(name) {
+  const upstream = await fetch(`${mojangApiUrl}/minecraft/profile/lookup/name/${encodeURIComponent(name)}`, {
+    headers: { "User-Agent": "Kung-Server" },
+    signal: AbortSignal.timeout(10_000),
+  });
+  return { status: upstream.status, body: await upstream.text() };
+}
+
+// The Bestiary list, read on first use. A missing or broken file is not remembered, so uploading it needs no restart.
+let bestiaryList;
+async function bestiaryMobs() {
+  if (!bestiaryList) {
+    try {
+      bestiaryList = parseBestiary(JSON.parse(await fs.readFile(bestiaryFile, "utf8")));
+    } catch (error) {
+      console.error(`bestiary list unusable: ${error.message}`);
+      return null;
+    }
+  }
+  return bestiaryList;
+}
+
+// levels: the kills each level needs, cut at the mob's cap (critters have their own brackets). area only joins the
+// name where two entries share one (Bat, Enderman). variants: a rare part of the mob with a name of its own
+// ("Scatha" of Stoneworm, as in the game's single entry); only a hand-picked few, so it can be asked for alone.
+function parseBestiary(root) {
+  return root.mobs.flatMap((entry) => {
+    const brackets = (entry.critter ? root.critterBrackets : root.brackets)[entry.bracket];
+    const key = normalizeBestiary(entry.area ? `${entry.name} ${entry.area}` : entry.name);
+    const mob = {
+      label: entry.area ? `${entry.name} (${entry.area})` : entry.name,
+      key,
+      names: [normalizeBestiary(entry.name), key],
+      levels: brackets.filter((kills) => kills <= entry.cap),
+      ids: entry.ids,
+    };
+    const variants = Object.entries(entry.variants ?? {}).map(([name, ids]) => ({
+      label: name, key: normalizeBestiary(name), names: [normalizeBestiary(name)], ids, parent: mob,
+    }));
+    return [mob, ...variants];
+  });
+}
+
+// Lower case letters and digits in single-space words; apostrophes drop out.
+const normalizeBestiary = (text) => String(text ?? "").toLowerCase().replace(/['\u2019]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+
+// An exact name wins; else every mob whose words start with the typed words in order ("barb" is Barbarian Duke X),
+// names that start with the whole query first, then the shorter name. mobs is the best three, total how many fit.
+function searchBestiary(mobs, query) {
+  const wanted = normalizeBestiary(query);
+  if (!wanted) {
+    return { mobs: [], total: 0 };
+  }
+  const words = wanted.split(" ");
+  let found = mobs.filter((mob) => mob.names.includes(wanted));
+  if (found.length === 0) {
+    found = mobs.filter((mob) => startsWords(words, mob.key.split(" ")));
+  }
+  found.sort((a, b) => Number(!a.key.startsWith(wanted)) - Number(!b.key.startsWith(wanted))
+    || a.key.length - b.key.length || a.label.localeCompare(b.label));
+  return { mobs: found.slice(0, 3), total: found.length };
+}
+
+// Each typed word starts a different word of the name, in the same order.
+function startsWords(query, name) {
+  let at = 0;
+  for (const word of query) {
+    while (at < name.length && !name[at].startsWith(word)) {
+      at += 1;
+    }
+    if (at === name.length) {
+      return false;
+    }
+    at += 1;
+  }
+  return true;
+}
+
+const killsOfBestiary = (mob, kills) => mob.ids.reduce((sum, id) => sum + (Number.isFinite(kills[id]) ? kills[id] : 0), 0);
+const killsText = (count) => count.toLocaleString("en-US");
+
+const killsLine = (label, kills) => `${label}: ${killsText(kills)} ${kills === 1 ? "kill" : "kills"}`;
+
+// "Name | Mob: 1,234 kills", and below the cap also "| Lvl 7 | 266 to next | 5,000 to max". A variant (Scatha) shows its own
+// kills first, then the whole mob it belongs to (Stoneworm), whose kills carry the level.
+function answerBestiary(player, mob, counts) {
+  const whole = mob.parent ?? mob;
+  const kills = killsOfBestiary(whole, counts);
+  const parts = [player];
+  if (mob.parent) {
+    parts.push(killsLine(mob.label, killsOfBestiary(mob, counts)));
+  }
+  parts.push(killsLine(whole.label, kills));
+  const cap = whole.levels[whole.levels.length - 1];
+  if (kills >= cap) {
+    return parts.join(" | ");
+  }
+  const level = whole.levels.filter((needed) => kills >= needed).length;
+  return [...parts, `Lvl ${level}`, `${killsText(whole.levels[level] - kills)} to next`, `${killsText(cap - kills)} to max`].join(" | ");
+}
+
+// The reply to a name that fits nothing or several mobs. It never repeats the typed words.
+function unclearBestiary({ mobs, total }) {
+  if (total === 0) {
+    return "No Bestiary mob fits that name.";
+  }
+  const more = total - mobs.length;
+  return `Which one? ${mobs.map((mob) => mob.label).join(", ")}${more > 0 ? ` (+${more} more)` : ""}. Type more of the name.`;
+}
+
 // The run's secret deltas need the live lifetime counter (the achievement, as with a client's own key),
 // which a profile only carries after a save. Cached for seconds only, or both ends of a run would match.
 async function fetchSecrets(uuid) {
@@ -342,7 +553,7 @@ async function fetchSecrets(uuid) {
   return { status: 200, body: `${JSON.stringify({ success: true, secrets: Number.isInteger(secrets) && secrets >= 0 ? secrets : -1 })}\n` };
 }
 
-async function fetchProfiles(uuid) {
+async function fetchProfiles(uuid, fields = memberFields) {
   const upstream = await fetch(`${hypixelApiUrl}/v2/skyblock/profiles?uuid=${uuid}`, {
     headers: { "API-Key": hypixelKey, "User-Agent": "Kung-Server" },
     signal: AbortSignal.timeout(10_000),
@@ -351,10 +562,14 @@ async function fetchProfiles(uuid) {
   if (upstream.status !== 200) {
     return { status: upstream.status, body };
   }
-  return { status: 200, body: `${JSON.stringify(stripProfiles(JSON.parse(body), uuid))}\n` };
+  return { status: 200, body: `${JSON.stringify(stripProfiles(JSON.parse(body), uuid, fields))}\n` };
 }
 
-async function fetchSacks(uuid) {
+const fetchSacks = (uuid) => fetchSelectedProfile(uuid, sacksMemberFields);
+// All profiles, so a "-coconut" line can read another one; the answer picks (see bestiaryAnswer).
+const fetchBestiary = (uuid) => fetchProfiles(uuid, bestiaryMemberFields);
+
+async function fetchSelectedProfile(uuid, memberFields) {
   const upstream = await fetch(`${hypixelApiUrl}/v2/skyblock/profiles?uuid=${uuid}`, {
     headers: { "API-Key": hypixelKey, "User-Agent": "Kung-Server" },
     signal: AbortSignal.timeout(10_000),
@@ -363,7 +578,7 @@ async function fetchSacks(uuid) {
   if (upstream.status !== 200) {
     return { status: upstream.status, body };
   }
-  return { status: 200, body: `${JSON.stringify(stripSacks(JSON.parse(body), uuid))}\n` };
+  return { status: 200, body: `${JSON.stringify(stripSelectedProfile(JSON.parse(body), uuid, memberFields))}\n` };
 }
 
 // Exactly what HypixelSkyBlockProfileClient.parseProfiles reads, and only the asking player's member:
@@ -386,8 +601,8 @@ const memberFields = {
   attributes: { stacks: { catacombs_explorer: true } },
 };
 
-function stripProfiles(root, uuid) {
-  const profileFields = { profile_id: true, cute_name: true, selected: true, members: { [uuid]: memberFields } };
+function stripProfiles(root, uuid, fields = memberFields) {
+  const profileFields = { profile_id: true, cute_name: true, selected: true, members: { [uuid]: fields } };
   return {
     success: root?.success,
     // null, missing and non-arrays all mean "no profiles" to the Java; null elements are skipped there.
@@ -397,13 +612,15 @@ function stripProfiles(root, uuid) {
   };
 }
 
-// The Sack counts of the asking player's selected profile (the first one when none is), in Hypixel's own shape so
-// HypixelSkyBlockProfileClient.parseSackCounts reads it. The counts sit in the member's inventory; older data had
+// One member's fields of the selected profile (the first one when none is), in Hypixel's own shape so
+// HypixelSkyBlockProfileClient.parseSackCounts and parseBestiaryKills read it. The Sack counts The counts sit in the member's inventory; older data had
 // them on the member itself.
 const sacksMemberFields = { inventory: { sacks_counts: true }, sacks_counts: true };
+// The Bestiary kills of the selected profile (mob id to kills, e.g. zombie_1 or barbarian_duke_x_200): the !bestiary command.
+const bestiaryMemberFields = { bestiary: { kills: true } };
 
-function stripSacks(root, uuid) {
-  const profileFields = { profile_id: true, cute_name: true, selected: true, members: { [uuid]: sacksMemberFields } };
+function stripSelectedProfile(root, uuid, memberFields) {
+  const profileFields = { profile_id: true, cute_name: true, selected: true, members: { [uuid]: memberFields } };
   const profiles = Array.isArray(root?.profiles) ? root.profiles.filter(isObject) : null;
   const chosen = profiles && (profiles.find((profile) => profile.selected === true) ?? profiles[0]);
   return { success: root?.success, profiles: profiles === null ? null : chosen ? [pick(chosen, profileFields)] : [] };
