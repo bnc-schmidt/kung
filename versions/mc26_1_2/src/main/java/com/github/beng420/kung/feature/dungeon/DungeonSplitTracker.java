@@ -458,11 +458,16 @@ public final class DungeonSplitTracker {
             }
             SplitsConfig settings = config.get();
             Map<String, Long> previousBest = settings.bestRun(floor, masterMode);
+            Map<String, Long> previousCompared = settings.comparedRun(floor, masterMode);
             boolean newBest = settings.recordRun(floor, masterMode, validPhases, averagePhases,
                 completedRun && !averagePhases.isEmpty() ? bestRunOf(averagePhases) : null);
+            // A run that beats the best run shown keeps showing the one it beat, whether that is the saved one or this session's.
+            if (!Objects.equals(settings.comparedRun(floor, masterMode).get(SplitsConfig.BEST_RUN_TOTAL),
+                previousCompared.get(SplitsConfig.BEST_RUN_TOTAL))) {
+                beatenRun = previousCompared;
+            }
             if (newBest) {
                 long previousTotal = previousBest.getOrDefault(SplitsConfig.BEST_RUN_TOTAL, -1L);
-                beatenRun = previousBest;
                 bestRunNotice = DungeonSplitMessages.bestRunNotice(floor, masterMode, stoppedElapsedMillis,
                     previousTotal, settings.format());
                 diagnostics.accept("best-run recorded floor=" + floor + " master=" + masterMode
@@ -491,13 +496,13 @@ public final class DungeonSplitTracker {
     }
 
     /**
-     * The splits of the floor's fastest recorded run, to compare this run with: by phase name, plus "Boss Entry" and
-     * "Total". Empty while the floor is unknown or nothing was recorded. A run that just set the record keeps the
-     * run it beat.
+     * The splits of the floor's fastest run in the PB scope (all time, or since the game started), to compare this run
+     * with: by phase name, plus "Boss Entry" and "Total". Empty while the floor is unknown or nothing was recorded.
+     * A run that just set the record keeps the run it beat.
      */
     public Map<String, Long> pbRun() {
         if (beatenRun != null) return beatenRun;
-        return hasKnownFloor() ? config.get().bestRun(floor, masterMode) : Map.of();
+        return hasKnownFloor() ? config.get().comparedRun(floor, masterMode) : Map.of();
     }
 
     private void startClockSegment(long elapsed) {

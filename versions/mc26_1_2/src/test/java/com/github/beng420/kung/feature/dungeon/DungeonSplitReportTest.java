@@ -75,6 +75,26 @@ public final class DungeonSplitReportTest {
         assertEquals(List.of(), state.dueSplitNotices(21L));
     }
 
+    /** A line held after the report is through (the best run notice follows the victory text) is not held forever. */
+    @Test public void aLineHeldAfterTheReportIsThroughIsDueAtOnce() {
+        var state = new DungeonStateTracker();
+        var late = new DungeonSplitMessages.Notice(com.github.beng420.kung.message.KungMessages.Type.SUCCESS,
+            "M7 new PB run recorded: 4m 36.05s (Previous: 4m 38.44s)");
+        assertEquals(List.of(), state.dueSplitNotices(100L));
+        state.holdSplitNotices(List.of(late));
+        assertEquals(List.of(late), state.dueSplitNotices(101L));
+        assertEquals(List.of(), state.dueSplitNotices(102L));
+    }
+
+    @Test public void aLineHeldWhileTheReportIsStillGoingWaitsForIt() {
+        var state = new DungeonStateTracker();
+        var held = new DungeonSplitMessages.Notice(com.github.beng420.kung.message.KungMessages.Type.INFO, "held");
+        state.observeSplitReport("Team Score: 303 (S+)", 0L);
+        state.holdSplitNotices(List.of(held));
+        assertEquals(List.of(), state.dueSplitNotices(19L));
+        assertEquals(List.of(held), state.dueSplitNotices(20L));
+    }
+
     private static void reachLastPhase(DungeonStateTracker state, int floor, boolean master) throws InterruptedException {
         state.splitTracker().startRun(0L, floor, master);
         for (String message : LAST_PHASE_LINES.get(floor - 1)) line(state, message, 0L);

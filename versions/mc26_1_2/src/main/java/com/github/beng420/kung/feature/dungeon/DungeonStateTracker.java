@@ -67,7 +67,7 @@ public final class DungeonStateTracker {
             if (this.splitReportDueTick == Long.MIN_VALUE) DungeonSplitMessages.send(phase);
             else this.heldSplitNotices.addAll(0, DungeonSplitMessages.notices(phase));
         },
-        notices -> this.heldSplitNotices.addAll(notices));
+        notices -> this.holdSplitNotices(notices));
     private boolean dungeonInstanceActive;
     // Commit scan readiness only after instance setup/reset reaches its existing boundary.
     private boolean scanReady;
@@ -95,6 +95,12 @@ public final class DungeonStateTracker {
     private boolean runStartMessageSent;
     private boolean runEndMessageSent;
     private boolean realRunStarted;
+    private static final long FLOOR_MISSING_LOG_MILLIS = 4_000L;
+    private static final java.util.regex.Pattern FLOOR_ROW = java.util.regex.Pattern.compile("catacombs|floor|master|dungeon",
+        java.util.regex.Pattern.CASE_INSENSITIVE);
+    /** When the floor was first missing during this run, 0 while it is known; {@link #traceMissingFloor} reads it. */
+    private long floorMissingSinceMillis;
+    private boolean floorMissingLogged;
     private DungeonScanUtils.GridPosition instanceEntrance;
 
     void seedScanEntrance(DungeonMapSnapshot snapshot) {
@@ -557,9 +563,29 @@ public final class DungeonStateTracker {
 
     private void configureDungeonFloor() {
         var floor = HypixelInstanceTracker.INSTANCE.dungeonFloor();
-        if (!floor.known()) return;
+        if (!floor.known()) {
+            traceMissingFloor();
+            return;
+        }
+        floorMissingSinceMillis = 0L;
         runStats.configureForFloor(floor.floor(), floor.masterMode());
         splitTracker.configureKnownFloor(floor.floor(), floor.masterMode());
+    }
+
+    /**
+     * Without a floor the splits show no PB and no floor name for the whole run. Once per run, when the floor is
+     * still missing a few seconds after the run started, the trace gets the rows the floor is read from.
+     */
+    private void traceMissingFloor() {
+        if (!realRunStarted || floorMissingLogged) return;
+        long now = System.currentTimeMillis();
+        if (floorMissingSinceMillis == 0L) floorMissingSinceMillis = now;
+        if (now - floorMissingSinceMillis < FLOOR_MISSING_LOG_MILLIS) return;
+        floorMissingLogged = true;
+        var instance = HypixelInstanceTracker.INSTANCE;
+        KungDebugRecorder.event("dungeon-splits", "floor-unknown after=" + (now - floorMissingSinceMillis) + "ms location="
+            + instance.location() + " sidebar=" + instance.sidebarLines() + " floorRows=" + instance.visibleLines().stream()
+                .filter(line -> FLOOR_ROW.matcher(line).find()).toList());
     }
 
     void observeGameMessage(Component message, boolean overlay) {
@@ -622,10 +648,19 @@ public final class DungeonStateTracker {
         }
     }
 
-    /** The held lines once their report is through, phase line first; empty while it is still going. */
+    void holdSplitNotices(List<DungeonSplitMessages.Notice> notices) {
+        heldSplitNotices.addAll(notices);
+    }
+
+    /**
+     * The held lines once their report is through, phase line first; empty while it is still going. Lines that come
+     * after the report is through (the "new PB run recorded" line follows the victory text, seconds after the score)
+     * have no report to wait for, so they are due at once.
+     */
     List<DungeonSplitMessages.Notice> dueSplitNotices(long tick) {
-        if (splitReportDueTick == Long.MIN_VALUE || tick < splitReportDueTick) return List.of();
+        if (splitReportDueTick != Long.MIN_VALUE && tick < splitReportDueTick) return List.of();
         splitReportDueTick = Long.MIN_VALUE;
+        if (heldSplitNotices.isEmpty()) return List.of();
         List<DungeonSplitMessages.Notice> due = List.copyOf(heldSplitNotices);
         heldSplitNotices.clear();
         return due;
@@ -1695,6 +1730,8 @@ public final class DungeonStateTracker {
         babyZombieDeaths.clear();
         runStats.startRun(dungeonTick);
         splitTracker.reset();
+        floorMissingSinceMillis = 0L;
+        floorMissingLogged = false;
         configureDungeonFloor();
         pendingRunSummaryTick = Long.MIN_VALUE;
         runSummarySent = false;

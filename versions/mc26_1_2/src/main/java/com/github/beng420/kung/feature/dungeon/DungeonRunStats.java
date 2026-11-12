@@ -1992,7 +1992,16 @@ public final class DungeonRunStats {
     String roomProgressSummary(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
         var progress = DungeonRoomProgress.from(renderPlan);
         return "Rooms cleared: " + progress.cleared() + "/" + unknownPositive(progress.total())
-            + " | Opened " + progress.opened();
+            + " | Opened " + progress.opened() + " | BR " + unknownPositive(bloodRushDoors(renderPlan));
+    }
+
+    /**
+     * The doors of the Blood Rush: what the helper counts, from the plan alone because the helper itself is not in
+     * the Modrinth jar. Zero while no blood room is known.
+     */
+    private static int bloodRushDoors(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {
+        return renderPlan == null ? 0
+            : Math.max(renderPlan.bloodRushTotalSpecialDoorCount(), renderPlan.knownNonStartSpecialDoorCount());
     }
 
     private int bestCompletedRooms(DungeonLiveMapWriter.MatchRenderPlan renderPlan) {

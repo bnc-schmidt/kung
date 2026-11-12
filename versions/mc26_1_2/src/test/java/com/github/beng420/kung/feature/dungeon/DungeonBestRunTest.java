@@ -6,8 +6,10 @@ import static org.junit.Assert.assertTrue;
 
 import com.github.beng420.kung.MinecraftBootstrapTest;
 import com.github.beng420.kung.config.category.SplitsConfig;
+import com.google.gson.Gson;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicLong;
 import org.junit.Test;
 
@@ -19,17 +21,25 @@ public final class DungeonBestRunTest extends MinecraftBootstrapTest {
         ignored -> { }, sent::addAll);
 
     private void after(long millis, String message) {
+        after(tracker, millis, message);
+    }
+
+    private void after(DungeonSplitTracker run, long millis, String message) {
         clock.addAndGet(millis);
-        tracker.observeMessage(message, 0L);
+        run.observeMessage(message, 0L);
     }
 
     /** A finished F5 run: Blood Open, Blood Clear, Portal Entry and Livid take the given times. */
     private void lividRun(long bloodOpen, long bloodClear, long portal, long boss) {
-        tracker.startRun(0L, 5, false);
-        after(bloodOpen, "The BLOOD DOOR has been opened!");
-        after(bloodClear, "[BOSS] The Watcher: You have proven yourself. You may pass.");
-        after(portal, "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows.");
-        after(boss, "Defeated Livid in 1m 30s");
+        lividRun(tracker, bloodOpen, bloodClear, portal, boss);
+    }
+
+    private void lividRun(DungeonSplitTracker run, long bloodOpen, long bloodClear, long portal, long boss) {
+        run.startRun(0L, 5, false);
+        after(run, bloodOpen, "The BLOOD DOOR has been opened!");
+        after(run, bloodClear, "[BOSS] The Watcher: You have proven yourself. You may pass.");
+        after(run, portal, "[BOSS] Livid: Welcome, you've arrived right on time. I am Livid, the Master of Shadows.");
+        after(run, boss, "Defeated Livid in 1m 30s");
     }
 
     private List<String> sentTexts() {
@@ -70,6 +80,42 @@ public final class DungeonBestRunTest extends MinecraftBootstrapTest {
         assertEquals(90_000L, (long) tracker.pbRun().get(SplitsConfig.BEST_RUN_TOTAL));
         tracker.startRun(0L, 5, false);
         assertEquals(80_000L, (long) tracker.pbRun().get(SplitsConfig.BEST_RUN_TOTAL));
+    }
+
+    @Test
+    public void theSessionScopeComparesWithTheFastestRunSinceTheGameStarted() {
+        var earlierGame = new SplitsConfig();
+        earlierGame.setEnabled(true);
+        lividRun(new DungeonSplitTracker(clock::get, ignored -> { }, earlierGame, ignored -> { }, sent::addAll),
+            10_000L, 30_000L, 10_000L, 40_000L);
+        assertEquals(90_000L, earlierGame.bestRunMillis(5, false));
+
+        // A new game: what is saved comes back, the session's runs do not.
+        var gson = new Gson();
+        var game = gson.fromJson(gson.toJson(earlierGame), SplitsConfig.class);
+        game.setPbScope(SplitsConfig.PbScope.SESSION);
+        var run = new DungeonSplitTracker(clock::get, ignored -> { }, game, ignored -> { }, sent::addAll);
+        assertEquals(90_000L, game.bestRunMillis(5, false));
+        assertEquals(Map.of(), game.comparedRun(5, false));
+
+        // Slower than the saved best, but the first of the session: it becomes the session's best, silently.
+        sent.clear();
+        lividRun(run, 10_000L, 30_000L, 10_000L, 50_000L);
+        assertEquals(List.of(), sent);
+        assertEquals(90_000L, game.bestRunMillis(5, false));
+        assertEquals(100_000L, (long) game.comparedRun(5, false).get(SplitsConfig.BEST_RUN_TOTAL));
+        assertEquals("nothing came before it in the session", Map.of(), run.pbRun());
+
+        // Faster than the session's best: it compares with the one it beat.
+        lividRun(run, 10_000L, 30_000L, 10_000L, 45_000L);
+        assertEquals(100_000L, (long) run.pbRun().get(SplitsConfig.BEST_RUN_TOTAL));
+        run.startRun(0L, 5, false);
+        assertEquals(95_000L, (long) run.pbRun().get(SplitsConfig.BEST_RUN_TOTAL));
+
+        // All Time shows the saved one again, and the session's runs never touched it.
+        game.setPbScope(SplitsConfig.PbScope.ALL_TIME);
+        assertEquals(90_000L, (long) run.pbRun().get(SplitsConfig.BEST_RUN_TOTAL));
+        assertEquals(90_000L, game.bestRunMillis(5, false));
     }
 
     @Test
