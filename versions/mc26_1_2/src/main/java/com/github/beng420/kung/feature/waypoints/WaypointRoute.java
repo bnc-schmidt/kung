@@ -24,11 +24,12 @@ public final class WaypointRoute {
     /**
      * The current index after the player stepped to a point. A waypoint within {@code radius} blocks of its centre becomes
      * current when it is allowed: the next one always, the previous one with {@code backwards}, and any other one only
-     * with both {@code backwards} and {@code skipping}. The waypoints are checked in order, each against the index
-     * the check before it left.
+     * with both {@code backwards} and {@code skipping}. The player is near when the feet ({@code py}) or the eyes
+     * ({@code eyeY}, above the same x and z) are within the radius. The waypoints are checked in order, each against the
+     * index the check before it left.
      */
-    public static int advance(List<Waypoint> waypoints, int current, double px, double py, double pz, double radius,
-                              boolean backwards, boolean skipping) {
+    public static int advance(List<Waypoint> waypoints, int current, double px, double py, double pz, double eyeY,
+                              double radius, boolean backwards, boolean skipping) {
         int size = waypoints.size();
         if (size == 0) return 0;
         int index = Math.clamp(current, 0, size - 1);
@@ -37,7 +38,9 @@ public final class WaypointRoute {
             int next = (index + 1) % size;
             int previous = Math.floorMod(index - 1, size);
             boolean reachable = (backwards || i == next) && (skipping || i == next || i == previous);
-            if (reachable && waypoints.get(i).distanceSqr(px, py, pz) < radiusSqr) index = i;
+            Waypoint waypoint = waypoints.get(i);
+            double nearest = Math.min(waypoint.distanceSqr(px, py, pz), waypoint.distanceSqr(px, eyeY, pz));
+            if (reachable && nearest < radiusSqr) index = i;
         }
         return index;
     }

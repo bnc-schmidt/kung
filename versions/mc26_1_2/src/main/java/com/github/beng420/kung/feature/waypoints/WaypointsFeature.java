@@ -110,9 +110,10 @@ public final class WaypointsFeature extends ConfigurableFeature<WaypointsConfig>
         if (held && !addKeyDown && active) addAtCrosshair(client);
         addKeyDown = held;
         Vec3 at = client.player.position();
+        double eyeY = client.player.getEyePosition().y;
         for (WaypointGroup group : store.visibleOn(island.id(), active)) {
             if (!group.ordered() || group.waypoints().isEmpty()) continue;
-            group.setCurrentIndex(WaypointRoute.advance(group.waypoints(), group.currentIndex(), at.x, at.y, at.z,
+            group.setCurrentIndex(WaypointRoute.advance(group.waypoints(), group.currentIndex(), at.x, at.y, at.z, eyeY,
                 config.activationRadius(), config.allowGoingBackwards(), config.allowSkipping()));
         }
     }
