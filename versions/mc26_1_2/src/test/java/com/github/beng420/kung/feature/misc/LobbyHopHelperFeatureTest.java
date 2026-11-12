@@ -1,6 +1,8 @@
 package com.github.beng420.kung.feature.misc;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
 
 import org.junit.After;
 import org.junit.Before;
@@ -35,6 +37,17 @@ public final class LobbyHopHelperFeatureTest {
         LobbyHopHelperFeature.recordVisit("mini456", 6_000L);
         assertEquals(new LobbyHopHelperFeature.Visit(1_000L, 5_000L), LobbyHopHelperFeature.recordVisit("mini123", 9_000L));
         assertEquals(new LobbyHopHelperFeature.Visit(6_000L, 6_000L), LobbyHopHelperFeature.recordVisit("mini456", 10_000L));
+    }
+
+    @Test
+    public void theTitleAndSoundComeOnlyForALobbyLeftLessThanTheWarnTimeAgo() {
+        assertTrue(LobbyHopHelperFeature.loud(29_999L, 30));
+        assertFalse(LobbyHopHelperFeature.loud(30_000L, 30));
+        assertFalse(LobbyHopHelperFeature.loud(65_000L, 30));
+        assertTrue(LobbyHopHelperFeature.loud(65_000L, 300));
+        // 0 never warns loudly, and the box may go past the slider's 300.
+        assertFalse(LobbyHopHelperFeature.loud(0L, 0));
+        assertTrue(LobbyHopHelperFeature.loud(1_000_000L, 1_000_000));
     }
 
     private static long visit(String lobbyId, long nowMillis) {

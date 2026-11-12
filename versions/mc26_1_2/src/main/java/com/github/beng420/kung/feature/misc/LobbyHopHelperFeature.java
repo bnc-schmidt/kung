@@ -105,9 +105,14 @@ public final class LobbyHopHelperFeature extends ConfigurableFeature<MiscConfig>
         return LocalTime.now().minus(Duration.ofMillis(nowMillis - thenMillis)).format(CLOCK);
     }
 
+    /** Whether a lobby left {@code agoMillis} ago still gets the title and the sound: only when that is less than the warn time. */
+    static boolean loud(long agoMillis, int warnSeconds) { return agoMillis < warnSeconds * 1_000L; }
+
     private static void alert(Minecraft client, String lobbyId, long nowMillis, Visit previous) {
-        String ago = formatAgo(nowMillis - previous.lastSeenMillis());
-        if (INSTANCE.config().lobbyHopTitleEnabled()) {
+        long agoMillis = nowMillis - previous.lastSeenMillis();
+        String ago = formatAgo(agoMillis);
+        boolean loud = loud(agoMillis, INSTANCE.config().lobbyHopWarnSeconds());
+        if (loud && INSTANCE.config().lobbyHopTitleEnabled()) {
             McCompat.setSubtitle(client, Component.literal(lobbyId + " - " + ago));
             McCompat.setTitle(client, Component.literal("Swap Lobbies"));
         }
@@ -116,6 +121,6 @@ public final class LobbyHopHelperFeature extends ConfigurableFeature<MiscConfig>
                 "You've been on lobby " + lobbyId + " before! " + ago + ". ("
                     + clock(nowMillis, previous.arrivedMillis()) + " - " + clock(nowMillis, previous.lastSeenMillis()) + ")");
         }
-        client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING.value(), 1.35F, 1.0F));
+        if (loud) client.getSoundManager().play(SimpleSoundInstance.forUI(SoundEvents.NOTE_BLOCK_PLING.value(), 1.35F, 1.0F));
     }
 }
